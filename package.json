@@ -1,0 +1,45 @@
+{
+  "name": "synapse-sap-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Solscan-style on-chain explorer for the Solana Agent Protocol (SAP) network",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@oobe-protocol-labs/synapse-client-sdk": "^2.0.5",
+    "@oobe-protocol-labs/synapse-sap-sdk": "link:/Users/keepeeto/Desktop/synapse-agent-sap/synapse-sap-sdk",
+    "@solana/web3.js": "^1.95",
+    "@types/d3-force": "^3.0.10",
+    "clsx": "^2.1.1",
+    "d3-force": "^3.0.0",
+    "lucide-react": "^0.468.0",
+    "next": "14.2.21",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sonner": "^1.7.0",
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.15",
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.21",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@10.30.3+sha512.c961d1e0a2d8e354ecaa5166b822516668b7f44cb5bd95122d590dd81922f606f5473b6d23ec4a5be05e7fcd18e8488d47d978bbe981872f1145d06e9a740017"
+}

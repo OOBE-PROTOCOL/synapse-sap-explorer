@@ -1,0 +1,196 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import {
+  Activity,
+  Search,
+  Network,
+  ArrowLeftRight,
+  Wrench,
+  ChevronLeft,
+  ChevronRight,
+  Bot,
+  Hexagon,
+  Layers,
+  Sparkles,
+  Wallet,
+  ShieldCheck,
+  Trophy,
+} from 'lucide-react';
+import { cn } from '~/lib/utils';
+
+const NAV_ITEMS = [
+  { href: '/', label: 'Overview', icon: Activity },
+  { href: '/agents', label: 'Agents', icon: Bot },
+  { href: '/network', label: 'Network', icon: Network },
+  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
+  { href: '/tools', label: 'Tools', icon: Wrench },
+  { href: '/protocols', label: 'Protocols', icon: Layers },
+  { href: '/capabilities', label: 'Capabilities', icon: Sparkles },
+  { href: '/escrows', label: 'Escrows', icon: Wallet },
+  { href: '/attestations', label: 'Attestations', icon: ShieldCheck },
+  { href: '/reputation', label: 'Reputation', icon: Trophy },
+];
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div className="flex min-h-screen">
+      {/* ── Sidebar ─────────────────────────────── */}
+      <aside
+        className={cn(
+          'hidden flex-shrink-0 lg:block transition-all duration-500 ease-[cubic-bezier(.22,1,.36,1)] relative sticky top-0 h-screen',
+          collapsed ? 'w-[72px]' : 'w-[260px]',
+        )}
+      >
+        <div className="absolute inset-0 sidebar-glass" />
+
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="sidebar-toggle"
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-3 w-3 text-blue-400/70" />
+          ) : (
+            <ChevronLeft className="h-3 w-3 text-blue-400/70" />
+          )}
+        </button>
+
+        <div className="relative z-10 flex h-full flex-col overflow-y-auto overflow-x-hidden">
+          {/* Logo */}
+          <div
+            className={cn(
+              'flex items-center gap-3 shrink-0 transition-all duration-300',
+              collapsed ? 'h-16 justify-center px-3' : 'h-16 px-5',
+            )}
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+          >
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-xl shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(20,184,166,0.08))',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+              }}
+            >
+              <Hexagon className="h-4 w-4 text-blue-400" />
+              <div className="absolute inset-0 rounded-xl ring-1 ring-blue-500/15" />
+            </div>
+            {!collapsed && (
+              <Link href="/" className="truncate">
+                <span className="text-sm font-semibold gradient-text">Synapse</span>
+                <span className="ml-1.5 text-[10px] font-medium text-white/25 uppercase tracking-widest">Explorer</span>
+              </Link>
+            )}
+          </div>
+
+          {/* Search */}
+          {!collapsed && (
+            <div className="px-4 py-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/20" />
+                <input
+                  type="text"
+                  placeholder="Search agents, PDAs..."
+                  className="w-full rounded-2xl bg-white/[0.03] border border-white/[0.06] py-2.5 pl-9 pr-3 text-[12px] text-white/70 placeholder-white/20 outline-none transition-all focus:border-blue-500/25 focus:bg-white/[0.05] focus:ring-1 focus:ring-blue-500/10"
+                  style={{ backdropFilter: 'blur(12px)' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {!collapsed && (
+            <div className="px-5 pb-1 pt-2">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/20">Protocol</span>
+            </div>
+          )}
+
+          {/* Nav */}
+          <nav className={cn('space-y-0.5 flex-1', collapsed ? 'px-2 py-3' : 'px-3')}>
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+              const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  title={collapsed ? label : undefined}
+                  className={cn(
+                    'group flex items-center gap-3 rounded-2xl text-[13px] font-medium transition-all duration-300',
+                    collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
+                    isActive
+                      ? 'nav-active text-white'
+                      : 'text-white/35 hover:bg-white/[0.03] hover:text-white/60',
+                  )}
+                >
+                  <Icon className={cn(
+                    'h-4 w-4 shrink-0 transition-colors duration-300',
+                    isActive ? 'text-blue-400' : 'text-white/25 group-hover:text-white/45',
+                  )} />
+                  {!collapsed && label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Bottom */}
+          <div
+            className={cn('shrink-0', collapsed ? 'p-2 pb-4' : 'p-4')}
+            style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+          >
+            {!collapsed ? (
+              <div className="rounded-2xl p-3"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(59,130,246,0.05), rgba(20,184,166,0.03))',
+                  border: '1px solid rgba(59,130,246,0.08)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
+                  <span className="text-[10px] text-white/35">SAP Program</span>
+                </div>
+                <p className="mt-1 font-mono text-[10px] text-blue-400/60 truncate">SAPp...FETZ</p>
+                <p className="mt-0.5 text-[9px] text-white/20">synapse-client-sdk v2.0.5</p>
+              </div>
+            ) : (
+              <div className="flex justify-center">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Content ─────────────────────────────── */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile header */}
+        <div className="sticky top-0 z-50 flex h-14 items-center gap-3 px-4 lg:hidden mobile-header">
+          <Hexagon className="h-5 w-5 text-blue-400" />
+          <span className="text-sm font-semibold gradient-text">Synapse Explorer</span>
+          <div className="ml-auto flex items-center gap-1">
+            {NAV_ITEMS.slice(0, 6).map(({ href, icon: Icon }) => {
+              const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'rounded-xl p-2 transition-all duration-300',
+                    isActive ? 'bg-blue-500/10 text-blue-400' : 'text-white/25 hover:text-white/50',
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <main className="flex-1 p-4 lg:p-6">{children}</main>
+      </div>
+    </div>
+  );
+}
