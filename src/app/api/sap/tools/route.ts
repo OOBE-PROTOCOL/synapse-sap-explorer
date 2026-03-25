@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /* ──────────────────────────────────────────────
  * GET /api/sap/tools — Tool registry (all categories)
  *

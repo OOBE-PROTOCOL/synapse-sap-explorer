@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /* ──────────────────────────────────────────────
  * GET /api/sap/feedbacks — Fetch all feedback accounts
  *

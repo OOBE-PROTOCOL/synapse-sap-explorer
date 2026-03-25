@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /* ──────────────────────────────────────────────
  * GET /api/sap/transactions — Recent SAP program transactions
  *
