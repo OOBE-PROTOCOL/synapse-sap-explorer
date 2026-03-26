@@ -32,4 +32,11 @@ export const env = {
   get DATABASE_URL() {
     return required('DATABASE_URL');
   },
+  /* Indexer (optional) */
+  get INDEXER_MODE() {
+    return optional('INDEXER_MODE', 'hybrid');
+  },
+  get INDEXER_GRPC_COMMITMENT() {
+    return optional('INDEXER_GRPC_COMMITMENT', 'confirmed');
+  },
 } as const;

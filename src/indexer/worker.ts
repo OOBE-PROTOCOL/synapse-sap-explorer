@@ -15,16 +15,19 @@ import { syncFeedbacks } from './sync-feedbacks';
 import { syncVaults } from './sync-vaults';
 import { syncTransactions } from './sync-transactions';
 import { syncSnapshots } from './sync-snapshots';
+import { startGrpcTransactionStream } from './stream-transactions';
 import { log, logErr, sleep } from './utils';
 
 /* ── Config ───────────────────────────────────────────── */
 
 const ENTITY_INTERVAL_MS = 60_000;       // 60s — agents, tools, escrows, etc.
 const TX_INTERVAL_MS = 30_000;           // 30s — transactions
+const TX_FALLBACK_INTERVAL_MS = 300_000; // 5min — fallback when in stream mode
 const SNAPSHOT_INTERVAL_MS = 300_000;    // 5min — network snapshots
 const INTER_ENTITY_DELAY_MS = 2_000;     // 2s pause between entity fetches
 
 const ONCE = process.argv.includes('--once');
+const INDEXER_MODE = (process.env.INDEXER_MODE ?? 'hybrid').toLowerCase() as 'polling' | 'stream' | 'hybrid';
 
 /* ── Graceful shutdown ────────────────────────────────── */
 
@@ -37,6 +40,14 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
   log('worker', 'SIGTERM received, shutting down...');
   running = false;
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  logErr('worker', `Unhandled rejection: ${reason?.message ?? String(reason)}`);
+});
+
+process.on('uncaughtException', (err: any) => {
+  logErr('worker', `Uncaught exception: ${err?.message ?? String(err)}`);
 });
 
 /* ── Sync cycles ──────────────────────────────────────── */
@@ -92,7 +103,8 @@ async function syncSnap() {
 async function main() {
   log('worker', '═══════════════════════════════════════');
   log('worker', '  SAP Indexer Worker starting');
-  log('worker', `  Mode: ${ONCE ? 'SINGLE RUN' : 'CONTINUOUS'}`);
+  log('worker', `  Run: ${ONCE ? 'SINGLE RUN' : 'CONTINUOUS'}`);
+  log('worker', `  Indexer mode: ${INDEXER_MODE.toUpperCase()}`);
   log('worker', `  DB: ${process.env.DATABASE_URL?.replace(/:[^@]+@/, ':***@') ?? 'NOT SET'}`);
   log('worker', '═══════════════════════════════════════');
 
@@ -102,7 +114,7 @@ async function main() {
   }
 
   if (ONCE) {
-    // Single run: all syncs sequentially, then exit
+    // Single run always executes polling sync (deterministic smoke/cron run)
     await syncAllEntities();
     await sleep(1000);
     await syncTx();
@@ -112,24 +124,43 @@ async function main() {
     process.exit(0);
   }
 
-  // Continuous mode: staggered interval loops
-  log('worker', `Intervals — entities: ${ENTITY_INTERVAL_MS / 1000}s, tx: ${TX_INTERVAL_MS / 1000}s, snapshots: ${SNAPSHOT_INTERVAL_MS / 1000}s`);
-
-  // Initial run
+  // Continuous mode: initial full baseline
+  log('worker', 'Running initial baseline sync (entities + snapshots)...');
   await syncAllEntities();
-  await syncTx();
   await syncSnap();
 
-  // Schedule recurring cycles
+  // gRPC stream setup (Option B)
+  let streamAbort: AbortController | null = null;
+  if (INDEXER_MODE === 'stream' || INDEXER_MODE === 'hybrid') {
+    streamAbort = new AbortController();
+    startGrpcTransactionStream(streamAbort.signal).catch((e) => {
+      logErr('worker', `gRPC stream fatal: ${e.message}`);
+    });
+  } else {
+    // polling-only mode keeps old tx loop cadence
+    await syncTx();
+  }
+
+  // Schedule recurring cycles (entities + snapshots always on)
   const entityTimer = setInterval(async () => {
     if (!running) return;
     await syncAllEntities();
   }, ENTITY_INTERVAL_MS);
 
+  // tx timer differs by mode:
+  // - polling: main mechanism every 30s
+  // - stream: disabled (stream is source of truth)
+  // - hybrid: light fallback every 5m for gap healing
   const txTimer = setInterval(async () => {
     if (!running) return;
-    await syncTx();
-  }, TX_INTERVAL_MS);
+    if (INDEXER_MODE === 'polling') {
+      await syncTx();
+      return;
+    }
+    if (INDEXER_MODE === 'hybrid') {
+      await syncTx();
+    }
+  }, INDEXER_MODE === 'polling' ? TX_INTERVAL_MS : TX_FALLBACK_INTERVAL_MS);
 
   const snapTimer = setInterval(async () => {
     if (!running) return;
@@ -144,6 +175,7 @@ async function main() {
   clearInterval(entityTimer);
   clearInterval(txTimer);
   clearInterval(snapTimer);
+  if (streamAbort) streamAbort.abort();
 
   log('worker', 'Worker stopped.');
   process.exit(0);

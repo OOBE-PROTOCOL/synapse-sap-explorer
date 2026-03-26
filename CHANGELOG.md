@@ -5,6 +5,53 @@ Aggiornare questo file ad ogni sessione di lavoro.
 
 ---
 
+## 2026-03-26 — Refactor FASE 2/B: gRPC Subscribe (realtime) — WIP
+
+### Obiettivo
+
+Avviare pipeline realtime `transactionSubscribe` (Option B) e usare gli eventi tx per triggerare refresh delle entity toccate.
+
+### File creati
+
+| File | Descrizione |
+|---|---|
+| `src/indexer/tx-pipeline.ts` | Pipeline condivisa di hydration + upsert transazioni (`transactions` + `tx_details`), riusata da polling e stream. |
+| `src/indexer/stream-transactions.ts` | Loop gRPC subscribe (reconnect/backoff), parsing tx stream, upsert realtime, update cursor `transactions`, trigger refresh entity. |
+| `src/indexer/entity-impact.ts` | Heuristics `sapInstructions -> entity groups` (`agents`, `tools`, `escrows`, `attestations`, `feedbacks`, `vaults`). |
+| `src/indexer/refresh-queue.ts` | Coda coalescente/debounce per refresh entity toccate, con ordine FK-safe (agents prima). |
+
+### File modificati
+
+| File | Modifica |
+|---|---|
+| `src/indexer/sync-transactions.ts` | Refactor per usare `tx-pipeline.ts` condivisa. |
+| `src/indexer/worker.ts` | Supporto `INDEXER_MODE=polling|stream|hybrid`, startup stream in continuous mode, fallback polling light in hybrid, hardening error handlers. |
+| `src/lib/env.ts` | Aggiunti getter opzionali `INDEXER_MODE` e `INDEXER_GRPC_COMMITMENT`. |
+| `.env.example` | Aggiunte variabili indexer mode/commitment. |
+| `package.json` | Aggiunte dipendenze `@triton-one/yellowstone-grpc`, nuovi script `indexer:polling`, `indexer:stream`, `indexer:hybrid`. |
+
+### Test eseguiti
+
+```bash
+pnpm typecheck                # ✅ OK
+pnpm indexer:once             # ✅ OK (polling, nessuna regressione)
+pnpm indexer:stream           # ⚠️ stream parte, ma auth gRPC fallisce su Synapse endpoint
+```
+
+### Stato corrente
+
+- ✅ Architettura Option B pronta (stream + queue + impact + shared tx pipeline)
+- ✅ Worker non crasha più su errori stream (reconnect loop attivo)
+- ⚠️ **Blocco runtime**: endpoint Synapse richiede metadata header `x-api-key`, mentre client Yellowstone usa `x-token`; errore ricevuto: `missing x-api-key metadata`
+
+### Next fix (prima di FASE 3)
+
+1. Implementare subscribe gRPC con `@grpc/grpc-js` + metadata custom `x-api-key`
+2. Oppure usare un endpoint compatibile Yellowstone (`x-token`)
+3. Poi validare ingest realtime end-to-end (tx stream -> DB insert -> refresh queue)
+
+---
+
 ## 2026-03-26 — FASE 2 Completata: Indexer Worker (Polling)
 
 ### Obiettivo

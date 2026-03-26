@@ -13,14 +13,18 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "indexer": "tsx src/indexer/worker.ts",
-    "indexer:once": "tsx src/indexer/worker.ts --once"
+    "indexer": "INDEXER_MODE=hybrid tsx src/indexer/worker.ts",
+    "indexer:once": "INDEXER_MODE=polling tsx src/indexer/worker.ts --once",
+    "indexer:polling": "INDEXER_MODE=polling tsx src/indexer/worker.ts",
+    "indexer:stream": "INDEXER_MODE=stream INDEXER_GRPC_COMMITMENT=confirmed tsx src/indexer/worker.ts",
+    "indexer:hybrid": "INDEXER_MODE=hybrid INDEXER_GRPC_COMMITMENT=confirmed tsx src/indexer/worker.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
     "@oobe-protocol-labs/synapse-client-sdk": "^2.0.5",
     "@oobe-protocol-labs/synapse-sap-sdk": "0.4.0",
     "@solana/web3.js": "^1.95",
+    "@triton-one/yellowstone-grpc": "^5.0.5",
     "@types/d3-force": "^3.0.10",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",
