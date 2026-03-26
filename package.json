@@ -8,7 +8,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -18,8 +22,10 @@
     "@types/d3-force": "^3.0.10",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",
+    "drizzle-orm": "^0.45.1",
     "lucide-react": "^0.468.0",
     "next": "14.2.21",
+    "pg": "^8.20.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sonner": "^1.7.0",
@@ -29,9 +35,12 @@
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.20.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
+    "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.27.4",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.21",
     "postcss": "^8.4.49",
