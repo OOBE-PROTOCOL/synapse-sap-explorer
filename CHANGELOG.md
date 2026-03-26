@@ -5,6 +5,64 @@ Aggiornare questo file ad ogni sessione di lavoro.
 
 ---
 
+## 2026-03-26 — FASE 2 Completata: Indexer Worker (Polling)
+
+### Obiettivo
+
+Processo Node.js standalone che legge dati on-chain da Solana RPC e li scrive nel database PostgreSQL via Drizzle ORM.
+
+### File creati
+
+| File | Descrizione |
+|---|---|
+| `src/indexer/worker.ts` | Entry point: loop con 3 cicli (entities 60s, tx 30s, snapshots 5m). Supporta `--once` per single run. Graceful shutdown via SIGINT/SIGTERM. |
+| `src/indexer/utils.ts` | Helper condivisi: `withRetry()` (backoff esponenziale), serializzazione `pk()` `bn()` `bnToDate()` `hashToHex()` `enumKey()`, `conflictUpdateSet()` per upsert Drizzle, logger con timestamp. |
+| `src/indexer/cursor.ts` | Gestione `sync_cursors`: `getCursor(entity)` e `setCursor(entity, data)`. |
+| `src/indexer/sync-agents.ts` | Fetch `findAllAgents()` + `findAllAgentStats()` → upsert `agents` + `agent_stats`. Batch di 20 con fallback row-by-row. |
+| `src/indexer/sync-tools.ts` | Fetch `findAllTools()` → upsert `tools`. Gestione enum Anchor per category/httpMethod. |
+| `src/indexer/sync-escrows.ts` | Fetch `findAllEscrows()` → upsert `escrows`. Mapping volumeCurve JSONB. |
+| `src/indexer/sync-attestations.ts` | Fetch `findAllAttestations()` → upsert `attestations`. |
+| `src/indexer/sync-feedbacks.ts` | Fetch `findAllFeedbacks()` → upsert `feedbacks`. |
+| `src/indexer/sync-vaults.ts` | Fetch `findAllVaults()` → upsert `vaults`. |
+| `src/indexer/sync-transactions.ts` | Sync incrementale via cursor: `getSignaturesForAddress` + `rawGetTransaction`. Idrata e scrive in `transactions` + `tx_details`. Pacing 200ms. |
+| `src/indexer/sync-snapshots.ts` | `getNetworkOverview()` → INSERT in `network_snapshots` (time-series). |
+
+### File modificati
+
+| File | Modifica |
+|---|---|
+| `package.json` | Aggiunti: `dotenv` (runtime), `tsx` (dev). Script `indexer` e `indexer:once`. |
+
+### Risultato primo run (`pnpm indexer:once`)
+
+```
+agents           5 upserted (+ 5 agent_stats)
+tools            6 upserted
+escrows          1 upserted
+attestations     0 (nessuna on-chain)
+feedbacks        0 (nessuna on-chain)
+vaults           0 (nessuna on-chain)
+transactions    50 inserted (+ 50 tx_details)
+snapshots        2 captured
+sync_cursors     aggiornati (tx cursor: slot 408958600)
+```
+
+### Come eseguire
+
+```bash
+# Single run (popola e esce)
+pnpm indexer:once
+
+# Continuous mode (loop infinito)
+pnpm indexer
+```
+
+### Prossimo step
+
+→ **FASE 3**: Riscrivere le API Routes per leggere dal DB via Drizzle invece che da RPC.
+
+---
+
 ## 2026-03-26 — FASE 1 Completata: Provisioning Database
 
 ### Obiettivo
