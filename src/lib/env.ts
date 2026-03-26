@@ -28,4 +28,8 @@ export const env = {
   get SYNAPSE_REGION() {
     return optional('SYNAPSE_REGION', 'US');
   },
+  /* Database */
+  get DATABASE_URL() {
+    return required('DATABASE_URL');
+  },
 } as const;
