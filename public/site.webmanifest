@@ -1,0 +1,21 @@
+{
+  "name": "Synapse Explorer",
+  "short_name": "Synapse",
+  "description": "Real-time on-chain explorer for the Solana Agent Protocol",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0b16",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
