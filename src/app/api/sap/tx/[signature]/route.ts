@@ -139,11 +139,19 @@ export async function GET(
             error: row.errorData ?? null,
             confirmations: null,
             version: 'legacy',
-            accountKeys: row.accountKeys,
-            instructions: row.instructions,
-            logs: row.logs,
-            balanceChanges: row.balanceChanges,
-            tokenBalanceChanges: row.tokenBalanceChanges,
+            recentBlockhash: null as string | null,
+            accountKeys: row.accountKeys ?? [],
+            instructions: ((row.instructions ?? []) as any[]).map((ix: any) => ({
+              ...ix,
+              innerInstructions: (ix.innerInstructions ?? []).map((inner: any) => ({
+                ...inner,
+                innerInstructions: inner.innerInstructions ?? [],
+              })),
+            })),
+            logs: row.logs ?? [],
+            events: extractSapEvents(row.logs ?? []),
+            balanceChanges: row.balanceChanges ?? [],
+            tokenBalanceChanges: row.tokenBalanceChanges ?? [],
             computeUnitsConsumed: row.computeUnits,
             _fromDb: true,
           };
@@ -223,6 +231,7 @@ export async function GET(
             parsed: ix.parsed ?? null,
             type,
             decodedArgs,
+            innerInstructions: [] as any[],
           };
         }) ?? [],
       })) ?? [];

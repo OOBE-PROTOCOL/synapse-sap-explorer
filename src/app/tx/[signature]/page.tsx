@@ -442,7 +442,7 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
         )}
 
         {/* CPI count */}
-        {ix.innerInstructions.length > 0 && (
+        {(ix.innerInstructions?.length ?? 0) > 0 && (
           <Badge variant="outline" className="text-[8px] shrink-0">{ix.innerInstructions.length} CPI</Badge>
         )}
 
@@ -514,12 +514,12 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
           )}
 
           {/* Account inputs */}
-          {ix.accounts.length > 0 && (
+          {(ix.accounts?.length ?? 0) > 0 && (
             <AccountList accounts={ix.accounts} labels={labels} />
           )}
 
           {/* Inner instructions (recursive) */}
-          {ix.innerInstructions.length > 0 && (
+          {(ix.innerInstructions?.length ?? 0) > 0 && (
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                 ↳ Inner Instructions ({ix.innerInstructions.length})
@@ -648,11 +648,16 @@ export default function TransactionDetailPage() {
   /* ── Derived ── */
   const ok        = tx.status === 'success';
   const feeSol    = tx.fee / 1e9;
-  const signer    = tx.accountKeys.find(k => k.signer)?.pubkey ?? '—';
-  const action    = tx.instructions.find(ix => ix.type)?.type ?? null;
-  const hasSap    = tx.instructions.some(ix => ix.programId === SAP);
-  const cuPerIx   = parsePerIxCU(tx.logs);
-  const solDeltas = tx.balanceChanges.filter(b => b.change !== 0);
+  const signer    = (tx.accountKeys ?? []).find(k => k.signer)?.pubkey ?? '—';
+  const action    = (tx.instructions ?? []).find(ix => ix.type)?.type ?? null;
+  const hasSap    = (tx.instructions ?? []).some(ix => ix.programId === SAP);
+  const cuPerIx   = parsePerIxCU(tx.logs ?? []);
+  const solDeltas = (tx.balanceChanges ?? []).filter(b => b.change !== 0);
+  const events    = tx.events ?? [];
+  const logs      = tx.logs ?? [];
+  const instructions = tx.instructions ?? [];
+  const accountKeys  = tx.accountKeys ?? [];
+  const tokenBalanceChanges = tx.tokenBalanceChanges ?? [];
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -776,7 +781,7 @@ export default function TransactionDetailPage() {
       </Section>
 
       {/* ═══ INSTRUCTION DETAILS ═══ */}
-      <Section title="Instruction Details" count={tx.instructions.length}>
+      <Section title="Instruction Details" count={instructions.length}>
         <div className="space-y-4">
           {/* CU distribution */}
           <CUDistribution instructions={tx.instructions} cuPerIx={cuPerIx} total={tx.computeUnitsConsumed} />
@@ -785,7 +790,7 @@ export default function TransactionDetailPage() {
 
           {/* Instruction rows */}
           <div>
-            {tx.instructions.map((ix, i) => (
+            {instructions.map((ix, i) => (
               <IxRow key={i} ix={ix} index={i} cuUsed={cuPerIx[i]} labels={labels} />
             ))}
           </div>
@@ -793,10 +798,10 @@ export default function TransactionDetailPage() {
       </Section>
 
       {/* ═══ SAP EVENTS ═══ */}
-      {tx.events.length > 0 && (
-        <Section title="SAP Events" count={tx.events.length} open={true}>
+      {events.length > 0 && (
+        <Section title="SAP Events" count={events.length} open={true}>
           <div className="space-y-2">
-            {tx.events.map((evt, i) => (
+            {events.map((evt, i) => (
               <div key={i} className="rounded-lg bg-muted/50 border border-border p-3">
                 <Badge variant="secondary" className="text-[9px] font-mono">{evt.name}</Badge>
                 {Object.keys(evt.data).length > 0 && (
@@ -812,10 +817,10 @@ export default function TransactionDetailPage() {
       )}
 
       {/* ═══ PROGRAM LOGS ═══ */}
-      {tx.logs.length > 0 && (
-        <Section title="Program Logs" count={tx.logs.length} open={true}>
+      {logs.length > 0 && (
+        <Section title="Program Logs" count={logs.length} open={true}>
           <div className="rounded-lg bg-muted/20 p-3 max-h-[500px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-            {tx.logs.map((line, i) => (
+            {logs.map((line, i) => (
               <div key={i} className="flex gap-3 py-0.5 hover:bg-muted/30 rounded px-1 transition-colors">
                 <span className="text-[9px] text-muted-foreground/30 font-mono tabular-nums shrink-0 w-6 text-right select-none">{i + 1}</span>
                 <span className={cn('text-[10px] font-mono break-all', logCls(line))}>{line}</span>
@@ -826,7 +831,7 @@ export default function TransactionDetailPage() {
       )}
 
       {/* ═══ ACCOUNT INPUTS ═══ */}
-      <Section title="Account Inputs" count={tx.accountKeys.length} open={true}>
+      <Section title="Account Inputs" count={accountKeys.length} open={true}>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -838,7 +843,7 @@ export default function TransactionDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tx.accountKeys.map((acc, i) => (
+              {accountKeys.map((acc, i) => (
                 <TableRow key={i} className="group">
                   <TableCell className="text-[10px] text-muted-foreground tabular-nums">{i}</TableCell>
                   <TableCell>
@@ -896,8 +901,8 @@ export default function TransactionDetailPage() {
       )}
 
       {/* ═══ TOKEN BALANCE CHANGES ═══ */}
-      {tx.tokenBalanceChanges.length > 0 && (
-        <Section title="Token Balance Changes" count={tx.tokenBalanceChanges.length} open={true}>
+      {tokenBalanceChanges.length > 0 && (
+        <Section title="Token Balance Changes" count={tokenBalanceChanges.length} open={true}>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -911,7 +916,7 @@ export default function TransactionDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tx.tokenBalanceChanges.map((t, i) => {
+                {tokenBalanceChanges.map((t, i) => {
                   const pre = parseFloat(t.preAmount);
                   const post = parseFloat(t.postAmount);
                   const ch = post - pre;
