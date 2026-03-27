@@ -83,6 +83,12 @@ export async function swr<T>(
   return promise;
 }
 
+/** Synchronous peek — returns cached data if present (any age), undefined otherwise */
+export function peek<T>(key: string): T | undefined {
+  const entry = _store.get(key) as CacheEntry<T> | undefined;
+  return entry?.data;
+}
+
 /** Invalidate a specific cache key */
 export function invalidate(key: string): void {
   _store.delete(key);
