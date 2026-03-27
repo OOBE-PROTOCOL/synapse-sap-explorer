@@ -14,8 +14,9 @@ module.exports = {
   apps: [
     {
       name: 'sap-indexer',
-      script: './node_modules/.bin/tsx',
-      args: 'src/indexer/worker.ts',
+      script: 'src/indexer/worker.ts',
+      interpreter: 'node',
+      interpreter_args: '--import tsx',
       cwd: __dirname,
 
       // Environment
