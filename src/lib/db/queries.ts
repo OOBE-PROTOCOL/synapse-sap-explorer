@@ -324,8 +324,24 @@ export async function upsertTransactions(dataArr: (typeof transactions.$inferIns
 
 export async function selectTxDetails(signature: string) {
   const rows = await db
-    .select()
+    .select({
+      signature: txDetails.signature,
+      status: txDetails.status,
+      errorData: txDetails.errorData,
+      accountKeys: txDetails.accountKeys,
+      instructions: txDetails.instructions,
+      logs: txDetails.logs,
+      balanceChanges: txDetails.balanceChanges,
+      tokenBalanceChanges: txDetails.tokenBalanceChanges,
+      computeUnits: txDetails.computeUnits,
+      // From parent transactions table
+      slot: transactions.slot,
+      blockTime: transactions.blockTime,
+      fee: transactions.fee,
+      version: transactions.version,
+    })
     .from(txDetails)
+    .leftJoin(transactions, eq(txDetails.signature, transactions.signature))
     .where(eq(txDetails.signature, signature))
     .limit(1);
   return rows[0] ?? null;
