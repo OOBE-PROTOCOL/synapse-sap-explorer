@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -47,6 +47,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -150,15 +152,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                 <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                {!collapsed && <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>}
+                {!collapsed && <span>{mounted ? (theme === 'dark' ? 'Dark Mode' : 'Light Mode') : '\u00A0'}</span>}
               </Button>
             </div>
 
             {/* External links */}
             <div className={cn('mb-3 space-y-0.5', collapsed && 'space-y-1')}>
               {[
-                { href: 'https://oobe.me', label: 'OOBE Protocol', icon: Globe },
-                { href: 'https://synapse-rpc.oobe.me', label: 'Synapse RPC Gateway', icon: ExternalLink },
+                { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
+                { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
                 { href: 'https://github.com/oobe-protocol/sap', label: 'SAP GitHub', icon: Github },
                 { href: 'https://github.com/oobe-protocol/sap-client-sdk', label: 'SAP Client SDK', icon: Github },
               ].map(({ href, label, icon: Icon }) => (

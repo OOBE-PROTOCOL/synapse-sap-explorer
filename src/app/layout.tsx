@@ -10,16 +10,16 @@ const SITE_URL = 'https://explorer.oobeprotocol.ai';
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Synapse Explorer — SAP Agent Protocol',
-    template: '%s | Synapse Explorer',
+    default: 'Synapse SAP Explorer | Agent Protocol',
+    template: '%s | Synapse SAP Explorer',
   },
   description:
-    'Explore the Solana Agent Protocol network — discover agents, visualize PDA connections, browse on-chain tools, and monitor SAP transactions in real-time.',
+    'Explore the Solana Agent Protocol network: discover agents, visualize PDA connections, browse on-chain tools, and monitor SAP transactions in real-time.',
   keywords: [
     'Solana', 'SAP', 'Agent Protocol', 'Explorer',
     'PDA', 'On-chain agents', 'Synapse', 'OOBE Protocol',
   ],
-  authors: [{ name: 'OOBE Protocol Labs', url: 'https://oobe.me' }],
+  authors: [{ name: 'OOBE Protocol Labs', url: 'https://oobeprotocol.ai' }],
   creator: 'OOBE Protocol Labs',
   icons: {
     icon: [

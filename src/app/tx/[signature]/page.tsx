@@ -141,11 +141,15 @@ function timeAgo(ts: number): string {
 }
 
 function fmtTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false, timeZoneName: 'short',
-  });
+  const d = new Date(ts * 1000);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mo = months[d.getUTCMonth()];
+  const day = d.getUTCDate();
+  const yr = d.getUTCFullYear();
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  const ss = String(d.getUTCSeconds()).padStart(2, '0');
+  return `${mo} ${day}, ${yr}, ${hh}:${mm}:${ss} UTC`;
 }
 
 function short(a: string, c = 8): string {

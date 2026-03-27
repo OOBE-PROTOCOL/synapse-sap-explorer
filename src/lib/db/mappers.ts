@@ -28,6 +28,10 @@ type TxRow = InferSelectModel<typeof transactions>;
 /* ── Agents ───────────────────────────────────── */
 
 export function dbAgentToApi(row: AgentRow) {
+  const capabilities = (row.capabilities ?? []) as any[];
+  const pricing = (row.pricing ?? []) as any[];
+  const protocols = (row.protocols ?? []) as string[];
+
   return {
     pda: row.pda,
     identity: {
@@ -48,12 +52,21 @@ export function dbAgentToApi(row: AgentRow) {
       totalCallsServed: row.totalCallsServed,
       avgLatencyMs: row.avgLatencyMs,
       uptimePercent: row.uptimePercent,
-      capabilities: row.capabilities ?? [],
-      pricing: row.pricing ?? [],
-      protocols: row.protocols ?? [],
+      capabilities,
+      pricing,
+      protocols,
       activePlugins: row.activePlugins ?? [],
     },
     stats: null,
+    computed: {
+      isActive: row.isActive ?? false,
+      totalCalls: String(row.totalCallsServed ?? '0'),
+      reputationScore: row.reputationScore ?? 0,
+      hasX402: !!row.x402Endpoint,
+      capabilityCount: capabilities.length,
+      pricingTierCount: pricing.length,
+      protocols,
+    },
   };
 }
 

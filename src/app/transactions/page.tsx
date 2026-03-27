@@ -531,7 +531,7 @@ export default function TransactionsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
 
   // Filters
   const [hideSpam, setHideSpam] = useState(false);
@@ -540,6 +540,7 @@ export default function TransactionsPage() {
   const [perPage, setPerPage] = useState(25);
 
   useEffect(() => {
+    setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(t);
   }, []);

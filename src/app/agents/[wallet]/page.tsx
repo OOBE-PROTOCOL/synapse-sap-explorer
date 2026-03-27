@@ -50,7 +50,15 @@ export default function AgentDetailPage() {
 
   const { profile } = data;
   const id = profile.identity;
-  const computed = profile.computed;
+  const computed = profile.computed ?? {
+    isActive: id?.isActive ?? false,
+    totalCalls: String(id?.totalCallsServed ?? '0'),
+    reputationScore: id?.reputationScore ?? 0,
+    hasX402: !!id?.x402Endpoint,
+    capabilityCount: id?.capabilities?.length ?? 0,
+    pricingTierCount: id?.pricing?.length ?? 0,
+    protocols: id?.protocols ?? [],
+  };
 
   const copyAddress = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -113,7 +121,7 @@ export default function AgentDetailPage() {
               <p className="text-[10px] text-muted-foreground">Reputation</p>
             </div>
             <div className="text-center">
-              <p className="text-lg font-semibold text-foreground">{Number(computed.totalCalls).toLocaleString()}</p>
+              <p className="text-lg font-semibold text-foreground tabular-nums">{Number(computed.totalCalls).toLocaleString('en-US')}</p>
               <p className="text-[10px] text-muted-foreground">Total Calls</p>
             </div>
             <div className="text-center">
@@ -140,7 +148,7 @@ export default function AgentDetailPage() {
         <Card>
           <CardContent className="pt-6 text-center">
             <Zap className="mb-2 mx-auto h-4 w-4 text-primary" />
-            <p className="text-lg font-bold tabular-nums text-foreground">{Number(id.totalCallsServed).toLocaleString()}</p>
+            <p className="text-lg font-bold tabular-nums text-foreground">{Number(id.totalCallsServed).toLocaleString('en-US')}</p>
             <p className="text-[10px] text-muted-foreground">Total Calls</p>
           </CardContent>
         </Card>
