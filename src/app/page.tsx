@@ -15,7 +15,6 @@ import {
   TrendingUp,
   Zap,
   Database,
-  Globe,
 } from "lucide-react";
 import {
   StatCard,
