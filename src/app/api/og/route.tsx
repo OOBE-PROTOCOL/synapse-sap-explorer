@@ -20,10 +20,27 @@ const SITE_URL = 'https://explorer.oobeprotocol.ai';
 /** Fetch the Synapse logo and return a data-uri for Satori */
 async function getLogoSrc(origin: string): Promise<string> {
   try {
-    const res = await fetch(`${origin}/images/synapse.png`);
-    const buf = await res.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    return `data:image/png;base64,${b64}`;
+    // Try multiple paths (favicon is smaller = faster, apple-touch is mid-size)
+    const urls = [
+      `${origin}/apple-touch-icon.png`,
+      `${origin}/images/synapse.png`,
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { cache: 'force-cache' });
+        if (!res.ok) continue;
+        const buf = await res.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        // Chunked encoding to avoid call-stack overflow with large images
+        let binary = '';
+        const CHUNK = 8192;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+        }
+        return `data:image/png;base64,${btoa(binary)}`;
+      } catch { continue; }
+    }
+    return '';
   } catch {
     return '';
   }
