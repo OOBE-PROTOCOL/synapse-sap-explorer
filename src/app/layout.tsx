@@ -1,18 +1,8 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
 import AppLayout from '~/components/layout/app-layout';
 import './globals.css';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
-
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-});
 
 export const metadata: Metadata = {
   title: 'Synapse Explorer — SAP Agent Protocol',
@@ -35,9 +25,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrains.variable} font-sans`}
+        className={`${GeistMono.variable} font-mono`}
+        suppressHydrationWarning
       >
         <AppLayout>{children}</AppLayout>
         <Toaster

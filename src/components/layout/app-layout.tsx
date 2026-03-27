@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import {
   Activity,
   Search,
@@ -18,8 +19,13 @@ import {
   Wallet,
   ShieldCheck,
   Trophy,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { Separator } from '~/components/ui/separator';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Overview', icon: Activity },
@@ -37,52 +43,47 @@ const NAV_ITEMS = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-background">
       {/* ── Sidebar ─────────────────────────────── */}
       <aside
         className={cn(
-          'hidden flex-shrink-0 lg:block transition-all duration-500 ease-[cubic-bezier(.22,1,.36,1)] relative sticky top-0 h-screen',
+          'hidden flex-shrink-0 lg:flex flex-col transition-all duration-500 ease-[cubic-bezier(.22,1,.36,1)] relative sticky top-0 h-screen border-r border-border bg-sidebar-background',
           collapsed ? 'w-[72px]' : 'w-[260px]',
         )}
       >
-        <div className="absolute inset-0 sidebar-glass" />
-
-        <button
+        {/* Collapse toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute -right-3 top-20 z-20 h-6 w-6 rounded-full border border-border bg-background shadow-sm"
           onClick={() => setCollapsed(!collapsed)}
-          className="sidebar-toggle"
           aria-label={collapsed ? 'Expand' : 'Collapse'}
         >
           {collapsed ? (
-            <ChevronRight className="h-3 w-3 text-blue-400/70" />
+            <ChevronRight className="h-3 w-3" />
           ) : (
-            <ChevronLeft className="h-3 w-3 text-blue-400/70" />
+            <ChevronLeft className="h-3 w-3" />
           )}
-        </button>
+        </Button>
 
-        <div className="relative z-10 flex h-full flex-col overflow-y-auto overflow-x-hidden">
+        <div className="flex h-full flex-col overflow-y-auto overflow-x-hidden">
           {/* Logo */}
           <div
             className={cn(
-              'flex items-center gap-3 shrink-0 transition-all duration-300',
+              'flex items-center gap-3 shrink-0 border-b border-border transition-all duration-300',
               collapsed ? 'h-16 justify-center px-3' : 'h-16 px-5',
             )}
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
           >
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-xl shrink-0"
-              style={{
-                background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(20,184,166,0.08))',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
-              }}
-            >
-              <Hexagon className="h-4 w-4 text-blue-400" />
-              <div className="absolute inset-0 rounded-xl ring-1 ring-blue-500/15" />
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-xl shrink-0 bg-primary/10">
+              <Hexagon className="h-4 w-4 text-primary" />
             </div>
             {!collapsed && (
               <Link href="/" className="truncate">
-                <span className="text-sm font-semibold gradient-text">Synapse</span>
-                <span className="ml-1.5 text-[10px] font-medium text-white/25 uppercase tracking-widest">Explorer</span>
+                <span className="text-sm font-semibold">Synapse</span>
+                <span className="ml-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Explorer</span>
               </Link>
             )}
           </div>
@@ -91,12 +92,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && (
             <div className="px-4 py-3">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/20" />
-                <input
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
                   type="text"
                   placeholder="Search agents, PDAs..."
-                  className="w-full rounded-2xl bg-white/[0.03] border border-white/[0.06] py-2.5 pl-9 pr-3 text-[12px] text-white/70 placeholder-white/20 outline-none transition-all focus:border-blue-500/25 focus:bg-white/[0.05] focus:ring-1 focus:ring-blue-500/10"
-                  style={{ backdropFilter: 'blur(12px)' }}
+                  className="pl-9 h-9 text-xs rounded-xl"
                 />
               </div>
             </div>
@@ -104,7 +104,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {!collapsed && (
             <div className="px-5 pb-1 pt-2">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/20">Protocol</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Protocol</span>
             </div>
           )}
 
@@ -118,16 +118,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   href={href}
                   title={collapsed ? label : undefined}
                   className={cn(
-                    'group flex items-center gap-3 rounded-2xl text-[13px] font-medium transition-all duration-300',
+                    'group flex items-center gap-3 rounded-xl text-[13px] font-medium transition-all duration-200',
                     collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
                     isActive
-                      ? 'nav-active text-white'
-                      : 'text-white/35 hover:bg-white/[0.03] hover:text-white/60',
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
                   <Icon className={cn(
-                    'h-4 w-4 shrink-0 transition-colors duration-300',
-                    isActive ? 'text-blue-400' : 'text-white/25 group-hover:text-white/45',
+                    'h-4 w-4 shrink-0 transition-colors duration-200',
+                    isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
                   )} />
                   {!collapsed && label}
                 </Link>
@@ -135,29 +135,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* Bottom */}
-          <div
-            className={cn('shrink-0', collapsed ? 'p-2 pb-4' : 'p-4')}
-            style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
-          >
-            {!collapsed ? (
-              <div className="rounded-2xl p-3"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(59,130,246,0.05), rgba(20,184,166,0.03))',
-                  border: '1px solid rgba(59,130,246,0.08)',
-                  backdropFilter: 'blur(12px)',
-                }}
+          {/* Bottom section */}
+          <div className={cn('shrink-0 border-t border-border', collapsed ? 'p-2 pb-4' : 'p-4')}>
+            {/* Theme toggle */}
+            <div className={cn('mb-3', collapsed ? 'flex justify-center' : 'flex items-center gap-2')}>
+              <Button
+                variant="outline"
+                size={collapsed ? 'icon' : 'sm'}
+                className={cn('h-8', !collapsed && 'w-full justify-start gap-2 text-xs')}
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               >
+                <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                {!collapsed && <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>}
+              </Button>
+            </div>
+
+            {!collapsed ? (
+              <div className="rounded-xl p-3 bg-muted/50 border border-border">
                 <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
-                  <span className="text-[10px] text-white/35">SAP Program</span>
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
+                  <span className="text-[10px] text-muted-foreground">SAP Program</span>
                 </div>
-                <p className="mt-1 font-mono text-[10px] text-blue-400/60 truncate">SAPp...FETZ</p>
-                <p className="mt-0.5 text-[9px] text-white/20">synapse-client-sdk v2.0.5</p>
+                <p className="mt-1 font-mono text-[10px] text-primary/60 truncate">SAPp...FETZ</p>
+                <p className="mt-0.5 text-[9px] text-muted-foreground">synapse-client-sdk v2.0.5</p>
               </div>
             ) : (
               <div className="flex justify-center">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
               </div>
             )}
           </div>
@@ -167,10 +172,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* ── Content ─────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile header */}
-        <div className="sticky top-0 z-50 flex h-14 items-center gap-3 px-4 lg:hidden mobile-header">
-          <Hexagon className="h-5 w-5 text-blue-400" />
-          <span className="text-sm font-semibold gradient-text">Synapse Explorer</span>
+        <div className="sticky top-0 z-50 flex h-14 items-center gap-3 px-4 lg:hidden border-b border-border bg-background/80 backdrop-blur-sm">
+          <Hexagon className="h-5 w-5 text-primary" />
+          <span className="text-sm font-semibold">Synapse Explorer</span>
           <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
             {NAV_ITEMS.slice(0, 6).map(({ href, icon: Icon }) => {
               const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
               return (
@@ -178,8 +192,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   key={href}
                   href={href}
                   className={cn(
-                    'rounded-xl p-2 transition-all duration-300',
-                    isActive ? 'bg-blue-500/10 text-blue-400' : 'text-white/25 hover:text-white/50',
+                    'rounded-xl p-2 transition-all duration-200',
+                    isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   <Icon className="h-4 w-4" />
