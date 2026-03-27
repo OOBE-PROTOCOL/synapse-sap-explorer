@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
+import { ThemeProvider } from '~/components/theme-provider';
 import AppLayout from '~/components/layout/app-layout';
 import './globals.css';
 
@@ -25,26 +26,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${GeistMono.variable} font-mono`}
         suppressHydrationWarning
       >
-        <AppLayout>{children}</AppLayout>
-        <Toaster
-          theme="dark"
-          position="bottom-right"
-          toastOptions={{
-            style: {
-              background: 'rgba(12,17,23,0.82)',
-              backdropFilter: 'blur(16px) saturate(150%)',
-              border: '1px solid rgba(255,255,255,0.055)',
-              color: '#e5e7eb',
-              borderRadius: '16px',
-              boxShadow: '0 8px 40px -8px rgba(0,0,0,0.40), 0 2px 12px -4px rgba(0,0,0,0.20)',
-            },
-          }}
-        />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AppLayout>{children}</AppLayout>
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              classNames: {
+                toast: 'bg-popover text-popover-foreground border-border shadow-lg rounded-2xl',
+              },
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   );

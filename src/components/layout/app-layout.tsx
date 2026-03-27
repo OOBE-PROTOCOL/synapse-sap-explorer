@@ -21,6 +21,9 @@ import {
   Trophy,
   Sun,
   Moon,
+  ExternalLink,
+  Github,
+  Globe,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { Button } from '~/components/ui/button';
@@ -151,14 +154,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
 
+            {/* External links */}
+            <div className={cn('mb-3 space-y-0.5', collapsed && 'space-y-1')}>
+              {[
+                { href: 'https://oobe.me', label: 'OOBE Protocol', icon: Globe },
+                { href: 'https://synapse-rpc.oobe.me', label: 'Synapse RPC Gateway', icon: ExternalLink },
+                { href: 'https://github.com/oobe-protocol/sap', label: 'SAP GitHub', icon: Github },
+                { href: 'https://github.com/oobe-protocol/sap-client-sdk', label: 'SAP Client SDK', icon: Github },
+              ].map(({ href, label, icon: Icon }) => (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={collapsed ? label : undefined}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-xl text-[11px] text-muted-foreground hover:text-foreground transition-colors',
+                    collapsed ? 'justify-center py-1.5' : 'px-2 py-1.5',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {!collapsed && <span className="truncate">{label}</span>}
+                </a>
+              ))}
+            </div>
+
             {!collapsed ? (
               <div className="rounded-xl p-3 bg-muted/50 border border-border">
                 <div className="flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
-                  <span className="text-[10px] text-muted-foreground">SAP Program</span>
+                  <span className="text-[10px] text-muted-foreground">SAP Program Skill</span>
+                  <a href="https://synapse.oobeprotocol.ai/skills.md" target="_blank" rel="noopener noreferrer" className="ml-auto text-[12px] font-medium text-primary hover:underline">DOWNLOAD</a>
                 </div>
-                <p className="mt-1 font-mono text-[10px] text-primary/60 truncate">SAPp...FETZ</p>
-                <p className="mt-0.5 text-[9px] text-muted-foreground">synapse-client-sdk v2.0.5</p>
               </div>
             ) : (
               <div className="flex justify-center">
