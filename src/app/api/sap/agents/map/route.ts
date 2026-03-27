@@ -9,48 +9,60 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { findAllAgents, serializeDiscoveredAgent } from '~/lib/sap/discovery';
-import { swr } from '~/lib/cache';
+import { swr, peek } from '~/lib/cache';
 import { selectAllAgents } from '~/lib/db/queries';
+
+type AgentMap = Record<string, { name: string; pda: string; score: number }>;
+
+async function rpcFetchAgentMap(): Promise<AgentMap> {
+  const agents = await findAllAgents();
+  const map: AgentMap = {};
+  for (const agent of agents) {
+    const s = serializeDiscoveredAgent(agent);
+    if (s.identity?.wallet) {
+      map[s.identity.wallet] = {
+        name: s.identity.name || s.identity.agentId || '',
+        pda: s.pda,
+        score: s.identity.reputationScore ?? 0,
+      };
+    }
+  }
+  return map;
+}
 
 export async function GET() {
   try {
-    const data = await swr('agents:map', async () => {
-      // 1. Try DB first
-      try {
-        const dbRows = await selectAllAgents();
-        if (dbRows.length > 0) {
-          const map: Record<string, { name: string; pda: string; score: number }> = {};
-          for (const row of dbRows) {
-            if (row.wallet) {
-              map[row.wallet] = {
-                name: row.name || row.agentId || '',
-                pda: row.pda,
-                score: row.reputationScore ?? 0,
-              };
-            }
+    // Step 1: cache peek
+    const cached = peek<AgentMap>('agents:map');
+    if (cached && Object.keys(cached).length > 0) {
+      swr('agents:map', rpcFetchAgentMap, { ttl: 60_000, swr: 300_000 }).catch(() => {});
+      return NextResponse.json(cached);
+    }
+
+    // Step 2: DB read
+    try {
+      const dbRows = await selectAllAgents();
+      if (dbRows.length > 0) {
+        const map: AgentMap = {};
+        for (const row of dbRows) {
+          if (row.wallet) {
+            map[row.wallet] = {
+              name: row.name || row.agentId || '',
+              pda: row.pda,
+              score: row.reputationScore ?? 0,
+            };
           }
-          return map;
         }
-      } catch (e) {
-        console.warn('[agents/map] DB read failed:', (e as Error).message);
+        swr('agents:map', rpcFetchAgentMap, { ttl: 60_000, swr: 300_000 }).catch(() => {});
+        return NextResponse.json(map);
       }
+    } catch (e) {
+      console.warn('[agents/map] DB read failed:', (e as Error).message);
+    }
 
-      // 2. Fallback to RPC
-      const agents = await findAllAgents();
-      const map: Record<string, { name: string; pda: string; score: number }> = {};
-      for (const agent of agents) {
-        const s = serializeDiscoveredAgent(agent);
-        if (s.identity?.wallet) {
-          map[s.identity.wallet] = {
-            name: s.identity.name || s.identity.agentId || '',
-            pda: s.pda,
-            score: s.identity.reputationScore ?? 0,
-          };
-        }
-      }
-      return map;
-    }, { ttl: 300_000, swr: 3_000_000 });
-
+    // Step 3: cold start
+    const data = await rpcFetchAgentMap();
+    swr('agents:map', () => Promise.resolve(data), { ttl: 60_000, swr: 300_000 }).catch(() => {});
     return NextResponse.json(data);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to build agent map';
