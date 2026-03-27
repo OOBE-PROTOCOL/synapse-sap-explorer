@@ -1,32 +1,54 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
+import { ThemeProvider } from '~/components/theme-provider';
 import AppLayout from '~/components/layout/app-layout';
 import './globals.css';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
-
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-});
+const SITE_URL = 'https://explorer.oobeprotocol.ai';
 
 export const metadata: Metadata = {
-  title: 'Synapse Explorer — SAP Agent Protocol',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'Synapse SAP Explorer | Agent Protocol',
+    template: '%s | Synapse SAP Explorer',
+  },
   description:
-    'Explore the Solana Agent Protocol network — discover agents, visualize PDA connections, browse on-chain tools, and monitor SAP transactions in real-time.',
+    'Explore the Solana Agent Protocol network: discover agents, visualize PDA connections, browse on-chain tools, and monitor SAP transactions in real-time.',
   keywords: [
-    'Solana',
-    'SAP',
-    'Agent Protocol',
-    'Explorer',
-    'PDA',
-    'On-chain agents',
-    'Synapse',
+    'Solana', 'SAP', 'Agent Protocol', 'Explorer',
+    'PDA', 'On-chain agents', 'Synapse', 'OOBE Protocol',
   ],
+  authors: [{ name: 'OOBE Protocol Labs', url: 'https://oobeprotocol.ai' }],
+  creator: 'OOBE Protocol Labs',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '32x32' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
+  openGraph: {
+    type: 'website',
+    siteName: 'Synapse Explorer',
+    title: 'Synapse Explorer — SAP Agent Protocol',
+    description: 'Real-time on-chain explorer for the Solana Agent Protocol. Discover agents, tools, escrows, and transactions.',
+    url: SITE_URL,
+    images: [{ url: `${SITE_URL}/api/og`, width: 1200, height: 630, alt: 'Synapse Explorer' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Synapse Explorer — SAP Agent Protocol',
+    description: 'Real-time on-chain explorer for the Solana Agent Protocol.',
+    images: [`${SITE_URL}/api/og`],
+    creator: '@oobeprotocol',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
@@ -35,25 +57,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrains.variable} font-sans`}
+        className={`${GeistMono.variable} font-mono`}
+        suppressHydrationWarning
       >
-        <AppLayout>{children}</AppLayout>
-        <Toaster
-          theme="dark"
-          position="bottom-right"
-          toastOptions={{
-            style: {
-              background: 'rgba(12,17,23,0.82)',
-              backdropFilter: 'blur(16px) saturate(150%)',
-              border: '1px solid rgba(255,255,255,0.055)',
-              color: '#e5e7eb',
-              borderRadius: '16px',
-              boxShadow: '0 8px 40px -8px rgba(0,0,0,0.40), 0 2px 12px -4px rgba(0,0,0,0.20)',
-            },
-          }}
-        />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AppLayout>{children}</AppLayout>
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              classNames: {
+                toast: 'bg-popover text-popover-foreground border-border shadow-lg rounded-2xl',
+              },
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   );

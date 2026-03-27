@@ -47,6 +47,58 @@ export default function OverviewPage() {
 
   const totalAgents = Number(metrics?.totalAgents ?? 0);
   const activeAgents = Number(metrics?.activeAgents ?? 0);
+  const totalEscrows = escrowData?.total ?? 0;
+  const totalAttestations = attestationData?.total ?? Number(metrics?.totalAttestations ?? 0);
+  const totalFeedbacks = feedbackData?.total ?? Number(metrics?.totalFeedbacks ?? 0);
+  const totalVaults = vaultData?.total ?? Number(metrics?.totalVaults ?? 0);
+  const totalTools = toolsData?.total ?? Number(metrics?.totalTools ?? 0);
+  const totalProtocols = Number(metrics?.totalProtocols ?? 0);
+  const totalCapabilities = Number(metrics?.totalCapabilities ?? 0);
+
+  /* -- Chart data: calls served per agent -- */
+  const agentChartData = useMemo(() => {
+    if (!agentsData?.agents) return [];
+    return agentsData.agents
+      .filter((a) => a.identity)
+      .slice(0, 10)
+      .map((a) => ({
+        name: a.identity!.name.length > 12 ? a.identity!.name.slice(0, 10) + '..' : a.identity!.name,
+        calls: Number(a.identity!.totalCallsServed),
+        score: a.identity!.reputationScore,
+      }));
+  }, [agentsData]);
+
+  /* -- Tool list from /tools -- */
+  const toolList = useMemo(() => {
+    if (!toolsData?.tools) return [];
+    return toolsData.tools
+      .filter((t: any) => t.descriptor)
+      .map((t: any) => ({
+        name: t.descriptor.toolName as string,
+        category: String(t.descriptor.category ?? 'Unknown'),
+        invocations: Number(t.descriptor.totalInvocations ?? 0),
+        isActive: t.descriptor.isActive as boolean,
+      }))
+      .sort((a: any, b: any) => b.invocations - a.invocations);
+  }, [toolsData]);
+
+  /* -- Escrow aggregated stats -- */
+  const escrowStats = useMemo(() => {
+    if (!escrowData?.escrows) return null;
+    const escrows = escrowData.escrows;
+    const totalBalance = escrows.reduce((s: number, e: any) => s + Number(e.balance), 0);
+    const totalDeposited = escrows.reduce((s: number, e: any) => s + Number(e.totalDeposited), 0);
+    const totalSettled = escrows.reduce((s: number, e: any) => s + Number(e.totalSettled), 0);
+    const totalCalls = escrows.reduce((s: number, e: any) => s + Number(e.totalCallsSettled), 0);
+    const active = escrows.filter((e: any) => Number(e.balance) > 0).length;
+    return { totalBalance, totalDeposited, totalSettled, totalCalls, active, total: escrows.length };
+  }, [escrowData]);
+
+  const CHART_COLORS = [
+    'hsl(262, 80%, 60%)', 'hsl(262, 70%, 50%)', 'hsl(262, 60%, 45%)',
+    'hsl(262, 50%, 40%)', 'hsl(200, 60%, 50%)', 'hsl(170, 50%, 45%)',
+    'hsl(340, 60%, 50%)', 'hsl(30, 70%, 50%)', 'hsl(280, 65%, 55%)', 'hsl(120, 40%, 45%)',
+  ];
 
   // Quick links with mobile-first priority
   const quickLinks = [
@@ -126,7 +178,7 @@ export default function OverviewPage() {
               <Skeleton className="h-20 md:h-16 w-full" />
             </div>
           ))
-        ) : metrics ? (
+        ) : (
           <>
             <StatCard
               label="Total Agents"
@@ -164,7 +216,7 @@ export default function OverviewPage() {
               className="stagger-4 animate-fade-in"
             />
           </>
-        ) : null}
+        )}
       </div>
 
       {/* ── Two-column: Top Agents + Tool Categories ── Layout responsive */}
@@ -293,8 +345,29 @@ export default function OverviewPage() {
                 View all agents →
               </a>
             </div>
-          )}
-        </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {escrowLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : !escrowStats ? (
+              <p className="text-xs text-muted-foreground">No escrow data</p>
+            ) : (
+              <div className="space-y-4">
+                {/* Summary grid */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-muted/20 border border-border/40 p-3 text-center">
+                    <p className="text-lg font-bold tabular-nums">{escrowStats.total}</p>
+                    <p className="text-[10px] text-muted-foreground">Total</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/20 border border-border/40 p-3 text-center">
+                    <p className="text-lg font-bold tabular-nums text-emerald-500">{escrowStats.active}</p>
+                    <p className="text-[10px] text-muted-foreground">Active</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/20 border border-border/40 p-3 text-center">
+                    <p className="text-lg font-bold tabular-nums">{escrowStats.totalCalls.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">Calls Settled</p>
+                  </div>
+                </div>
 
         {/* Right Column - Tool Categories + Network Stats */}
         <div className="space-y-4 md:space-y-6 lg:col-span-3">
@@ -342,15 +415,17 @@ export default function OverviewPage() {
                         </div>
                       </div>
                     );
-                  });
-                })()}
+                  })}
+                </div>
               </div>
             ) : (
               <p className="text-[12px] md:text-[13px] text-white/25">
                 No tool data
               </p>
             )}
-          </div>
+          </CardContent>
+        </Card>
+      </div>
 
           {/* Network Composition - Grid mobile friendly */}
           <div className="glass-card-static p-4 md:p-5">

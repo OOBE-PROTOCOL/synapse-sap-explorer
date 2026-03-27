@@ -26,10 +26,8 @@ export default function CapabilitiesPage() {
 
   const loading = gLoading || aLoading;
 
-  /* ── Build capability list from graph nodes ────────── */
   const capabilities = useMemo(() => {
     if (!graphData) return [];
-
     return graphData.nodes
       .filter(
         (n): n is GraphNode & { type: "capability" } => n.type === "capability",
@@ -42,7 +40,6 @@ export default function CapabilitiesPage() {
           const agent = agentsData?.agents.find((a) => a.pda === pda);
           return { pda, name: agent?.identity?.name ?? null };
         });
-
         return {
           id: String(n.meta?.capabilityId ?? n.name),
           name: n.name,
@@ -56,7 +53,6 @@ export default function CapabilitiesPage() {
       .sort((a, b) => a.id.localeCompare(b.id));
   }, [graphData, agentsData]);
 
-  /* ── Unique protocols for the filter dropdown ──────── */
   const protocols = useMemo(
     () =>
       [
@@ -65,9 +61,8 @@ export default function CapabilitiesPage() {
     [capabilities],
   );
 
-  /* ── Search + filter ───────────────────────────────── */
   const filtered = capabilities.filter((c) => {
-    if (protocolFilter && c.protocolId !== protocolFilter) return false;
+    if (protocolFilter !== 'all' && c.protocolId !== protocolFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -111,7 +106,7 @@ export default function CapabilitiesPage() {
         </select>
       </div>
 
-      {/* ── Content ──────────────────────────────── */}
+      {/* Content */}
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -136,8 +131,6 @@ export default function CapabilitiesPage() {
     </div>
   );
 }
-
-/* ── Capability Card ──────────────────────────────────── */
 
 type CapInfo = {
   id: string;
@@ -181,13 +174,15 @@ function CapabilityCard({ capability }: { capability: CapInfo }) {
               </div>
             )}
           </div>
+          {capability.version && (
+            <Badge variant="secondary" className="text-[10px] shrink-0">v{capability.version}</Badge>
+          )}
         </div>
         {capability.version && (
           <span className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] font-mono text-white/30 shrink-0">
             v{capability.version}
           </span>
         )}
-      </div>
 
       {/* Description */}
       {capability.description && (
@@ -215,7 +210,6 @@ function CapabilityCard({ capability }: { capability: CapInfo }) {
             {capability.ownerCount !== 1 ? "s" : ""}
           </span>
         </div>
-      </div>
 
       {/* Owners */}
       {capability.owners.length > 0 && (
@@ -240,8 +234,8 @@ function CapabilityCard({ capability }: { capability: CapInfo }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

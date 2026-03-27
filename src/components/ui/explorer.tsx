@@ -1,15 +1,19 @@
 'use client';
 
 /* ═══════════════════════════════════════════════════════════
- * Explorer UI Components — Solscan-style primitives
- *
- * Shared components used across all explorer detail pages:
- * timestamps, copyable fields, Solscan links, tx status,
- * instruction views, DID identity badges, account tables.
+ * Explorer UI Components — shadcn-based detail page primitives
  * ═══════════════════════════════════════════════════════════ */
 
 import { useState } from 'react';
 import { cn } from '~/lib/utils';
+import { Badge } from '~/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Button } from '~/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '~/components/ui/collapsible';
 import {
   Copy,
   Check,
@@ -19,10 +23,10 @@ import {
   Fingerprint,
   ChevronDown,
   ChevronRight,
+  ArrowLeft,
 } from 'lucide-react';
 
 /* ── Timestamp Display ───────────────────────── */
-/** Solscan-style: "Mar 13, 2026 14:32:05 UTC · 2 minutes ago · Unix: 1773698525" */
 export function TimestampDisplay({
   unixSeconds,
   className,
@@ -33,7 +37,7 @@ export function TimestampDisplay({
   compact?: boolean;
 }) {
   const ts = Number(unixSeconds);
-  if (!ts || ts === 0) return <span className={cn('text-white/20 text-[12px]', className)}>—</span>;
+  if (!ts || ts === 0) return <span className={cn('text-muted-foreground text-xs', className)}>—</span>;
 
   const date = new Date(ts * 1000);
   const now = Date.now();
@@ -65,25 +69,25 @@ export function TimestampDisplay({
 
   if (compact) {
     return (
-      <span className={cn('text-[12px] text-white/50 tabular-nums', className)} title={`${absolute}\nUnix: ${ts}`}>
+      <span className={cn('text-xs text-muted-foreground tabular-nums', className)} title={`${absolute}\nUnix: ${ts}`}>
         {relativeTime}
       </span>
     );
   }
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2 text-[12px]', className)}>
-      <Clock className="h-3 w-3 text-white/20 shrink-0" />
-      <span className="text-white/60 tabular-nums">{absolute}</span>
-      <span className="text-white/15">·</span>
-      <span className="text-blue-400/60 tabular-nums">{relativeTime}</span>
-      <span className="text-white/15">·</span>
-      <span className="text-white/20 font-mono text-[10px]">Unix: {ts}</span>
+    <div className={cn('flex flex-wrap items-center gap-2 text-xs', className)}>
+      <Clock className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+      <span className="text-foreground/70 tabular-nums">{absolute}</span>
+      <span className="text-muted-foreground/30">·</span>
+      <span className="text-primary/70 tabular-nums">{relativeTime}</span>
+      <span className="text-muted-foreground/30">·</span>
+      <span className="text-muted-foreground font-mono text-[10px]">Unix: {ts}</span>
     </div>
   );
 }
 
-/* ── Copyable Field (Solscan-style data row) ── */
+/* ── Copyable Field ──────────────────────────── */
 export function CopyableField({
   label,
   value,
@@ -116,8 +120,8 @@ export function CopyableField({
     : value;
 
   return (
-    <div className={cn('flex items-start justify-between gap-4 py-2.5 border-b border-white/[0.03] last:border-0', className)}>
-      <span className="text-[12px] text-white/30 shrink-0 min-w-[120px]">{label}</span>
+    <div className={cn('flex items-start justify-between gap-4 py-2.5 border-b border-border/50 last:border-0', className)}>
+      <span className="text-xs text-muted-foreground shrink-0 min-w-[120px]">{label}</span>
       <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
         {href ? (
           <a
@@ -125,7 +129,7 @@ export function CopyableField({
             target={external ? '_blank' : undefined}
             rel={external ? 'noopener noreferrer' : undefined}
             className={cn(
-              'text-[12px] text-blue-400/70 hover:text-blue-400 transition-colors truncate',
+              'text-xs text-primary/80 hover:text-primary transition-colors truncate',
               mono && 'font-mono',
             )}
             title={stringValue ?? undefined}
@@ -136,7 +140,7 @@ export function CopyableField({
         ) : (
           <span
             className={cn(
-              'text-[12px] text-white/70 truncate',
+              'text-xs text-foreground/80 truncate',
               mono && 'font-mono',
             )}
             title={stringValue ?? undefined}
@@ -147,10 +151,10 @@ export function CopyableField({
         {stringValue && (
           <button
             onClick={handleCopy}
-            className="shrink-0 rounded-lg p-1 text-white/15 hover:text-white/40 hover:bg-white/[0.04] transition-all duration-micro ease-out-smooth"
+            className="shrink-0 rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-all"
             title="Copy"
           >
-            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
           </button>
         )}
       </div>
@@ -179,7 +183,7 @@ export function SolscanLink({
       href={`${base}${path}`}
       target="_blank"
       rel="noopener noreferrer"
-      className={cn('inline-flex items-center gap-1 text-[11px] text-blue-400/70 hover:text-blue-400 transition-colors font-mono', className)}
+      className={cn('inline-flex items-center gap-1 text-xs text-primary/80 hover:text-primary transition-colors font-mono', className)}
       title={`View on Solscan: ${value}`}
     >
       {display}
@@ -191,19 +195,22 @@ export function SolscanLink({
 /* ── TX Status Badge ─────────────────────────── */
 export function TxStatusBadge({ success, className }: { success: boolean; className?: string }) {
   return (
-    <span className={cn(
-      'inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
-      success
-        ? 'bg-emerald-500/[0.08] text-emerald-400 border border-emerald-500/10'
-        : 'bg-red-500/[0.08] text-red-400 border border-red-500/10',
-      className,
-    )}>
+    <Badge
+      variant={success ? 'default' : 'destructive'}
+      className={cn(
+        'gap-1.5 text-[10px] font-semibold uppercase tracking-wider',
+        success
+          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+          : 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20 hover:bg-red-500/20',
+        className,
+      )}
+    >
       <span className={cn(
         'h-1.5 w-1.5 rounded-full',
-        success ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.4)]' : 'bg-red-400 shadow-[0_0_4px_rgba(248,113,113,0.4)]',
+        success ? 'bg-emerald-500' : 'bg-red-500',
       )} />
       {success ? 'Success' : 'Failed'}
-    </span>
+    </Badge>
   );
 }
 
@@ -222,47 +229,46 @@ export function DIDIdentity({
   const hasDID = agentId || agentUri;
 
   return (
-    <div className={cn('rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4', className)}>
-      <div className="flex items-center gap-2 mb-3">
-        <Fingerprint className="h-4 w-4 text-violet-400" />
-        <h3 className="text-[12px] font-semibold text-white">Decentralized Identity (DID)</h3>
-      </div>
-
-      {hasDID ? (
-        <div className="space-y-0">
-          {agentId && (
-            <CopyableField label="Agent ID" value={agentId} />
-          )}
-          {agentUri && (
-            <CopyableField
-              label="Agent URI"
-              value={agentUri}
-              href={agentUri.startsWith('http') ? agentUri : undefined}
-              external={agentUri.startsWith('http')}
-            />
-          )}
-          {wallet && (
-            <CopyableField label="Wallet (Authority)" value={wallet} truncate />
-          )}
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 py-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-white/10" />
-          <span className="text-[12px] text-white/25">No DID registered on-chain</span>
-          {wallet && (
-            <span className="text-[10px] text-white/15 font-mono ml-auto">{wallet.slice(0, 8)}…</span>
-          )}
-        </div>
-      )}
-    </div>
+    <Card className={className}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Fingerprint className="h-4 w-4 text-primary" />
+          Decentralized Identity (DID)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {hasDID ? (
+          <div className="space-y-0">
+            {agentId && <CopyableField label="Agent ID" value={agentId} />}
+            {agentUri && (
+              <CopyableField
+                label="Agent URI"
+                value={agentUri}
+                href={agentUri.startsWith('http') ? agentUri : undefined}
+                external={agentUri.startsWith('http')}
+              />
+            )}
+            {wallet && <CopyableField label="Wallet (Authority)" value={wallet} truncate />}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 py-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+            <span className="text-xs text-muted-foreground">No DID registered on-chain</span>
+            {wallet && (
+              <span className="text-[10px] text-muted-foreground/60 font-mono ml-auto">{wallet.slice(0, 8)}…</span>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 /* ── Slot / Block Display ────────────────────── */
 export function SlotDisplay({ slot, className }: { slot: number; className?: string }) {
   return (
-    <span className={cn('inline-flex items-center gap-1 text-[12px] font-mono tabular-nums text-white/60', className)}>
-      <Hash className="h-3 w-3 text-white/20" />
+    <span className={cn('inline-flex items-center gap-1 text-xs font-mono tabular-nums text-foreground/70', className)}>
+      <Hash className="h-3 w-3 text-muted-foreground/50" />
       {slot.toLocaleString()}
     </span>
   );
@@ -272,10 +278,10 @@ export function SlotDisplay({ slot, className }: { slot: number; className?: str
 export function FeeDisplay({ lamports, className }: { lamports: number; className?: string }) {
   const sol = lamports / 1e9;
   return (
-    <span className={cn('text-[12px] tabular-nums text-white/60', className)}>
+    <span className={cn('text-xs tabular-nums text-foreground/70', className)}>
       {sol < 0.001 ? `${lamports.toLocaleString()} lamports` : `${sol.toFixed(6)} SOL`}
       {sol >= 0.001 && (
-        <span className="text-white/20 ml-1">({lamports.toLocaleString()} lamports)</span>
+        <span className="text-muted-foreground ml-1">({lamports.toLocaleString()} lamports)</span>
       )}
     </span>
   );
@@ -308,44 +314,42 @@ export function InstructionView({
   const [showAccounts, setShowAccounts] = useState(false);
 
   return (
-    <div className={cn('rounded-xl border border-white/[0.04] bg-white/[0.01] overflow-hidden', className)}>
-      {/* Header */}
+    <Card className={cn('overflow-hidden', className)}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
+        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left"
       >
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.04] text-[10px] font-mono text-white/40 shrink-0">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-[10px] font-mono text-muted-foreground shrink-0">
           #{index}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {instruction.program && (
-              <span className="badge-blue text-[9px]">{instruction.program}</span>
+              <Badge variant="default" className="text-[9px]">{instruction.program}</Badge>
             )}
             {instruction.type && (
-              <span className="badge-emerald text-[9px]">{instruction.type}</span>
+              <Badge variant="secondary" className="text-[9px]">{instruction.type}</Badge>
             )}
           </div>
-          <span className="text-[10px] font-mono text-white/25 mt-0.5 block truncate">
+          <span className="text-[10px] font-mono text-muted-foreground mt-0.5 block truncate">
             {instruction.programId}
           </span>
         </div>
         {expanded ? (
-          <ChevronDown className="h-3 w-3 text-white/20 shrink-0" />
+          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
         ) : (
-          <ChevronRight className="h-3 w-3 text-white/20 shrink-0" />
+          <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
         )}
       </button>
 
-      {/* Expanded details */}
       {expanded && (
-        <div className="border-t border-white/[0.03] px-4 py-3 space-y-2">
+        <div className="border-t border-border px-4 py-3 space-y-2">
           <CopyableField label="Program ID" value={instruction.programId} truncate />
 
           {instruction.parsed && Object.keys(instruction.parsed).length > 0 && (
             <div className="mt-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25 block mb-2">Parsed Data</span>
-              <pre className="text-[10px] font-mono text-white/50 bg-black/20 rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-2">Parsed Data</span>
+              <pre className="text-[10px] font-mono text-foreground/70 bg-muted rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
                 {JSON.stringify(instruction.parsed, null, 2)}
               </pre>
             </div>
@@ -353,8 +357,8 @@ export function InstructionView({
 
           {instruction.data && (
             <div className="mt-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25 block mb-1">Raw Data</span>
-              <p className="text-[10px] font-mono text-white/30 break-all">{instruction.data}</p>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Raw Data</span>
+              <p className="text-[10px] font-mono text-muted-foreground break-all">{instruction.data}</p>
             </div>
           )}
 
@@ -362,7 +366,7 @@ export function InstructionView({
             <div className="mt-2">
               <button
                 onClick={() => setShowAccounts(!showAccounts)}
-                className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-white/30 hover:text-white/50 transition-colors"
+                className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showAccounts ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 Accounts ({instruction.accounts.length})
@@ -371,8 +375,8 @@ export function InstructionView({
                 <div className="mt-1 space-y-0.5 ml-3">
                   {instruction.accounts.map((acc, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <span className="text-[9px] text-white/15 w-4 text-right">{i}</span>
-                      <a href={`/address/${acc}`} className="text-[10px] font-mono text-blue-400/60 hover:text-blue-400 transition-colors truncate">
+                      <span className="text-[9px] text-muted-foreground/50 w-4 text-right">{i}</span>
+                      <a href={`/address/${acc}`} className="text-[10px] font-mono text-primary/70 hover:text-primary transition-colors truncate">
                         {acc.length > 20 ? `${acc.slice(0, 8)}…${acc.slice(-6)}` : acc}
                       </a>
                     </div>
@@ -382,23 +386,22 @@ export function InstructionView({
             </div>
           )}
 
-          {/* Inner instructions */}
           {instruction.innerInstructions && instruction.innerInstructions.length > 0 && (
-            <div className="mt-2 border-t border-white/[0.03] pt-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25 block mb-2">
+            <div className="mt-2 border-t border-border pt-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
                 Inner Instructions ({instruction.innerInstructions.length})
               </span>
               <div className="space-y-1 ml-3">
                 {instruction.innerInstructions.map((inner, i) => (
-                  <div key={i} className="rounded-lg border border-white/[0.03] bg-white/[0.01] p-2">
+                  <div key={i} className="rounded-md border border-border bg-muted/50 p-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-white/15">↳ {i}</span>
-                      {inner.program && <span className="badge-cyan text-[8px]">{inner.program}</span>}
-                      {inner.type && <span className="text-[9px] text-white/35">{inner.type}</span>}
+                      <span className="text-[9px] text-muted-foreground/50">↳ {i}</span>
+                      {inner.program && <Badge variant="outline" className="text-[8px]">{inner.program}</Badge>}
+                      {inner.type && <span className="text-[9px] text-muted-foreground">{inner.type}</span>}
                     </div>
-                    <span className="text-[9px] font-mono text-white/20 mt-0.5 block truncate">{inner.programId}</span>
+                    <span className="text-[9px] font-mono text-muted-foreground/60 mt-0.5 block truncate">{inner.programId}</span>
                     {inner.parsed && (
-                      <pre className="text-[9px] font-mono text-white/30 mt-1 break-all max-h-20 overflow-auto" style={{ scrollbarWidth: 'thin' }}>
+                      <pre className="text-[9px] font-mono text-muted-foreground/70 mt-1 break-all max-h-20 overflow-auto" style={{ scrollbarWidth: 'thin' }}>
                         {JSON.stringify(inner.parsed, null, 2)}
                       </pre>
                     )}
@@ -409,11 +412,11 @@ export function InstructionView({
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
-/* ── On-Chain Data Section (collapsible raw data) ── */
+/* ── On-Chain Data Section ───────────────────── */
 export function OnChainDataSection({
   title = 'On-Chain Account Data',
   data,
@@ -426,23 +429,23 @@ export function OnChainDataSection({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className={cn('rounded-2xl border border-white/[0.05] bg-white/[0.02] overflow-hidden', className)}>
+    <Card className={cn('overflow-hidden', className)}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
+        className="flex items-center gap-2 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left"
       >
-        {expanded ? <ChevronDown className="h-3 w-3 text-white/30" /> : <ChevronRight className="h-3 w-3 text-white/30" />}
-        <span className="text-[12px] font-semibold text-white/60">{title}</span>
-        <span className="text-[9px] text-white/15 ml-auto">{Object.keys(data).length} fields</span>
+        {expanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+        <span className="text-sm font-medium text-foreground/80">{title}</span>
+        <span className="text-xs text-muted-foreground ml-auto">{Object.keys(data).length} fields</span>
       </button>
       {expanded && (
-        <div className="border-t border-white/[0.03] px-4 py-3">
-          <pre className="text-[10px] font-mono text-white/50 bg-black/20 rounded-lg p-3 overflow-x-auto max-h-[400px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+        <div className="border-t border-border px-4 py-3">
+          <pre className="text-[10px] font-mono text-foreground/70 bg-muted rounded-lg p-3 overflow-x-auto max-h-[400px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {JSON.stringify(data, null, 2)}
           </pre>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -456,9 +459,9 @@ export function SectionHeader({ title, count, children, className }: {
   return (
     <div className={cn('flex items-center justify-between mb-4', className)}>
       <div className="flex items-center gap-2">
-        <h2 className="text-[14px] font-semibold text-white">{title}</h2>
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         {count !== undefined && (
-          <span className="rounded-lg bg-white/[0.04] px-2 py-0.5 text-[10px] tabular-nums text-white/30">{count}</span>
+          <Badge variant="secondary" className="text-[10px] tabular-nums">{count}</Badge>
         )}
       </div>
       {children}
@@ -487,13 +490,15 @@ export function DetailPageShell({
   onBack?: () => void;
 }) {
   const backElement = onBack ? (
-    <button onClick={onBack} className="mb-4 flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60 transition-colors">
-      <ChevronRight className="h-3 w-3 rotate-180" /> {backLabel}
-    </button>
+    <Button variant="ghost" size="sm" onClick={onBack} className="mb-4 gap-1.5 text-muted-foreground hover:text-foreground">
+      <ArrowLeft className="h-3 w-3" /> {backLabel}
+    </Button>
   ) : (
-    <a href={backHref} className="mb-4 flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60 transition-colors">
-      <ChevronRight className="h-3 w-3 rotate-180" /> {backLabel}
-    </a>
+    <Button variant="ghost" size="sm" asChild className="mb-4 gap-1.5 text-muted-foreground hover:text-foreground">
+      <a href={backHref}>
+        <ArrowLeft className="h-3 w-3" /> {backLabel}
+      </a>
+    </Button>
   );
 
   return (
@@ -502,16 +507,16 @@ export function DetailPageShell({
         {backElement}
         <div className="flex items-start gap-4">
           {icon && (
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl shrink-0">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
               {icon}
             </div>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-semibold text-white">{title}</h1>
+              <h1 className="text-xl font-semibold text-foreground">{title}</h1>
               {badges}
             </div>
-            {subtitle && <p className="mt-1 text-[13px] text-white/30">{subtitle}</p>}
+            {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
           </div>
         </div>
       </div>

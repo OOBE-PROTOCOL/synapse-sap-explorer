@@ -50,21 +50,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           collapsed ? "w-[72px]" : "w-[260px]",
         )}
       >
-        <div className="absolute inset-0 sidebar-glass" />
-
-        <button
+        {/* Collapse toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute -right-3 top-20 z-20 h-6 w-6 rounded-full border border-border bg-background shadow-sm"
           onClick={() => setCollapsed(!collapsed)}
           className="sidebar-toggle"
           aria-label={collapsed ? "Expand" : "Collapse"}
         >
           {collapsed ? (
-            <ChevronRight className="h-3 w-3 text-blue-400/70" />
+            <ChevronRight className="h-3 w-3" />
           ) : (
-            <ChevronLeft className="h-3 w-3 text-blue-400/70" />
+            <ChevronLeft className="h-3 w-3" />
           )}
-        </button>
+        </Button>
 
-        <div className="relative z-10 flex h-full flex-col overflow-y-auto overflow-x-hidden">
+        <div className="flex h-full flex-col overflow-y-auto overflow-x-hidden">
           {/* Logo */}
           <div
             className={cn(
@@ -100,8 +102,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && (
             <div className="px-4 py-3">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/20" />
-                <input
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
                   type="text"
                   placeholder="Search agents, PDAs..."
                   className="w-full rounded-2xl bg-white/[0.03] border border-white/[0.06] py-2.5 pl-9 pr-3 text-[12px] text-white/70 placeholder-white/20 outline-none transition-all focus:border-blue-500/25 focus:bg-white/[0.05] focus:ring-1 focus:ring-blue-500/10"
@@ -171,9 +173,43 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   backdropFilter: "blur(12px)",
                 }}
               >
+                <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                {!collapsed && <span>{mounted ? (theme === 'dark' ? 'Dark Mode' : 'Light Mode') : '\u00A0'}</span>}
+              </Button>
+            </div>
+
+            {/* External links */}
+            <div className={cn('mb-3 space-y-0.5', collapsed && 'space-y-1')}>
+              {[
+                { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
+                { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
+                { href: 'https://github.com/oobe-protocol/synapse-sap', label: 'SAP GitHub', icon: Github },
+                { href: 'https://github.com/oobe-protocol/synapse-sap-sdk', label: 'SAP Client SDK', icon: Github },
+              ].map(({ href, label, icon: Icon }) => (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={collapsed ? label : undefined}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-xl text-[11px] text-muted-foreground hover:text-foreground transition-colors',
+                    collapsed ? 'justify-center py-1.5' : 'px-2 py-1.5',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {!collapsed && <span className="truncate">{label}</span>}
+                </a>
+              ))}
+            </div>
+
+            {!collapsed ? (
+              <div className="rounded-xl p-3 bg-muted/50 border border-border">
                 <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
-                  <span className="text-[10px] text-white/35">SAP Program</span>
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
+                  <span className="text-[10px] text-muted-foreground">SAP Program Skill</span>
+                  <a href="https://synapse.oobeprotocol.ai/skills.md" target="_blank" rel="noopener noreferrer" className="ml-auto text-[12px] font-medium text-primary hover:underline">DOWNLOAD</a>
                 </div>
                 <p className="mt-1 font-mono text-[10px] text-blue-400/60 truncate">
                   SAPp...FETZ
@@ -184,7 +220,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             ) : (
               <div className="flex justify-center">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.4)]" />
               </div>
             )}
           </div>
