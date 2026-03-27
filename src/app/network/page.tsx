@@ -3,13 +3,7 @@
 /* ──────────────────────────────────────────────────────────
  * Network Page — BubbleMaps v2 style
  *
- * Full-viewport canvas graph with:
- *  • Draggable / zoomable nodes
- *  • Glassmorphism overlay panels
- *  • Animated glow links per type
- *  • Node detail panel on hover
- *  • Legend overlay
- *  • iOS-style "glass water" effects
+ * Full-viewport canvas graph with Card overlay panels.
  * ────────────────────────────────────────────────────────── */
 
 import { useRef, useEffect, useState, useCallback } from 'react';
@@ -17,9 +11,12 @@ import { useGraph, useMetrics } from '~/hooks/use-sap';
 import ForceGraph from '~/components/network/force-graph';
 import type { SimNode } from '~/components/network/force-graph';
 import NodeDetailModal from '~/components/network/node-detail-modal';
+import { Card, CardContent } from '~/components/ui/card';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Separator } from '~/components/ui/separator';
 
 /* ── Color map (matches force-graph palette) ──────────── */
-
 const TYPE_COLORS: Record<string, { dot: string; label: string }> = {
   agent:      { dot: '#7c3aed', label: 'Agents' },
   protocol:   { dot: '#06b6d4', label: 'Protocols' },
@@ -34,11 +31,7 @@ const LINK_LEGEND: { color: string; label: string }[] = [
   { color: 'rgba(52, 211, 153, 0.5)',  label: 'Shared protocol' },
 ];
 
-/* ── Active filter type ───────────────────────────────── */
-
 type FilterKey = 'all' | 'agent' | 'protocol' | 'capability' | 'tool';
-
-/* ── Page ─────────────────────────────────────────────── */
 
 export default function NetworkPage() {
   const { data, loading, error } = useGraph();
@@ -67,7 +60,6 @@ export default function NetworkPage() {
     const visibleNodes = new Set<string>();
     const filtered = data.nodes.filter((n) => {
       if (n.type === activeFilter) { visibleNodes.add(n.id); return true; }
-      // Always keep agents that connect to filtered type
       if (n.type === 'agent') { visibleNodes.add(n.id); return true; }
       return false;
     });
@@ -87,54 +79,45 @@ export default function NetworkPage() {
   } : null;
 
   /* ── Callbacks ────────────────────────────────────── */
-  const handleNodeClick = useCallback((node: SimNode) => {
-    setSelectedNode(node);
-  }, []);
-
-  const handleCloseModal = useCallback(() => {
-    setSelectedNode(null);
-  }, []);
-
-  const handleNodeHover = useCallback((node: SimNode | null) => {
-    setHoveredNode(node);
-  }, []);
+  const handleNodeClick = useCallback((node: SimNode) => setSelectedNode(node), []);
+  const handleCloseModal = useCallback(() => setSelectedNode(null), []);
+  const handleNodeHover = useCallback((node: SimNode | null) => setHoveredNode(node), []);
 
   return (
-    <div className="network-fullbleed relative flex flex-col overflow-hidden bg-[#080612]">
+    <div className="relative flex flex-col overflow-hidden bg-background" style={{ height: 'calc(100vh - 64px)' }}>
 
-      {/* ── Top bar (glassmorphism) ─────────────────── */}
-      <div className="glass-bar z-30 flex items-center justify-between px-5 py-3">
+      {/* ── Top bar ─────────────────────────────── */}
+      <div className="z-30 flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-5 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="relative h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-violet-400">
-                <circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-sm font-semibold text-white/90 tracking-tight">Network Explorer</h1>
-              <p className="text-[9px] text-white/30 font-medium tracking-wider uppercase">SAP Protocol — Live Map</p>
-            </div>
+          <div className="relative h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-sm font-semibold tracking-tight">Network Explorer</h1>
+            <p className="text-[9px] text-muted-foreground font-medium tracking-wider uppercase">SAP Protocol — Live Map</p>
           </div>
         </div>
 
         {/* Filter pills */}
         <div className="flex items-center gap-1.5">
           {(['all', 'agent', 'protocol', 'capability', 'tool'] as FilterKey[]).map((key) => (
-            <button
+            <Button
               key={key}
+              variant={activeFilter === key ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs px-3"
               onClick={() => setActiveFilter(key)}
-              className={`filter-pill ${activeFilter === key ? 'filter-pill-active' : ''}`}
             >
-              {key === 'all' ? (
-                'All'
-              ) : (
+              {key === 'all' ? 'All' : (
                 <>
-                  <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: TYPE_COLORS[key]?.dot }} />
+                  <span className="inline-block h-1.5 w-1.5 rounded-full mr-1.5" style={{ background: TYPE_COLORS[key]?.dot }} />
                   {TYPE_COLORS[key]?.label ?? key}
                 </>
               )}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -144,29 +127,31 @@ export default function NetworkPage() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
           </span>
-          <span className="text-[10px] text-emerald-400/80 font-medium">LIVE</span>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">LIVE</span>
         </div>
       </div>
 
       {/* ── Main canvas area ────────────────────────── */}
-      <div ref={containerRef} className="relative flex-1 min-h-0">
+      <div ref={containerRef} className="relative flex-1 min-h-0 bg-zinc-950 dark:bg-[#080612]">
 
         {loading ? (
           <div className="flex h-full w-full items-center justify-center">
             <div className="flex flex-col items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center animate-pulse">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-violet-400 animate-spin" style={{ animationDuration: '3s' }}>
+              <div className="h-12 w-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center animate-pulse">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary animate-spin" style={{ animationDuration: '3s' }}>
                   <circle cx="12" cy="12" r="10" strokeDasharray="30 60" />
                 </svg>
               </div>
-              <p className="text-xs text-white/30 font-medium">Loading network graph…</p>
+              <p className="text-xs text-muted-foreground font-medium">Loading network graph…</p>
             </div>
           </div>
         ) : error ? (
           <div className="flex h-full w-full items-center justify-center">
-            <div className="glass-panel-s p-6 text-center max-w-xs">
-              <p className="text-xs text-red-400/80">{error}</p>
-            </div>
+            <Card className="max-w-xs">
+              <CardContent className="pt-6 text-center">
+                <p className="text-xs text-destructive">{error}</p>
+              </CardContent>
+            </Card>
           </div>
         ) : filteredData && filteredData.nodes.length > 0 && dimensions.w > 0 ? (
           <ForceGraph
@@ -178,190 +163,182 @@ export default function NetworkPage() {
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <div className="glass-panel-s p-6 text-center">
-              <p className="text-xs text-white/30">No network data</p>
-            </div>
+            <Card className="max-w-xs">
+              <CardContent className="pt-6 text-center">
+                <p className="text-xs text-muted-foreground">No network data</p>
+              </CardContent>
+            </Card>
           </div>
         )}
 
-        {/* ── Hover detail panel (glassmorphism) ──── */}
+        {/* ── Hover detail panel ────────────────── */}
         {hoveredNode && (
-          <div className="glass-panel absolute left-4 top-4 z-20 w-72 max-h-[calc(100%-2rem)] overflow-y-auto animate-fade-in" style={{ scrollbarWidth: 'none' }}>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="h-3 w-3 rounded-full flex-shrink-0" style={{ background: TYPE_COLORS[hoveredNode.type]?.dot ?? '#7c3aed', boxShadow: `0 0 12px ${TYPE_COLORS[hoveredNode.type]?.dot ?? '#7c3aed'}44` }} />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-white truncate">{hoveredNode.name}</p>
-                <p className="text-[9px] uppercase tracking-widest text-white/30 font-medium">{hoveredNode.type}</p>
+          <Card className="absolute left-4 top-4 z-20 w-72 max-h-[calc(100%-2rem)] overflow-y-auto bg-card/95 backdrop-blur-xl shadow-xl animate-in fade-in duration-150" style={{ scrollbarWidth: 'none' }}>
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="h-3 w-3 rounded-full flex-shrink-0" style={{ background: TYPE_COLORS[hoveredNode.type]?.dot ?? '#7c3aed', boxShadow: `0 0 12px ${TYPE_COLORS[hoveredNode.type]?.dot ?? '#7c3aed'}44` }} />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold truncate">{hoveredNode.name}</p>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-medium">{hoveredNode.type}</p>
+                </div>
               </div>
-            </div>
 
-            <div className="glass-divider" />
+              <Separator className="my-2" />
 
-            {/* ─ Agent detail ─ */}
-            {hoveredNode.type === 'agent' && (
-              <div className="mt-2.5 space-y-1.5">
-                <DetailRow label="PDA" value={hoveredNode.id} mono copyable />
-                {hoveredNode.meta?.wallet && (
-                  <DetailRow label="Wallet" value={String(hoveredNode.meta.wallet)} mono copyable />
-                )}
-                <div className="glass-divider my-1" />
-                <DetailRow label="Score" value={String(hoveredNode.score)} accent />
-                <DetailRow label="Calls" value={Number(hoveredNode.calls).toLocaleString()} />
-                <DetailRow label="Status" value={hoveredNode.isActive ? '● Active' : '○ Inactive'} active={hoveredNode.isActive} />
-                {hoveredNode.meta?.avgLatencyMs != null && Number(hoveredNode.meta.avgLatencyMs) > 0 && (
-                  <DetailRow label="Latency" value={`${hoveredNode.meta.avgLatencyMs}ms`} />
-                )}
-                {hoveredNode.meta?.uptimePercent != null && Number(hoveredNode.meta.uptimePercent) > 0 && (
-                  <DetailRow label="Uptime" value={`${hoveredNode.meta.uptimePercent}%`} />
-                )}
-                {hoveredNode.meta?.totalFeedbacks != null && (
-                  <DetailRow label="Feedbacks" value={String(hoveredNode.meta.totalFeedbacks)} />
-                )}
-                {hoveredNode.meta?.description && String(hoveredNode.meta.description).length > 0 && (
-                  <>
-                    <div className="glass-divider my-1" />
-                    <p className="text-[9px] text-white/40 leading-relaxed">{String(hoveredNode.meta.description)}</p>
-                  </>
-                )}
-                <div className="glass-divider my-1" />
-                {hoveredNode.meta?.capCount != null && (
-                  <DetailRow label="Capabilities" value={String(hoveredNode.meta.capCount)} />
-                )}
-                {hoveredNode.meta?.capabilities && String(hoveredNode.meta.capabilities).length > 0 && (
-                  <p className="text-[9px] text-cyan-400/60 font-mono leading-relaxed">{String(hoveredNode.meta.capabilities)}</p>
-                )}
-                {hoveredNode.meta?.protoCount != null && (
-                  <DetailRow label="Protocols" value={String(hoveredNode.meta.protoCount)} />
-                )}
-                {hoveredNode.meta?.protocols && String(hoveredNode.meta.protocols).length > 0 && (
-                  <p className="text-[9px] text-cyan-400/60 font-mono">{String(hoveredNode.meta.protocols)}</p>
-                )}
-                {hoveredNode.meta?.x402 && (
-                  <DetailRow label="x402" value={String(hoveredNode.meta.x402)} mono />
-                )}
-                {hoveredNode.meta?.agentId && (
-                  <DetailRow label="Agent ID" value={String(hoveredNode.meta.agentId)} mono />
-                )}
-                {hoveredNode.meta?.version != null && (
-                  <DetailRow label="Version" value={String(hoveredNode.meta.version)} />
-                )}
-                <p className="text-[9px] text-violet-400/50 mt-2 cursor-pointer hover:text-violet-400 transition-colors">
-                  Click for details →
-                </p>
-              </div>
-            )}
+              {/* ─ Agent detail ─ */}
+              {hoveredNode.type === 'agent' && (
+                <div className="mt-2.5 space-y-1.5">
+                  <HoverRow label="PDA" value={hoveredNode.id} mono copyable />
+                  {hoveredNode.meta?.wallet && <HoverRow label="Wallet" value={String(hoveredNode.meta.wallet)} mono copyable />}
+                  <Separator className="my-1" />
+                  <HoverRow label="Score" value={String(hoveredNode.score)} accent />
+                  <HoverRow label="Calls" value={Number(hoveredNode.calls).toLocaleString()} />
+                  <HoverRow label="Status" value={hoveredNode.isActive ? '● Active' : '○ Inactive'} active={hoveredNode.isActive} />
+                  {hoveredNode.meta?.avgLatencyMs != null && Number(hoveredNode.meta.avgLatencyMs) > 0 && <HoverRow label="Latency" value={`${hoveredNode.meta.avgLatencyMs}ms`} />}
+                  {hoveredNode.meta?.uptimePercent != null && Number(hoveredNode.meta.uptimePercent) > 0 && <HoverRow label="Uptime" value={`${hoveredNode.meta.uptimePercent}%`} />}
+                  {hoveredNode.meta?.totalFeedbacks != null && <HoverRow label="Feedbacks" value={String(hoveredNode.meta.totalFeedbacks)} />}
+                  {hoveredNode.meta?.description && String(hoveredNode.meta.description).length > 0 && (
+                    <>
+                      <Separator className="my-1" />
+                      <p className="text-[9px] text-muted-foreground leading-relaxed">{String(hoveredNode.meta.description)}</p>
+                    </>
+                  )}
+                  <Separator className="my-1" />
+                  {hoveredNode.meta?.capCount != null && <HoverRow label="Capabilities" value={String(hoveredNode.meta.capCount)} />}
+                  {hoveredNode.meta?.capabilities && String(hoveredNode.meta.capabilities).length > 0 && (
+                    <p className="text-[9px] text-cyan-600 dark:text-cyan-400 font-mono leading-relaxed">{String(hoveredNode.meta.capabilities)}</p>
+                  )}
+                  {hoveredNode.meta?.protoCount != null && <HoverRow label="Protocols" value={String(hoveredNode.meta.protoCount)} />}
+                  {hoveredNode.meta?.protocols && String(hoveredNode.meta.protocols).length > 0 && (
+                    <p className="text-[9px] text-cyan-600 dark:text-cyan-400 font-mono">{String(hoveredNode.meta.protocols)}</p>
+                  )}
+                  {hoveredNode.meta?.x402 && <HoverRow label="x402" value={String(hoveredNode.meta.x402)} mono />}
+                  {hoveredNode.meta?.agentId && <HoverRow label="Agent ID" value={String(hoveredNode.meta.agentId)} mono />}
+                  {hoveredNode.meta?.version != null && <HoverRow label="Version" value={String(hoveredNode.meta.version)} />}
+                  <p className="text-[9px] text-primary/60 mt-2 cursor-pointer hover:text-primary transition-colors">
+                    Click for details →
+                  </p>
+                </div>
+              )}
 
-            {/* ─ Tool detail ─ */}
-            {hoveredNode.type === 'tool' && hoveredNode.meta && (
-              <div className="mt-2.5 space-y-1.5">
-                <DetailRow label="Tool PDA" value={String(hoveredNode.meta.toolPda ?? '')} mono copyable />
-                <DetailRow label="Agent PDA" value={String(hoveredNode.meta.agentPda ?? '')} mono copyable />
-                <div className="glass-divider my-1" />
-                <DetailRow label="Name" value={String(hoveredNode.meta.toolName ?? hoveredNode.name)} />
-                <DetailRow label="Category" value={String(hoveredNode.meta.category ?? '—')} />
-                <DetailRow label="HTTP" value={String(hoveredNode.meta.method ?? '—')} mono />
-                <DetailRow label="Params" value={`${hoveredNode.meta.requiredParams ?? 0} req / ${hoveredNode.meta.paramsCount ?? 0} total`} />
-                <DetailRow label="Compound" value={hoveredNode.meta.isCompound ? 'Yes' : 'No'} />
-                <DetailRow label="Invocations" value={Number(hoveredNode.meta.totalInvocations ?? hoveredNode.calls).toLocaleString()} />
-                <DetailRow label="Version" value={String(hoveredNode.meta.version ?? 0)} />
-                <DetailRow label="Active" value={hoveredNode.isActive ? '● Yes' : '○ No'} active={hoveredNode.isActive} />
-              </div>
-            )}
+              {/* ─ Tool detail ─ */}
+              {hoveredNode.type === 'tool' && hoveredNode.meta && (
+                <div className="mt-2.5 space-y-1.5">
+                  <HoverRow label="Tool PDA" value={String(hoveredNode.meta.toolPda ?? '')} mono copyable />
+                  <HoverRow label="Agent PDA" value={String(hoveredNode.meta.agentPda ?? '')} mono copyable />
+                  <Separator className="my-1" />
+                  <HoverRow label="Name" value={String(hoveredNode.meta.toolName ?? hoveredNode.name)} />
+                  <HoverRow label="Category" value={String(hoveredNode.meta.category ?? '—')} />
+                  <HoverRow label="HTTP" value={String(hoveredNode.meta.method ?? '—')} mono />
+                  <HoverRow label="Params" value={`${hoveredNode.meta.requiredParams ?? 0} req / ${hoveredNode.meta.paramsCount ?? 0} total`} />
+                  <HoverRow label="Compound" value={hoveredNode.meta.isCompound ? 'Yes' : 'No'} />
+                  <HoverRow label="Invocations" value={Number(hoveredNode.meta.totalInvocations ?? hoveredNode.calls).toLocaleString()} />
+                  <HoverRow label="Version" value={String(hoveredNode.meta.version ?? 0)} />
+                  <HoverRow label="Active" value={hoveredNode.isActive ? '● Yes' : '○ No'} active={hoveredNode.isActive} />
+                </div>
+              )}
 
-            {/* ─ Protocol detail ─ */}
-            {hoveredNode.type === 'protocol' && (
-              <div className="mt-2.5 space-y-1.5">
-                <DetailRow label="Protocol" value={String(hoveredNode.meta?.protocolId ?? hoveredNode.name)} mono />
-                <DetailRow label="Agents" value={String(hoveredNode.meta?.agentCount ?? 0)} />
-                {hoveredNode.meta?.agents && String(hoveredNode.meta.agents).length > 0 && (
-                  <>
-                    <div className="glass-divider my-1" />
-                    <p className="text-[9px] text-white/30 mb-0.5">Linked agent PDAs</p>
-                    <p className="text-[9px] text-cyan-400/60 font-mono leading-relaxed">{String(hoveredNode.meta.agents)}</p>
-                  </>
-                )}
-              </div>
-            )}
+              {/* ─ Protocol detail ─ */}
+              {hoveredNode.type === 'protocol' && (
+                <div className="mt-2.5 space-y-1.5">
+                  <HoverRow label="Protocol" value={String(hoveredNode.meta?.protocolId ?? hoveredNode.name)} mono />
+                  <HoverRow label="Agents" value={String(hoveredNode.meta?.agentCount ?? 0)} />
+                  {hoveredNode.meta?.agents && String(hoveredNode.meta.agents).length > 0 && (
+                    <>
+                      <Separator className="my-1" />
+                      <p className="text-[9px] text-muted-foreground mb-0.5">Linked agent PDAs</p>
+                      <p className="text-[9px] text-cyan-600 dark:text-cyan-400 font-mono leading-relaxed">{String(hoveredNode.meta.agents)}</p>
+                    </>
+                  )}
+                </div>
+              )}
 
-            {/* ─ Capability detail ─ */}
-            {hoveredNode.type === 'capability' && (
-              <div className="mt-2.5 space-y-1.5">
-                <DetailRow label="Capability" value={String(hoveredNode.meta?.capabilityId ?? hoveredNode.name)} mono />
-                {hoveredNode.meta?.description && String(hoveredNode.meta.description).length > 0 && (
-                  <p className="text-[9px] text-white/40 leading-relaxed">{String(hoveredNode.meta.description)}</p>
-                )}
-                {hoveredNode.meta?.protocolId && String(hoveredNode.meta.protocolId).length > 0 && (
-                  <DetailRow label="Protocol" value={String(hoveredNode.meta.protocolId)} mono />
-                )}
-                {hoveredNode.meta?.version && String(hoveredNode.meta.version).length > 0 && (
-                  <DetailRow label="Version" value={String(hoveredNode.meta.version)} />
-                )}
-                <DetailRow label="Owners" value={String(hoveredNode.meta?.ownerCount ?? 0)} />
-                {hoveredNode.meta?.owners && String(hoveredNode.meta.owners).length > 0 && (
-                  <>
-                    <div className="glass-divider my-1" />
-                    <p className="text-[9px] text-white/30 mb-0.5">Owner agent PDAs</p>
-                    <p className="text-[9px] text-violet-400/60 font-mono leading-relaxed">{String(hoveredNode.meta.owners)}</p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+              {/* ─ Capability detail ─ */}
+              {hoveredNode.type === 'capability' && (
+                <div className="mt-2.5 space-y-1.5">
+                  <HoverRow label="Capability" value={String(hoveredNode.meta?.capabilityId ?? hoveredNode.name)} mono />
+                  {hoveredNode.meta?.description && String(hoveredNode.meta.description).length > 0 && (
+                    <p className="text-[9px] text-muted-foreground leading-relaxed">{String(hoveredNode.meta.description)}</p>
+                  )}
+                  {hoveredNode.meta?.protocolId && String(hoveredNode.meta.protocolId).length > 0 && (
+                    <HoverRow label="Protocol" value={String(hoveredNode.meta.protocolId)} mono />
+                  )}
+                  {hoveredNode.meta?.version && String(hoveredNode.meta.version).length > 0 && (
+                    <HoverRow label="Version" value={String(hoveredNode.meta.version)} />
+                  )}
+                  <HoverRow label="Owners" value={String(hoveredNode.meta?.ownerCount ?? 0)} />
+                  {hoveredNode.meta?.owners && String(hoveredNode.meta.owners).length > 0 && (
+                    <>
+                      <Separator className="my-1" />
+                      <p className="text-[9px] text-muted-foreground mb-0.5">Owner agent PDAs</p>
+                      <p className="text-[9px] text-violet-600 dark:text-violet-400 font-mono leading-relaxed">{String(hoveredNode.meta.owners)}</p>
+                    </>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* ── Legend panel (bottom-left) ──────────── */}
-        <div className="glass-panel-s absolute bottom-4 left-4 z-20">
-          <p className="text-[9px] font-semibold uppercase tracking-widest text-white/30 mb-2">Nodes</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {Object.entries(TYPE_COLORS).map(([key, { dot, label }]) => (
-              <span key={key} className="flex items-center gap-1.5 text-[10px] text-white/50">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: dot, boxShadow: `0 0 6px ${dot}44` }} />
-                {label}
-                {nodeCounts && (
-                  <span className="text-white/25 ml-0.5">
-                    {key === 'agent' ? nodeCounts.agents : key === 'protocol' ? nodeCounts.protocols : key === 'capability' ? nodeCounts.capabilities : nodeCounts.tools}
-                  </span>
-                )}
-              </span>
-            ))}
-          </div>
-          <div className="glass-divider my-2" />
-          <p className="text-[9px] font-semibold uppercase tracking-widest text-white/30 mb-1.5">Links</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {LINK_LEGEND.map(({ color, label }) => (
-              <span key={label} className="flex items-center gap-1.5 text-[10px] text-white/40">
-                <span className="inline-block h-0.5 w-3 rounded-full" style={{ background: color }} />
-                {label}
-              </span>
-            ))}
-          </div>
-        </div>
+        <Card className="absolute bottom-4 left-4 z-20 bg-card/90 backdrop-blur-xl shadow-lg">
+          <CardContent className="py-3 px-4">
+            <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Nodes</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {Object.entries(TYPE_COLORS).map(([key, { dot, label }]) => (
+                <span key={key} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: dot, boxShadow: `0 0 6px ${dot}44` }} />
+                  {label}
+                  {nodeCounts && (
+                    <span className="text-muted-foreground/50 ml-0.5">
+                      {key === 'agent' ? nodeCounts.agents : key === 'protocol' ? nodeCounts.protocols : key === 'capability' ? nodeCounts.capabilities : nodeCounts.tools}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+            <Separator className="my-2" />
+            <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Links</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {LINK_LEGEND.map(({ color, label }) => (
+                <span key={label} className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                  <span className="inline-block h-0.5 w-3 rounded-full" style={{ background: color }} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* ── Stats panel (bottom-right) ─────────── */}
-        <div className="glass-panel-s absolute bottom-4 right-4 z-20 text-right">
-          {nodeCounts && (
-            <div className="flex items-center gap-4">
-              <StatBadge value={nodeCounts.agents} label="agents" color="#7c3aed" />
-              <StatBadge value={nodeCounts.protocols} label="protos" color="#06b6d4" />
-              <StatBadge value={nodeCounts.tools} label="tools" color="#ec4899" />
-              <StatBadge value={nodeCounts.links} label="links" color="#64748b" />
-            </div>
-          )}
-          {metrics && (
-            <p className="text-[9px] text-white/20 mt-1.5">
-              Network: {metrics.totalAgents ?? 0} registered · {metrics.activeAgents ?? 0} active
-            </p>
-          )}
-        </div>
+        <Card className="absolute bottom-4 right-4 z-20 bg-card/90 backdrop-blur-xl shadow-lg">
+          <CardContent className="py-3 px-4 text-right">
+            {nodeCounts && (
+              <div className="flex items-center gap-4">
+                <StatBadge value={nodeCounts.agents} label="agents" color="#7c3aed" />
+                <StatBadge value={nodeCounts.protocols} label="protos" color="#06b6d4" />
+                <StatBadge value={nodeCounts.tools} label="tools" color="#ec4899" />
+                <StatBadge value={nodeCounts.links} label="links" color="#64748b" />
+              </div>
+            )}
+            {metrics && (
+              <p className="text-[9px] text-muted-foreground mt-1.5">
+                Network: {metrics.totalAgents ?? 0} registered · {metrics.activeAgents ?? 0} active
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ── Controls hint (top-right) ──────────── */}
-        <div className="glass-panel-xs absolute top-4 right-4 z-20">
-          <p className="text-[9px] text-white/25 leading-relaxed">
-            <span className="text-white/40">Click</span> node for details<br />
-            <span className="text-white/40">Drag</span> nodes to reposition<br />
-            <span className="text-white/40">Scroll</span> to zoom · <span className="text-white/40">Pan</span> empty space
-          </p>
-        </div>
+        <Card className="absolute top-4 right-4 z-20 bg-card/90 backdrop-blur-xl shadow-lg">
+          <CardContent className="py-2.5 px-3.5">
+            <p className="text-[9px] text-muted-foreground leading-relaxed">
+              <span className="font-medium">Click</span> node for details<br />
+              <span className="font-medium">Drag</span> nodes to reposition<br />
+              <span className="font-medium">Scroll</span> to zoom · <span className="font-medium">Pan</span> empty space
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* ── Node detail modal ────────────────────── */}
@@ -374,7 +351,7 @@ export default function NetworkPage() {
 
 /* ── Sub-components ───────────────────────────────────── */
 
-function DetailRow({ label, value, mono, accent, active, copyable }: {
+function HoverRow({ label, value, mono, accent, active, copyable }: {
   label: string;
   value: string;
   mono?: boolean;
@@ -382,19 +359,18 @@ function DetailRow({ label, value, mono, accent, active, copyable }: {
   active?: boolean;
   copyable?: boolean;
 }) {
-  // For long addresses, show truncated with full title
   const display = copyable && value.length > 16
     ? value.slice(0, 6) + '…' + value.slice(-4)
     : value;
 
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[10px] text-white/30 flex-shrink-0">{label}</span>
+      <span className="text-[10px] text-muted-foreground flex-shrink-0">{label}</span>
       <span
         className={`text-[10px] font-medium truncate ${
-          accent ? 'text-violet-400' :
-          active !== undefined ? (active ? 'text-emerald-400' : 'text-white/30') :
-          'text-white/70'
+          accent ? 'text-violet-600 dark:text-violet-400' :
+          active !== undefined ? (active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground') :
+          'text-foreground/70'
         } ${mono ? 'font-mono' : ''} ${copyable ? 'cursor-copy select-all' : ''}`}
         title={copyable ? value : undefined}
       >
@@ -408,7 +384,7 @@ function StatBadge({ value, label, color }: { value: number; label: string; colo
   return (
     <div className="flex flex-col items-center">
       <span className="text-sm font-bold tabular-nums" style={{ color }}>{value}</span>
-      <span className="text-[8px] text-white/25 uppercase tracking-wider">{label}</span>
+      <span className="text-[8px] text-muted-foreground/50 uppercase tracking-wider">{label}</span>
     </div>
   );
 }

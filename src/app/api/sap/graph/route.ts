@@ -3,11 +3,7 @@ export const dynamic = 'force-dynamic';
 /* ──────────────────────────────────────────────
  * GET /api/sap/graph — Network graph data for visualization
  *
- * Returns nodes (agents, protocols, capabilities)
- * and links for the bubble map / force graph.
- *
- * Query params:
- *   protocol — optional protocol filter
+ * SWR cached (60s fresh, 5min stale window)
  * ────────────────────────────────────────────── */
 
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
@@ -19,34 +15,36 @@ import {
   findAllTools,
   buildGraphData,
 } from '~/lib/sap/discovery';
+import { swr } from '~/lib/cache';
 
 export const GET = withSynapseError(async (req: Request) => {
   const { searchParams } = new URL(req.url);
   const protocol = searchParams.get('protocol');
   const capability = searchParams.get('capability');
+  const cacheKey = `graph:${protocol ?? ''}:${capability ?? ''}`;
 
-  let agents: DiscoveredAgent[];
-  if (capability) {
-    agents = await findAgentsByCapability(capability);
-  } else if (protocol) {
-    agents = await findAgentsByProtocol(protocol);
-  } else {
-    // Fetch ALL agents for the network graph
-    agents = await findAllAgents();
-  }
+  const data = await swr(cacheKey, async () => {
+    let agents: DiscoveredAgent[];
+    if (capability) {
+      agents = await findAgentsByCapability(capability);
+    } else if (protocol) {
+      agents = await findAgentsByProtocol(protocol);
+    } else {
+      agents = await findAllAgents();
+    }
 
-  // Deduplicate
-  const seen = new Set<string>();
-  const unique = agents.filter((a) => {
-    const key = a.pda.toBase58();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    // Deduplicate
+    const seen = new Set<string>();
+    const unique = agents.filter((a) => {
+      const key = a.pda.toBase58();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
-  // Also fetch tools to include in the graph
-  const tools = await findAllTools();
+    const tools = await findAllTools();
+    return buildGraphData(unique, tools);
+  }, { ttl: 60_000, swr: 300_000 });
 
-  const graph = buildGraphData(unique, tools);
-  return synapseResponse(graph);
+  return synapseResponse(data);
 });

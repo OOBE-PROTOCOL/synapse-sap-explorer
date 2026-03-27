@@ -1,17 +1,13 @@
 'use client';
 
-/* ──────────────────────────────────────────────────────────
- * Escrow Detail Page — /escrows/[pda]
- *
- * Full escrow account data: parties (agent ↔ depositor),
- * balance, settlement history, pricing, expiry, volume curve,
- * timestamps, raw on-chain data.
- * ────────────────────────────────────────────────────────── */
-
 import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Wallet } from 'lucide-react';
 import { Skeleton, Address } from '~/components/ui';
+import { Card, CardContent } from '~/components/ui/card';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '~/components/ui/table';
 import {
   CopyableField,
   TimestampDisplay,
@@ -41,7 +37,7 @@ export default function EscrowDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -51,10 +47,10 @@ export default function EscrowDetailPage() {
   if (!escrow) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
-        <p className="text-[13px] text-white/25">Escrow not found: {pda}</p>
-        <button onClick={() => router.push('/escrows')} className="btn-ghost mt-4">
-          <ArrowLeft className="h-3 w-3" /> All Escrows
-        </button>
+        <p className="text-sm text-muted-foreground">Escrow not found: {pda}</p>
+        <Button variant="ghost" size="sm" className="mt-4" onClick={() => router.push('/escrows')}>
+          <ArrowLeft className="h-3 w-3 mr-1" /> All Escrows
+        </Button>
       </div>
     );
   }
@@ -75,113 +71,117 @@ export default function EscrowDetailPage() {
       badges={
         <>
           {isExpired ? (
-            <span className="badge-red">Expired</span>
+            <Badge variant="destructive">Expired</Badge>
           ) : hasBalance ? (
-            <span className="badge-emerald">Funded</span>
+            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">Funded</Badge>
           ) : (
-            <span className="badge-blue">Empty</span>
+            <Badge variant="secondary">Empty</Badge>
           )}
         </>
       }
       icon={
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/[0.08] border border-emerald-500/10">
-          <Wallet className="h-5 w-5 text-emerald-400" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-chart-4/10">
+          <Wallet className="h-5 w-5 text-chart-4" />
         </div>
       }
     >
-      {/* ── Balance Stats ────────────────────── */}
+      {/* Balance Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="stat-card">
-          <p className="metric-value text-emerald-400">{formatAmount(escrow.balance)}</p>
-          <p className="metric-label">Current Balance</p>
-        </div>
-        <div className="stat-card">
-          <p className="metric-value">{formatAmount(escrow.totalDeposited)}</p>
-          <p className="metric-label">Total Deposited</p>
-        </div>
-        <div className="stat-card">
-          <p className="metric-value">{formatAmount(escrow.totalSettled)}</p>
-          <p className="metric-label">Total Settled</p>
-        </div>
-        <div className="stat-card">
-          <p className="metric-value">{Number(escrow.totalCallsSettled).toLocaleString()}</p>
-          <p className="metric-label">Calls Settled</p>
-        </div>
+        <Card><CardContent className="pt-6 text-center">
+          <p className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatAmount(escrow.balance)}</p>
+          <p className="text-[10px] text-muted-foreground">Current Balance</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-6 text-center">
+          <p className="text-lg font-bold tabular-nums text-foreground">{formatAmount(escrow.totalDeposited)}</p>
+          <p className="text-[10px] text-muted-foreground">Total Deposited</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-6 text-center">
+          <p className="text-lg font-bold tabular-nums text-foreground">{formatAmount(escrow.totalSettled)}</p>
+          <p className="text-[10px] text-muted-foreground">Total Settled</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-6 text-center">
+          <p className="text-lg font-bold tabular-nums text-foreground">{Number(escrow.totalCallsSettled).toLocaleString()}</p>
+          <p className="text-[10px] text-muted-foreground">Calls Settled</p>
+        </CardContent></Card>
       </div>
 
-      {/* ── Account Info ─────────────────────── */}
-      <div className="glass-card-static p-5">
-        <SectionHeader title="Account Information" />
-        <CopyableField label="Escrow PDA" value={escrow.pda} />
-        <CopyableField
-          label="Agent"
-          value={agent?.identity?.name ? `${agent.identity.name} (${escrow.agent.slice(0, 8)}…)` : escrow.agent}
-          href={`/address/${escrow.agent}`}
-        />
-        <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} truncate />
-        <CopyableField label="Depositor" value={escrow.depositor} href={`/address/${escrow.depositor}`} truncate />
-        {escrow.tokenMint && (
-          <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} truncate />
-        )}
-        <CopyableField label="Token Decimals" value={String(escrow.tokenDecimals)} mono={false} />
-        <div className="flex items-start justify-between gap-4 py-2.5 border-b border-white/[0.03]">
-          <span className="text-[12px] text-white/30 shrink-0 min-w-[120px]">Solscan</span>
-          <SolscanLink type="account" value={escrow.pda} label="View on Solscan →" />
-        </div>
-      </div>
-
-      {/* ── Pricing ──────────────────────────── */}
-      <div className="glass-card-static p-5">
-        <SectionHeader title="Pricing Configuration" />
-        <CopyableField label="Price Per Call" value={`${formatAmount(escrow.pricePerCall)} tokens`} mono={false} />
-        <CopyableField label="Max Calls" value={escrow.maxCalls === '0' ? '∞ (Unlimited)' : Number(escrow.maxCalls).toLocaleString()} mono={false} />
-      </div>
-
-      {/* ── Volume Curve ─────────────────────── */}
-      {escrow.volumeCurve && escrow.volumeCurve.length > 0 && (
-        <div className="glass-card-static p-5">
-          <SectionHeader title="Volume Discount Curve" count={escrow.volumeCurve.length} />
-          <div className="overflow-hidden rounded-xl border border-white/[0.04]">
-            <div className="grid grid-cols-2 gap-2 border-b border-white/[0.06] px-4 py-2">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-white/25">After X Calls</span>
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-white/25 text-right">Price Per Call</span>
-            </div>
-            {escrow.volumeCurve.map((tier: any, i: number) => (
-              <div key={i} className="grid grid-cols-2 gap-2 px-4 py-2 border-b border-white/[0.03] last:border-0">
-                <span className="text-[11px] font-mono tabular-nums text-white/50">{Number(tier.afterCalls).toLocaleString()}</span>
-                <span className="text-[11px] font-mono tabular-nums text-white/50 text-right">{formatAmount(tier.pricePerCall)}</span>
-              </div>
-            ))}
+      {/* Account Info */}
+      <Card>
+        <CardContent className="pt-6">
+          <SectionHeader title="Account Information" />
+          <CopyableField label="Escrow PDA" value={escrow.pda} />
+          <CopyableField label="Agent" value={agent?.identity?.name ? `${agent.identity.name} (${escrow.agent.slice(0, 8)}…)` : escrow.agent} href={`/address/${escrow.agent}`} />
+          <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} truncate />
+          <CopyableField label="Depositor" value={escrow.depositor} href={`/address/${escrow.depositor}`} truncate />
+          {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} truncate />}
+          <CopyableField label="Token Decimals" value={String(escrow.tokenDecimals)} mono={false} />
+          <div className="flex items-start justify-between gap-4 py-2.5 border-b border-border/50">
+            <span className="text-xs text-muted-foreground shrink-0 min-w-[120px]">Solscan</span>
+            <SolscanLink type="account" value={escrow.pda} label="View on Solscan →" />
           </div>
-        </div>
+        </CardContent>
+      </Card>
+
+      {/* Pricing */}
+      <Card>
+        <CardContent className="pt-6">
+          <SectionHeader title="Pricing Configuration" />
+          <CopyableField label="Price Per Call" value={`${formatAmount(escrow.pricePerCall)} tokens`} mono={false} />
+          <CopyableField label="Max Calls" value={escrow.maxCalls === '0' ? '∞ (Unlimited)' : Number(escrow.maxCalls).toLocaleString()} mono={false} />
+        </CardContent>
+      </Card>
+
+      {/* Volume Curve */}
+      {escrow.volumeCurve && escrow.volumeCurve.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <div className="px-4 pt-4 pb-2">
+              <SectionHeader title="Volume Discount Curve" count={escrow.volumeCurve.length} />
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>After X Calls</TableHead>
+                  <TableHead className="text-right">Price Per Call</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {escrow.volumeCurve.map((tier: any, i: number) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-mono tabular-nums text-muted-foreground">{Number(tier.afterCalls).toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-muted-foreground">{formatAmount(tier.pricePerCall)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
-      {/* ── Timestamps ───────────────────────── */}
-      <div className="glass-card-static p-5">
-        <SectionHeader title="Timestamps" />
-        <div className="space-y-3">
-          <div>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25 block mb-1">Created</span>
-            <TimestampDisplay unixSeconds={escrow.createdAt} />
-          </div>
-          <div>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25 block mb-1">Last Settled</span>
-            <TimestampDisplay unixSeconds={escrow.lastSettledAt} />
-          </div>
-          {escrow.expiresAt !== '0' && (
+      {/* Timestamps */}
+      <Card>
+        <CardContent className="pt-6">
+          <SectionHeader title="Timestamps" />
+          <div className="space-y-3">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25 block mb-1">Expires</span>
-              <TimestampDisplay unixSeconds={escrow.expiresAt} />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Created</span>
+              <TimestampDisplay unixSeconds={escrow.createdAt} />
             </div>
-          )}
-        </div>
-      </div>
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Last Settled</span>
+              <TimestampDisplay unixSeconds={escrow.lastSettledAt} />
+            </div>
+            {escrow.expiresAt !== '0' && (
+              <div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Expires</span>
+                <TimestampDisplay unixSeconds={escrow.expiresAt} />
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* ── Raw On-Chain Data ────────────────── */}
-      <OnChainDataSection
-        title="Raw Escrow Account (On-Chain)"
-        data={escrow as unknown as Record<string, unknown>}
-      />
+      <OnChainDataSection title="Raw Escrow Account (On-Chain)" data={escrow as unknown as Record<string, unknown>} />
     </DetailPageShell>
   );
 }
