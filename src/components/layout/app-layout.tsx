@@ -161,8 +161,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {[
                 { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
                 { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
-                { href: 'https://github.com/oobe-protocol/sap', label: 'SAP GitHub', icon: Github },
-                { href: 'https://github.com/oobe-protocol/sap-client-sdk', label: 'SAP Client SDK', icon: Github },
+                { href: 'https://github.com/oobe-protocol/synapse-sap', label: 'SAP GitHub', icon: Github },
+                { href: 'https://github.com/oobe-protocol/synapse-sap-sdk', label: 'SAP Client SDK', icon: Github },
               ].map(({ href, label, icon: Icon }) => (
                 <a
                   key={href}
