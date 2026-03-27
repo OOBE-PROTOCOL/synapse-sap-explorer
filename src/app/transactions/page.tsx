@@ -548,13 +548,31 @@ export default function TransactionsPage() {
   const fetchTxs = useCallback(async (poll: boolean, signal?: AbortSignal) => {
     if (poll) setRefreshing(true);
     try {
-      const res = await fetch('/api/sap/transactions', { signal });
+      // On poll: only fetch txs newer than the latest slot we have
+      const afterParam = poll && txs.length > 0
+        ? `&after=${Math.max(...txs.map(t => t.slot))}`
+        : '';
+      const res = await fetch(`/api/sap/transactions?limit=50${afterParam}`, { signal });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const data = await res.json();
-      setTxs(data.transactions ?? []);
+      const incoming: SapTx[] = data.transactions ?? [];
+
+      if (poll && txs.length > 0 && incoming.length > 0) {
+        // Merge new txs into existing list (deduped by signature)
+        setTxs(prev => {
+          const sigSet = new Set(prev.map(t => t.signature));
+          const fresh = incoming.filter(t => !sigSet.has(t.signature));
+          if (fresh.length === 0) return prev;
+          // Prepend new txs, keep max 100
+          return [...fresh, ...prev].sort((a, b) => b.slot - a.slot).slice(0, 100);
+        });
+      } else {
+        // Initial load — replace entirely
+        setTxs(incoming);
+      }
       setLastUpdated(Date.now());
       setError(null);
     } catch (err: unknown) {
@@ -563,7 +581,7 @@ export default function TransactionsPage() {
     } finally {
       if (poll) setRefreshing(false); else setLoading(false);
     }
-  }, []);
+  }, [txs]);
 
   const fetchAgentMap = useCallback(async (signal?: AbortSignal) => {
     try {

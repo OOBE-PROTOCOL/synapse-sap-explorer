@@ -291,22 +291,24 @@ export default function OverviewPage() {
               <p className="text-xs text-muted-foreground text-center py-10">No agent data</p>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={agentChartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <BarChart data={agentChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
                     axisLine={{ stroke: 'hsl(var(--border))' }}
                     tickLine={false}
                     interval={0}
                     angle={-35}
                     textAnchor="end"
                     height={60}
+                    className="text-muted-foreground"
                   />
                   <YAxis
-                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
                     axisLine={false}
                     tickLine={false}
-                    width={50}
+                    width={40}
+                    className="text-muted-foreground"
                   />
                   <RechartsTooltip
                     contentStyle={{
@@ -316,6 +318,8 @@ export default function OverviewPage() {
                       fontSize: '11px',
                       color: 'hsl(var(--popover-foreground))',
                     }}
+                    labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                    itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
                   />
                   <Bar dataKey="calls" name="Calls Served" radius={[4, 4, 0, 0]} maxBarSize={32}>
