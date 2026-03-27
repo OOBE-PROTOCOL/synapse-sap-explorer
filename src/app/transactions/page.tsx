@@ -237,7 +237,7 @@ function resolveCounterparties(tx: SapTx, agentMap: AgentMap, escrowMap: EscrowM
     if (info.pda) pdaToWallet[info.pda] = { wallet, name: info.name };
   }
 
-  for (const key of tx.accountKeys) {
+  for (const key of (tx.accountKeys ?? [])) {
     if (seen.has(key)) continue;
     seen.add(key);
 
