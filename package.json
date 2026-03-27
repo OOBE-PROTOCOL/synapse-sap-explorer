@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
     "@hookform/resolvers": "^5.2.2",
     "@oobe-protocol-labs/synapse-client-sdk": "^2.0.5",
     "@oobe-protocol-labs/synapse-sap-sdk": "0.4.2",
@@ -59,8 +61,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "d3-force": "^3.0.0",
-    "dotenv": "^17.3.1",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
     "embla-carousel-react": "^8.6.0",
     "geist": "^1.7.0",
@@ -93,9 +95,8 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.21",
     "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.16",
-    "tsx": "^4.21.0",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   },
   "engines": {

@@ -47,6 +47,11 @@ export async function syncTransactions(): Promise<number> {
 
   if (signatures.length === 0) {
     log('tx', 'No new transactions');
+    // Touch the cursor timestamp so the health check knows we're alive
+    await setCursor('transactions', {
+      lastSlot: cursor.lastSlot,
+      lastSignature: cursor.lastSignature,
+    });
     return 0;
   }
 
