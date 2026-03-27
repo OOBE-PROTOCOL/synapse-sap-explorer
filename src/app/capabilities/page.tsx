@@ -152,7 +152,7 @@ type CapInfo = {
 function CapabilityCard({ capability }: { capability: CapInfo }) {
   return (
     <div className="glass-card group relative overflow-hidden border border-white/[0.03] hover:border-white/[0.08] transition-all duration-200 hover:-translate-y-0.5">
-      {/* Gradiente overlay all'hover - più sottile */}
+      {/* Gradient overlay on hover — more subtle */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/[0.01] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
       {/* Header */}
