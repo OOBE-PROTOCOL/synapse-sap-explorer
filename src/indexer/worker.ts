@@ -149,7 +149,7 @@ async function main() {
 
   // tx timer differs by mode:
   // - polling: main mechanism every 30s
-  // - stream: disabled (stream is source of truth)
+  // - stream: light fallback every 5m (keeps data flowing if stream auth is blocked)
   // - hybrid: light fallback every 5m for gap healing
   const txTimer = setInterval(async () => {
     if (!running) return;
@@ -157,7 +157,7 @@ async function main() {
       await syncTx();
       return;
     }
-    if (INDEXER_MODE === 'hybrid') {
+    if (INDEXER_MODE === 'hybrid' || INDEXER_MODE === 'stream') {
       await syncTx();
     }
   }, INDEXER_MODE === 'polling' ? TX_INTERVAL_MS : TX_FALLBACK_INTERVAL_MS);

@@ -164,7 +164,14 @@ export async function startGrpcTransactionStream(signal?: AbortSignal): Promise<
 
       logErr('grpc', 'Stream ended, reconnecting...');
     } catch (e: any) {
-      logErr('grpc', `Connection failed: ${e.message}`);
+      const msg = e?.message ?? String(e);
+      logErr('grpc', `Connection failed: ${msg}`);
+
+      // Auth mismatch on provider side (expects x-api-key metadata).
+      // Slow down retries to avoid hot-loop log spam until transport is patched.
+      if (msg.toLowerCase().includes('missing x-api-key metadata')) {
+        backoffMs = Math.max(backoffMs, 60_000);
+      }
     } finally {
       try { stream?.destroy?.(); } catch {}
       try { (client as any)?.close?.(); } catch {}
