@@ -1,12 +1,12 @@
 // src/indexer/refresh-queue.ts — Coalesced refresh queue for touched entities
-import type { EntityGroup } from './entity-impact';
-import { syncAgents } from './sync-agents';
-import { syncTools } from './sync-tools';
-import { syncEscrows } from './sync-escrows';
-import { syncAttestations } from './sync-attestations';
-import { syncFeedbacks } from './sync-feedbacks';
-import { syncVaults } from './sync-vaults';
-import { log, logErr } from './utils';
+import type { EntityGroup } from '~/indexer/entity-impact';
+import { syncAgents } from '~/indexer/sync-agents';
+import { syncTools } from '~/indexer/sync-tools';
+import { syncEscrows } from '~/indexer/sync-escrows';
+import { syncAttestations } from '~/indexer/sync-attestations';
+import { syncFeedbacks } from '~/indexer/sync-feedbacks';
+import { syncVaults } from '~/indexer/sync-vaults';
+import { log, logErr } from '~/indexer/utils';
 
 const pending = new Set<EntityGroup>();
 let flushTimer: NodeJS.Timeout | null = null;

@@ -1,12 +1,14 @@
 // src/indexer/worker.ts — Indexer entry point
 //
 // Usage:
-//   pnpm indexer          → continuous loop
-//   pnpm indexer:once     → single run, then exit
+//   pnpm indexer          → continuous loop (polling)
+//   pnpm indexer:once     → single run, then exit (safe for CRON)
 //
 // Must be first import — loads .env before any module-level code
 import 'dotenv/config';
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { syncAgents } from './sync-agents';
 import { syncTools } from './sync-tools';
 import { syncEscrows } from './sync-escrows';
@@ -20,14 +22,44 @@ import { log, logErr, sleep } from './utils';
 
 /* ── Config ───────────────────────────────────────────── */
 
-const ENTITY_INTERVAL_MS = 60_000;       // 60s — agents, tools, escrows, etc.
-const TX_INTERVAL_MS = 30_000;           // 30s — transactions
-const TX_FALLBACK_INTERVAL_MS = 300_000; // 5min — fallback when in stream mode
-const SNAPSHOT_INTERVAL_MS = 300_000;    // 5min — network snapshots
-const INTER_ENTITY_DELAY_MS = 2_000;     // 2s pause between entity fetches
+const ENTITY_INTERVAL_MS  = Number(process.env.ENTITY_INTERVAL_MS  ?? 60_000);   // 60s
+const TX_INTERVAL_MS      = Number(process.env.TX_INTERVAL_MS      ?? 20_000);   // 20s (compensates for no real-time)
+const TX_FALLBACK_INTERVAL_MS = 300_000;                                          // 5min — fallback when gRPC is active
+const SNAPSHOT_INTERVAL_MS = Number(process.env.SNAPSHOT_INTERVAL_MS ?? 300_000); // 5min
+const INTER_ENTITY_DELAY_MS = 2_000;                                              // 2s pause between entity fetches
 
 const ONCE = process.argv.includes('--once');
-const INDEXER_MODE = (process.env.INDEXER_MODE ?? 'hybrid').toLowerCase() as 'polling' | 'stream' | 'hybrid';
+const INDEXER_MODE = (process.env.INDEXER_MODE ?? 'polling').toLowerCase() as 'polling' | 'stream' | 'hybrid';
+
+/* ── Lockfile (anti-overlap for CRON --once) ──────────── */
+
+const LOCKFILE = path.join(process.env.TMPDIR ?? '/tmp', 'sap-indexer.lock');
+
+function acquireLock(): boolean {
+  try {
+    // wx = write + exclusive — fails if file already exists
+    fs.writeFileSync(LOCKFILE, String(process.pid), { flag: 'wx' });
+    return true;
+  } catch {
+    // Lock exists — check if the owning process is still alive
+    try {
+      const pid = Number(fs.readFileSync(LOCKFILE, 'utf-8').trim());
+      if (pid && pid !== process.pid) {
+        process.kill(pid, 0); // throws if process doesn't exist
+        return false;         // process alive → genuine overlap
+      }
+    } catch {
+      // Stale lock — previous process crashed
+    }
+    // Overwrite stale lock
+    fs.writeFileSync(LOCKFILE, String(process.pid));
+    return true;
+  }
+}
+
+function releaseLock() {
+  try { fs.unlinkSync(LOCKFILE); } catch {}
+}
 
 /* ── Graceful shutdown ────────────────────────────────── */
 
@@ -103,8 +135,9 @@ async function syncSnap() {
 async function main() {
   log('worker', '═══════════════════════════════════════');
   log('worker', '  SAP Indexer Worker starting');
-  log('worker', `  Run: ${ONCE ? 'SINGLE RUN' : 'CONTINUOUS'}`);
+  log('worker', `  Run: ${ONCE ? 'SINGLE RUN (--once)' : 'CONTINUOUS DAEMON'}`);
   log('worker', `  Indexer mode: ${INDEXER_MODE.toUpperCase()}`);
+  log('worker', `  Intervals: entity=${ENTITY_INTERVAL_MS / 1000}s  tx=${TX_INTERVAL_MS / 1000}s  snap=${SNAPSHOT_INTERVAL_MS / 1000}s`);
   log('worker', `  DB: ${process.env.DATABASE_URL?.replace(/:[^@]+@/, ':***@') ?? 'NOT SET'}`);
   log('worker', '═══════════════════════════════════════');
 
@@ -113,14 +146,22 @@ async function main() {
     process.exit(1);
   }
 
+  /* ── CRON single-run with overlap protection ── */
   if (ONCE) {
-    // Single run always executes polling sync (deterministic smoke/cron run)
-    await syncAllEntities();
-    await sleep(1000);
-    await syncTx();
-    await sleep(1000);
-    await syncSnap();
-    log('worker', 'Single run complete. Exiting.');
+    if (!acquireLock()) {
+      log('worker', 'Another --once instance is already running. Skipping.');
+      process.exit(0);
+    }
+    try {
+      await syncAllEntities();
+      await sleep(1000);
+      await syncTx();
+      await sleep(1000);
+      await syncSnap();
+      log('worker', 'Single run complete. Exiting.');
+    } finally {
+      releaseLock();
+    }
     process.exit(0);
   }
 

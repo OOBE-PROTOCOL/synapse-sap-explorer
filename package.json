@@ -13,11 +13,12 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "indexer": "INDEXER_MODE=hybrid tsx src/indexer/worker.ts",
+    "indexer": "INDEXER_MODE=polling tsx src/indexer/worker.ts",
     "indexer:once": "INDEXER_MODE=polling tsx src/indexer/worker.ts --once",
     "indexer:polling": "INDEXER_MODE=polling tsx src/indexer/worker.ts",
     "indexer:stream": "INDEXER_MODE=stream INDEXER_GRPC_COMMITMENT=confirmed tsx src/indexer/worker.ts",
-    "indexer:hybrid": "INDEXER_MODE=hybrid INDEXER_GRPC_COMMITMENT=confirmed tsx src/indexer/worker.ts"
+    "indexer:hybrid": "INDEXER_MODE=hybrid INDEXER_GRPC_COMMITMENT=confirmed tsx src/indexer/worker.ts",
+    "indexer:health": "tsx src/indexer/healthcheck.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",

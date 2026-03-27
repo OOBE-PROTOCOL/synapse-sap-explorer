@@ -10,7 +10,7 @@ import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constan
 import { env } from '~/lib/env';
 import { hydrateTx, upsertHydratedTx, type SignatureLike } from './tx-pipeline';
 import { inferTouchedEntities } from './entity-impact';
-import { enqueueEntityRefreshMany } from './refresh-queue';
+import { enqueueEntityRefreshMany } from '../../refresh-queue';
 import { setCursor } from './cursor';
 import { log, logErr, sleep } from './utils';
 
