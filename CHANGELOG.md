@@ -5,6 +5,111 @@ Aggiornare questo file ad ogni sessione di lavoro.
 
 ---
 
+## 2026-03-26 — Refactor FASE 2/B: gRPC Subscribe (realtime) — WIP
+
+### Obiettivo
+
+Avviare pipeline realtime `transactionSubscribe` (Option B) e usare gli eventi tx per triggerare refresh delle entity toccate.
+
+### File creati
+
+| File | Descrizione |
+|---|---|
+| `src/indexer/tx-pipeline.ts` | Pipeline condivisa di hydration + upsert transazioni (`transactions` + `tx_details`), riusata da polling e stream. |
+| `src/indexer/stream-transactions.ts` | Loop gRPC subscribe (reconnect/backoff), parsing tx stream, upsert realtime, update cursor `transactions`, trigger refresh entity. |
+| `src/indexer/entity-impact.ts` | Heuristics `sapInstructions -> entity groups` (`agents`, `tools`, `escrows`, `attestations`, `feedbacks`, `vaults`). |
+| `src/indexer/refresh-queue.ts` | Coda coalescente/debounce per refresh entity toccate, con ordine FK-safe (agents prima). |
+
+### File modificati
+
+| File | Modifica |
+|---|---|
+| `src/indexer/sync-transactions.ts` | Refactor per usare `tx-pipeline.ts` condivisa. |
+| `src/indexer/worker.ts` | Supporto `INDEXER_MODE=polling|stream|hybrid`, startup stream in continuous mode, fallback polling light in hybrid, hardening error handlers. |
+| `src/lib/env.ts` | Aggiunti getter opzionali `INDEXER_MODE` e `INDEXER_GRPC_COMMITMENT`. |
+| `.env.example` | Aggiunte variabili indexer mode/commitment. |
+| `package.json` | Aggiunte dipendenze `@triton-one/yellowstone-grpc`, nuovi script `indexer:polling`, `indexer:stream`, `indexer:hybrid`. |
+
+### Test eseguiti
+
+```bash
+pnpm typecheck                # ✅ OK
+pnpm indexer:once             # ✅ OK (polling, nessuna regressione)
+pnpm indexer:stream           # ⚠️ stream parte, ma auth gRPC fallisce su Synapse endpoint
+```
+
+### Stato corrente
+
+- ✅ Architettura Option B pronta (stream + queue + impact + shared tx pipeline)
+- ✅ Worker non crasha più su errori stream (reconnect loop attivo)
+- ⚠️ **Blocco runtime**: endpoint Synapse richiede metadata header `x-api-key`, mentre client Yellowstone usa `x-token`; errore ricevuto: `missing x-api-key metadata`
+
+### Next fix (prima di FASE 3)
+
+1. Implementare subscribe gRPC con `@grpc/grpc-js` + metadata custom `x-api-key`
+2. Oppure usare un endpoint compatibile Yellowstone (`x-token`)
+3. Poi validare ingest realtime end-to-end (tx stream -> DB insert -> refresh queue)
+
+---
+
+## 2026-03-26 — FASE 2 Completata: Indexer Worker (Polling)
+
+### Obiettivo
+
+Processo Node.js standalone che legge dati on-chain da Solana RPC e li scrive nel database PostgreSQL via Drizzle ORM.
+
+### File creati
+
+| File | Descrizione |
+|---|---|
+| `src/indexer/worker.ts` | Entry point: loop con 3 cicli (entities 60s, tx 30s, snapshots 5m). Supporta `--once` per single run. Graceful shutdown via SIGINT/SIGTERM. |
+| `src/indexer/utils.ts` | Helper condivisi: `withRetry()` (backoff esponenziale), serializzazione `pk()` `bn()` `bnToDate()` `hashToHex()` `enumKey()`, `conflictUpdateSet()` per upsert Drizzle, logger con timestamp. |
+| `src/indexer/cursor.ts` | Gestione `sync_cursors`: `getCursor(entity)` e `setCursor(entity, data)`. |
+| `src/indexer/sync-agents.ts` | Fetch `findAllAgents()` + `findAllAgentStats()` → upsert `agents` + `agent_stats`. Batch di 20 con fallback row-by-row. |
+| `src/indexer/sync-tools.ts` | Fetch `findAllTools()` → upsert `tools`. Gestione enum Anchor per category/httpMethod. |
+| `src/indexer/sync-escrows.ts` | Fetch `findAllEscrows()` → upsert `escrows`. Mapping volumeCurve JSONB. |
+| `src/indexer/sync-attestations.ts` | Fetch `findAllAttestations()` → upsert `attestations`. |
+| `src/indexer/sync-feedbacks.ts` | Fetch `findAllFeedbacks()` → upsert `feedbacks`. |
+| `src/indexer/sync-vaults.ts` | Fetch `findAllVaults()` → upsert `vaults`. |
+| `src/indexer/sync-transactions.ts` | Sync incrementale via cursor: `getSignaturesForAddress` + `rawGetTransaction`. Idrata e scrive in `transactions` + `tx_details`. Pacing 200ms. |
+| `src/indexer/sync-snapshots.ts` | `getNetworkOverview()` → INSERT in `network_snapshots` (time-series). |
+
+### File modificati
+
+| File | Modifica |
+|---|---|
+| `package.json` | Aggiunti: `dotenv` (runtime), `tsx` (dev). Script `indexer` e `indexer:once`. |
+
+### Risultato primo run (`pnpm indexer:once`)
+
+```
+agents           5 upserted (+ 5 agent_stats)
+tools            6 upserted
+escrows          1 upserted
+attestations     0 (nessuna on-chain)
+feedbacks        0 (nessuna on-chain)
+vaults           0 (nessuna on-chain)
+transactions    50 inserted (+ 50 tx_details)
+snapshots        2 captured
+sync_cursors     aggiornati (tx cursor: slot 408958600)
+```
+
+### Come eseguire
+
+```bash
+# Single run (popola e esce)
+pnpm indexer:once
+
+# Continuous mode (loop infinito)
+pnpm indexer
+```
+
+### Prossimo step
+
+→ **FASE 3**: Riscrivere le API Routes per leggere dal DB via Drizzle invece che da RPC.
+
+---
+
 ## 2026-03-26 — FASE 1 Completata: Provisioning Database
 
 ### Obiettivo
