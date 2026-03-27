@@ -49,7 +49,7 @@ export default function OverviewPage() {
   const totalAgents = Number(metrics?.totalAgents ?? 0);
   const activeAgents = Number(metrics?.activeAgents ?? 0);
 
-  // Quick links con priorità mobile
+  // Quick links with mobile-first priority
   const quickLinks = [
     {
       href: "/agents",
