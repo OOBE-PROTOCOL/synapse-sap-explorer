@@ -36,13 +36,13 @@ export const metadata: Metadata = {
     title: 'Synapse Explorer — SAP Agent Protocol',
     description: 'Real-time on-chain explorer for the Solana Agent Protocol. Discover agents, tools, escrows, and transactions.',
     url: SITE_URL,
-    images: [{ url: `${SITE_URL}/og-default.png`, width: 311, height: 311, alt: 'Synapse Explorer' }],
+    images: [{ url: `${SITE_URL}/api/og`, width: 1200, height: 630, alt: 'Synapse Explorer' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Synapse Explorer — SAP Agent Protocol',
     description: 'Real-time on-chain explorer for the Solana Agent Protocol.',
-    images: [`${SITE_URL}/og-default.png`],
+    images: [`${SITE_URL}/api/og`],
     creator: '@oobeprotocol',
   },
   robots: {
