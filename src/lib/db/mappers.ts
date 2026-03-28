@@ -10,6 +10,7 @@ import type {
   agents,
   tools,
   escrows,
+  escrowEvents,
   attestations,
   feedbacks,
   vaults,
@@ -20,6 +21,7 @@ import type {
 type AgentRow = InferSelectModel<typeof agents>;
 type ToolRow = InferSelectModel<typeof tools>;
 type EscrowRow = InferSelectModel<typeof escrows>;
+type EscrowEventRow = InferSelectModel<typeof escrowEvents>;
 type AttestationRow = InferSelectModel<typeof attestations>;
 type FeedbackRow = InferSelectModel<typeof feedbacks>;
 type VaultRow = InferSelectModel<typeof vaults>;
@@ -195,7 +197,9 @@ export function dbEscrowToApi(row: EscrowRow) {
     totalCallsSettled: row.totalCallsSettled,
     pricePerCall: row.pricePerCall,
     maxCalls: row.maxCalls,
+    status: row.status,
     createdAt: row.createdAt?.toISOString?.() ?? '0',
+    closedAt: row.closedAt?.toISOString?.() ?? null,
     lastSettledAt: row.lastSettledAt?.toISOString?.() ?? '0',
     expiresAt: row.expiresAt?.toISOString?.() ?? '0',
     tokenMint: row.tokenMint,
@@ -219,9 +223,32 @@ export function apiEscrowToDb(e: any) {
     tokenMint: e.tokenMint ?? null,
     tokenDecimals: e.tokenDecimals ?? 9,
     volumeCurve: e.volumeCurve ?? [],
+    status: e.status ?? 'active',
     createdAt: e.createdAt && e.createdAt !== '0' ? new Date(Number(e.createdAt) * 1000) : new Date(),
+    closedAt: e.closedAt ? new Date(e.closedAt) : null,
     lastSettledAt: e.lastSettledAt && e.lastSettledAt !== '0' ? new Date(Number(e.lastSettledAt) * 1000) : null,
     expiresAt: e.expiresAt && e.expiresAt !== '0' ? new Date(Number(e.expiresAt) * 1000) : null,
+  };
+}
+
+/* ── Escrow Events ────────────────────────────── */
+
+export function dbEscrowEventToApi(row: EscrowEventRow) {
+  return {
+    id: row.id,
+    escrowPda: row.escrowPda,
+    txSignature: row.txSignature,
+    eventType: row.eventType,
+    slot: row.slot,
+    blockTime: row.blockTime?.toISOString?.() ?? null,
+    signer: row.signer,
+    balanceBefore: row.balanceBefore,
+    balanceAfter: row.balanceAfter,
+    amountChanged: row.amountChanged,
+    callsSettled: row.callsSettled,
+    agentPda: row.agentPda,
+    depositor: row.depositor,
+    indexedAt: row.indexedAt?.toISOString?.() ?? new Date().toISOString(),
   };
 }
 

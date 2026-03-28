@@ -5,13 +5,14 @@
  * Used by API routes as the primary data source (DB → RPC fallback).
  * ────────────────────────────────────────────── */
 
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import { db } from '~/db';
 import {
   agents,
   agentStats,
   tools,
   escrows,
+  escrowEvents,
   attestations,
   feedbacks,
   vaults,
@@ -150,6 +151,11 @@ export async function selectAllEscrows() {
   return db.select().from(escrows).orderBy(desc(escrows.indexedAt));
 }
 
+export async function selectEscrowByPda(pda: string) {
+  const rows = await db.select().from(escrows).where(eq(escrows.pda, pda)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function upsertEscrow(data: typeof escrows.$inferInsert) {
   return db
     .insert(escrows)
@@ -169,6 +175,8 @@ export async function upsertEscrow(data: typeof escrows.$inferInsert) {
         tokenMint: data.tokenMint,
         tokenDecimals: data.tokenDecimals,
         volumeCurve: data.volumeCurve,
+        status: data.status,
+        closedAt: data.closedAt,
         lastSettledAt: data.lastSettledAt,
         expiresAt: data.expiresAt,
         indexedAt: new Date(),
@@ -176,9 +184,57 @@ export async function upsertEscrow(data: typeof escrows.$inferInsert) {
     });
 }
 
+/** Mark an escrow as closed (preserves the row in DB even though PDA is deleted on-chain) */
+export async function markEscrowClosed(pda: string) {
+  return db
+    .update(escrows)
+    .set({ status: 'closed', closedAt: new Date(), indexedAt: new Date() })
+    .where(eq(escrows.pda, pda));
+}
+
 export async function upsertEscrows(dataArr: (typeof escrows.$inferInsert)[]) {
   if (dataArr.length === 0) return;
   await Promise.allSettled(dataArr.map((d) => upsertEscrow(d)));
+}
+
+/* ── Escrow Events ────────────────────────────── */
+
+export async function selectEscrowEvents(escrowPda?: string, limit = 100) {
+  if (escrowPda) {
+    return db
+      .select()
+      .from(escrowEvents)
+      .where(eq(escrowEvents.escrowPda, escrowPda))
+      .orderBy(desc(escrowEvents.slot))
+      .limit(limit);
+  }
+  return db
+    .select()
+    .from(escrowEvents)
+    .orderBy(desc(escrowEvents.slot))
+    .limit(limit);
+}
+
+export async function upsertEscrowEvent(data: typeof escrowEvents.$inferInsert) {
+  // Use txSignature + eventType as natural dedup — prevent duplicate events
+  const existing = await db
+    .select({ id: escrowEvents.id })
+    .from(escrowEvents)
+    .where(
+      and(
+        eq(escrowEvents.txSignature, data.txSignature),
+        eq(escrowEvents.eventType, data.eventType!),
+        eq(escrowEvents.escrowPda, data.escrowPda),
+      ),
+    )
+    .limit(1);
+  if (existing.length > 0) return existing[0];
+  return db.insert(escrowEvents).values(data).returning({ id: escrowEvents.id });
+}
+
+export async function upsertEscrowEvents(dataArr: (typeof escrowEvents.$inferInsert)[]) {
+  if (dataArr.length === 0) return;
+  await Promise.allSettled(dataArr.map((d) => upsertEscrowEvent(d)));
 }
 
 /* ── Attestations ─────────────────────────────── */

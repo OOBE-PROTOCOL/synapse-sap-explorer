@@ -419,7 +419,7 @@ export default function OverviewPage() {
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[11px] text-muted-foreground">{label}</span>
                           <span className="text-[11px] font-medium tabular-nums text-foreground">
-                            {sol < 0.001 ? value.toLocaleString() + ' lamports' : sol.toFixed(4) + ' SOL'}
+                            {sol === 0 ? '0 SOL' : sol < 0.001 ? sol.toFixed(6) + ' SOL' : sol.toFixed(4) + ' SOL'}
                           </span>
                         </div>
                         <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">

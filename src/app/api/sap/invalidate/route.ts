@@ -18,6 +18,7 @@ const ALL_PREFIXES = [
   'agents',
   'tools',
   'escrows',
+  'escrow-events',
   'attestations',
   'feedbacks',
   'vaults',
