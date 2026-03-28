@@ -230,6 +230,8 @@ const KNOWN_PROGRAMS = new Set(Object.keys(PROGRAM_META));
 function resolveCounterparties(tx: SapTx, agentMap: AgentMap, escrowMap: EscrowMap): Party[] {
   const parties: Party[] = [];
   const seen = new Set<string>();
+  // Track which wallets we've resolved — dedup agent-wallet/agent-pda/escrow
+  const resolvedWallets = new Set<string>();
 
   // Build reverse PDA → wallet map
   const pdaToWallet: Record<string, { wallet: string; name: string }> = {};
@@ -246,7 +248,8 @@ function resolveCounterparties(tx: SapTx, agentMap: AgentMap, escrowMap: EscrowM
     if (KNOWN_PROGRAMS.has(key)) continue;
 
     const agentByWallet = agentMap[key];
-    if (agentByWallet) {
+    if (agentByWallet && !resolvedWallets.has(key)) {
+      resolvedWallets.add(key);
       parties.push({
         address: key,
         label: agentByWallet.name,
@@ -258,9 +261,12 @@ function resolveCounterparties(tx: SapTx, agentMap: AgentMap, escrowMap: EscrowM
 
     const pdaOwner = pdaToWallet[key];
     if (pdaOwner) {
+      // Skip if we already resolved this agent by wallet
+      if (resolvedWallets.has(pdaOwner.wallet)) continue;
+      resolvedWallets.add(pdaOwner.wallet);
       parties.push({
-        address: key,
-        label: `${pdaOwner.name} (PDA)`,
+        address: pdaOwner.wallet,
+        label: pdaOwner.name,
         type: 'agent-pda',
         link: `/agents/${pdaOwner.wallet}`,
       });
@@ -276,8 +282,11 @@ function resolveCounterparties(tx: SapTx, agentMap: AgentMap, escrowMap: EscrowM
       const counterAgent = agentMap[escrow.agentWallet];
       const depositorAgent = agentMap[escrow.depositor];
 
+      // Skip if we already resolved this counterparty
+      if (resolvedWallets.has(counterAddr || key)) continue;
+      resolvedWallets.add(counterAddr || key);
+
       if (isSignerDepositor && counterAgent) {
-        // Signer is depositor, show the agent
         parties.push({
           address: escrow.agentWallet,
           label: `${counterAgent.name} (Escrow)`,
@@ -285,7 +294,6 @@ function resolveCounterparties(tx: SapTx, agentMap: AgentMap, escrowMap: EscrowM
           link: `/agents/${escrow.agentWallet}`,
         });
       } else if (!isSignerDepositor && depositorAgent) {
-        // Signer is agent, show the depositor
         parties.push({
           address: escrow.depositor,
           label: `${depositorAgent.name} (Depositor)`,
@@ -293,7 +301,6 @@ function resolveCounterparties(tx: SapTx, agentMap: AgentMap, escrowMap: EscrowM
           link: `/agents/${escrow.depositor}`,
         });
       } else {
-        // Fallback: show the counterparty address with escrow label
         const resolvedAgent = counterAgent ?? depositorAgent;
         const label = resolvedAgent
           ? `${resolvedAgent.name} (Escrow)`
