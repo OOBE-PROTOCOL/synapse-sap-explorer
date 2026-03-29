@@ -73,7 +73,7 @@ await client.ledger.init(sessionPda);
 ### Write
 
 ```typescript
-import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 const data = Buffer.from("User requested SOL to USDC swap");
 const contentHash = hashToArray(sha256(data));
@@ -128,7 +128,7 @@ await client.vault.initVault(vaultNonce);
 ### Open Session
 
 ```typescript
-import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 const sessionHash = hashToArray(sha256("conversation-456"));
 await client.vault.openSession(sessionHash);

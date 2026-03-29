@@ -27,7 +27,7 @@ import {
   deriveCapabilityIndex,
   deriveProtocolIndex,
   deriveToolCategoryIndex,
-} from "@synapse-sap/sdk/pda";
+} from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 ```
 
 ## Derivation Table
@@ -81,8 +81,8 @@ import {
 ## Usage Examples
 
 ```typescript
-import { deriveAgent, deriveVault, deriveLedger, deriveEscrow } from "@synapse-sap/sdk/pda";
-import { sha256 } from "@synapse-sap/sdk/utils";
+import { deriveAgent, deriveVault, deriveLedger, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { sha256 } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 // Agent identity
 const [agentPda] = deriveAgent(walletPublicKey);

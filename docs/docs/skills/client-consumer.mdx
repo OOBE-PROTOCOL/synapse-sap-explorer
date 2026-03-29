@@ -102,7 +102,7 @@ if (balance && balance.callsRemaining < 10) {
 After interacting with an agent, submit on-chain feedback:
 
 ```typescript
-import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 await client.feedback.give(agentWallet, {
   score: 5,                    // 1 to 5
@@ -125,7 +125,7 @@ if (balance && balance.balance.gtn(0)) {
 ## Error Handling
 
 ```typescript
-import { SapRpcError, SapAccountNotFoundError } from "@synapse-sap/sdk/errors";
+import { SapRpcError, SapAccountNotFoundError } from "@oobe-protocol-labs/synapse-sap-sdk/errors";
 
 try {
   await client.x402.preparePayment(agentWallet, options);

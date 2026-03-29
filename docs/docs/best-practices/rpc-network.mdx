@@ -22,7 +22,7 @@ The SDK provides two connection factories, depending on whether you need signing
 ### Signing Connection
 
 ```typescript
-import { SapConnection } from "@synapse-sap/sdk";
+import { SapConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
 import { Keypair } from "@solana/web3.js";
 
 const { client, anchorProvider } = SapConnection.fromKeypair(
@@ -35,7 +35,7 @@ const { client, anchorProvider } = SapConnection.fromKeypair(
 ### Read-Only from Provider
 
 ```typescript
-import { SapClient } from "@synapse-sap/sdk";
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
 import { AnchorProvider } from "@coral-xyz/anchor";
 
 const client = SapClient.from(AnchorProvider.env());

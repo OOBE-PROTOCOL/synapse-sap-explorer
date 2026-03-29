@@ -38,7 +38,7 @@ The agent PDA is deterministically derived from the owner wallet. No registratio
 **Why is this important?** In a traditional database, you would need to query "find the agent owned by wallet X." On Solana, you compute the exact address using a mathematical formula. This means zero search queries, zero network calls to find the address, and zero ambiguity: one wallet always maps to exactly one agent address.
 
 ```typescript
-import { deriveAgent, deriveAgentStats } from "@synapse-sap/sdk/pda";
+import { deriveAgent, deriveAgentStats } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 
 // This is pure math, no network call needed
 const [agentPda, bump]  = deriveAgent(walletPublicKey);

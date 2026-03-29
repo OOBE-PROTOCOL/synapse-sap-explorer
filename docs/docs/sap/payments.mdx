@@ -206,7 +206,7 @@ await client.escrow.create(agentWallet, {
 ## PDA Derivation
 
 ```typescript
-import { deriveAgent, deriveEscrow } from "@synapse-sap/sdk/pda";
+import { deriveAgent, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 
 const [agentPda] = deriveAgent(agentWallet);
 const [escrowPda] = deriveEscrow(agentPda, depositorWallet);

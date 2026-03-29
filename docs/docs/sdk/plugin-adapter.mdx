@@ -13,7 +13,7 @@ An LLM can call any SAP instruction without ever touching Solana primitives dire
 
 ```typescript
 import { SynapseAgentKit } from "@oobe-protocol-labs/synapse-client-sdk/ai/plugins";
-import { createSAPPlugin } from "@synapse-sap/sdk/plugin";
+import { createSAPPlugin } from "@oobe-protocol-labs/synapse-sap-sdk/plugin";
 
 const sapPlugin = createSAPPlugin({ provider });
 
@@ -75,7 +75,7 @@ All write operations return `{ txSignature: string }` in the output schema.
 ## Configuration
 
 ```typescript
-import { createSAPPlugin } from "@synapse-sap/sdk/plugin";
+import { createSAPPlugin } from "@oobe-protocol-labs/synapse-sap-sdk/plugin";
 
 // Minimal: uses canonical program ID
 const plugin = createSAPPlugin({ provider });

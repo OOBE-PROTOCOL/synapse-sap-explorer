@@ -125,7 +125,7 @@ await client.escrow.deposit(agentWallet, new BN(50_000_000));
 ### Settle
 
 ```typescript
-import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 const serviceHash = hashToArray(sha256("service-record-001"));
 await client.escrow.settle(depositorWallet, new BN(5), serviceHash);

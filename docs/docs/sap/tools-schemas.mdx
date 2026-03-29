@@ -39,7 +39,7 @@ Tool Descriptor PDA
 ### By Name (Recommended)
 
 ```typescript
-import { HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@synapse-sap/sdk";
+import { HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@oobe-protocol-labs/synapse-sap-sdk";
 
 await client.tools.publishByName(
   "getWeather",
@@ -158,8 +158,8 @@ await client.tools.reportInvocations("getWeather", 5);
 ## PDA Derivation
 
 ```typescript
-import { deriveAgent, deriveTool } from "@synapse-sap/sdk/pda";
-import { sha256 } from "@synapse-sap/sdk/utils";
+import { deriveAgent, deriveTool } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { sha256 } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 const [agentPda] = deriveAgent(agentWallet);
 const [toolPda] = deriveTool(agentPda, sha256("getWeather"));

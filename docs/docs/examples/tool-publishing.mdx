@@ -10,11 +10,11 @@ This example demonstrates publishing a tool descriptor on-chain, inscribing full
 ## Full Example
 
 ```typescript
-import { SapClient } from "@synapse-sap/sdk";
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
 import { AnchorProvider } from "@coral-xyz/anchor";
-import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
-import { HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@synapse-sap/sdk";
-import { deriveAgent } from "@synapse-sap/sdk/pda";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+import { HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { deriveAgent } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 
 const client = SapClient.from(AnchorProvider.env());
 

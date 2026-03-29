@@ -161,7 +161,7 @@ if (remaining && remaining.balance.gtn(0)) {
 When publishing tools, the SDK stores a SHA-256 hash of the schema on-chain. Consumers can verify schema integrity:
 
 ```typescript
-import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 const tool = await client.tools.fetch(agentPda, "myTool");
 const inscribedSchema = await client.tools.fetchInscription(agentPda, "myTool", 0);

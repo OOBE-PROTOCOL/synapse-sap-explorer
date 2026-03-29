@@ -137,7 +137,7 @@ await client.indexing.removeFromProtocolIndex("mcp-v1");
 ### Tool Category Indexes
 
 ```typescript
-import { TOOL_CATEGORY_VALUES } from "@synapse-sap/sdk";
+import { TOOL_CATEGORY_VALUES } from "@oobe-protocol-labs/synapse-sap-sdk";
 
 await client.indexing.initToolCategoryIndex(TOOL_CATEGORY_VALUES.Swap);
 await client.indexing.addToToolCategory(TOOL_CATEGORY_VALUES.Swap, toolPda);
@@ -147,8 +147,8 @@ await client.indexing.removeFromToolCategory(TOOL_CATEGORY_VALUES.Swap, toolPda)
 ## PDA Derivation
 
 ```typescript
-import { deriveCapabilityIndex, deriveProtocolIndex, deriveToolCategoryIndex } from "@synapse-sap/sdk/pda";
-import { sha256 } from "@synapse-sap/sdk/utils";
+import { deriveCapabilityIndex, deriveProtocolIndex, deriveToolCategoryIndex } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { sha256 } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 const [capIdxPda] = deriveCapabilityIndex(sha256("jupiter:swap"));
 const [protoIdxPda] = deriveProtocolIndex(sha256("jupiter"));
