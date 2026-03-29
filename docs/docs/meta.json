@@ -1,18 +1,15 @@
 {
-  "title": "SAP Explorer Docs",
+  "title": "Documentation",
   "pages": [
     "index",
-    "---Solana Agent Protocol---",
+    "---Protocol---",
     "sap",
-    "---SDK Reference---",
+    "---Developer---",
     "sdk",
-    "---Explorer---",
-    "explorer",
-    "---Agent Skills---",
     "skills",
-    "---Working Examples---",
     "examples",
-    "---Best Practices---",
+    "---Reference---",
+    "explorer",
     "best-practices"
   ]
 }

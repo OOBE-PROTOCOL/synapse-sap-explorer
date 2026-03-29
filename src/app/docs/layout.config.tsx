@@ -31,16 +31,16 @@ export const baseOptions: BaseLayoutProps = {
   },
   links: [
     {
+      text: "Protocol",
+      url: "/docs/sap/overview",
+    },
+    {
       text: "SDK",
       url: "/docs/sdk/overview",
     },
     {
-      text: "SAP",
-      url: "/docs/sap/overview",
-    },
-    {
-      text: "AI Gateway",
-      url: "/docs/ai-gateway/overview",
+      text: "Explorer",
+      url: "/docs/explorer/overview",
     },
     {
       text: "GitHub",
