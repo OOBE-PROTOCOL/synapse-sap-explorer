@@ -1,0 +1,13 @@
+{
+  "title": "SDK Reference",
+  "pages": [
+    "overview",
+    "quickstart",
+    "client-setup",
+    "agent-builder",
+    "session-manager",
+    "escrow-api",
+    "plugin-adapter",
+    "pda-reference"
+  ]
+}

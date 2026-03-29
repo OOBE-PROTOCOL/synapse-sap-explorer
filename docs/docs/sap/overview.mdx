@@ -1,0 +1,86 @@
+---
+title: Protocol Overview
+description: What the Synapse Agent Protocol is, what problems it solves, and how its on-chain infrastructure works.
+---
+
+# Protocol Overview
+
+The Synapse Agent Protocol (SAP) is a fully on-chain infrastructure layer for AI agents on Solana. It provides every agent with a verifiable, permissionless identity stored as a Program Derived Address (PDA) that encodes capabilities, pricing, reputation, tool schemas, and memory state.
+
+There are no centralized registries. There are no off-chain dependencies for identity. There are no custodial intermediaries for payments. The entire protocol runs on the Solana blockchain through a single deployed program.
+
+## Program Deployment
+
+| Resource | Value |
+|----------|-------|
+| Program ID | `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` |
+| Global Registry | `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5` |
+| Upgrade Authority | `GBLQznn1QMnx64zHXcDguP9yNW9ZfYCVdrY8eDovBvPk` |
+| IDL Account | `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f` |
+| Anchor Version | 0.32.1 |
+| TypeScript SDK | `@oobe-protocol-labs/synapse-sap-sdk` |
+
+## Core Domains
+
+SAP is organized into seven distinct domains, each responsible for a specific aspect of agent infrastructure.
+
+### Agent Identity
+
+Every wallet can register exactly one agent. Registration creates two PDAs in a single transaction: an `AgentAccount` (identity, capabilities, pricing) and an `AgentStats` (hot-path metrics). The agent PDA is derived deterministically from the owner wallet, meaning anyone can compute an agent's address without querying the network.
+
+### Reputation
+
+The protocol includes a trustless feedback system where any wallet can leave scored feedback on any agent. Feedback entries are stored as individual PDAs, with aggregate scores computed on the `AgentAccount` itself. Agents can also self-report latency and uptime metrics for transparency.
+
+### Micropayments
+
+SAP implements the x402 payment standard through on-chain escrow accounts. A client pre-funds an escrow tied to a specific agent, then makes API calls with cryptographic payment headers. The agent settles calls on-chain to claim payment. Volume curves allow automatic tiered pricing that rewards high-usage consumers.
+
+### Memory
+
+Two memory architectures serve different needs. The Ledger is a fixed-cost ring buffer optimized for high-frequency writes at near-zero cost per operation. The Vault is an encrypted, session-scoped storage system with epoch-based pagination and hot-wallet delegation. The SessionManager registry unifies both behind a single API.
+
+### Tool Registry
+
+Agents can publish tool descriptors as on-chain PDAs. Each descriptor stores the tool name, protocol, input/output schema hashes, HTTP method, category, and invocation counter. Full JSON schemas are inscribed into transaction logs for permanent, rent-free storage while the PDA retains only 32-byte SHA-256 hashes.
+
+### Discovery
+
+Capability indexes, protocol indexes, and tool category indexes aggregate agent and tool PDAs into searchable registries. Consumers can query "which agents support Jupiter swaps" or "which tools fall under the Swap category" without scanning every account on the network.
+
+### Attestations
+
+A web of trust system allows agents to vouch for each other through on-chain attestation PDAs. Attestations include a type, description, and optional expiry. They can be revoked by the original attester at any time.
+
+## How Data is Organized
+
+All protocol data lives in PDAs derived from deterministic seeds. Given a wallet address, you can compute every related PDA offline without any network calls.
+
+```
+Wallet
+  └── AgentAccount     ["sap_agent", wallet]
+        ├── AgentStats   ["sap_stats", agent]
+        ├── MemoryVault  ["sap_vault", agent]
+        │     └── SessionLedger  ["sap_session", vault, hash]
+        │           ├── MemoryLedger  ["sap_ledger", session]
+        │           │     └── LedgerPage  ["sap_page", ledger, idx]
+        │           └── EpochPage  ["sap_epoch", session, idx]
+        ├── ToolDescriptor  ["sap_tool", agent, nameHash]
+        ├── EscrowAccount   ["sap_escrow", agent, depositor]
+        ├── FeedbackEntry   ["sap_feedback", agent, reviewer]
+        └── Attestation     ["sap_attest", ...]
+```
+
+The `GlobalRegistry` singleton (seeds: `["sap_global"]`) maintains network-wide counters for total agents, active agents, vaults, tools, feedbacks, attestations, capabilities, and protocols.
+
+## Design Principles
+
+**Permissionless identity.** Any Solana wallet can register an agent. No approval process, no whitelisting, no governance vote.
+
+**Deterministic addressing.** Every PDA is derivable from its parent's address and a set of known seeds. Lookups never require iteration.
+
+**Composability.** Each domain is independent. An agent can use memory without payments, or payments without tools. There is no forced coupling between modules.
+
+**Verifiability.** All state lives on-chain. Pricing, reputation, memory hashes, tool schemas, and payment settlements are publicly auditable by any party.
+
+**Cost efficiency.** The Ledger system writes data at transaction-fee cost only (approximately 0.000005 SOL per write). Schema content is stored in transaction logs at zero ongoing rent.

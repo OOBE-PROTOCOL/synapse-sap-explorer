@@ -1,0 +1,134 @@
+---
+title: RPC and Network Configuration
+description: Optimal RPC setup, Synapse Gateway, connection factories, and rate limiting strategies.
+---
+
+# RPC and Network Configuration
+
+Reliable RPC connectivity is the foundation of any SAP integration. This guide covers connection setup, the Synapse Gateway, rate limiting strategies, and production-grade configuration.
+
+## Connection Factories
+
+The SDK provides two connection factories, depending on whether you need signing capabilities or just read access.
+
+### Signing Connection
+
+```typescript
+import { SapConnection } from "@synapse-sap/sdk";
+import { Keypair } from "@solana/web3.js";
+
+const { client, anchorProvider } = SapConnection.fromKeypair(
+  "https://api.devnet.solana.com",
+  keypair,
+  { commitment: "confirmed" }
+);
+```
+
+### Read-Only from Provider
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+```
+
+## Cluster Selection
+
+| Cluster | RPC URL | Use Case |
+|---------|---------|----------|
+| Devnet | `https://api.devnet.solana.com` | Development, testing |
+| Mainnet | `https://api.mainnet-beta.solana.com` | Production (rate limited) |
+| Custom | Provider URL | Dedicated RPC nodes |
+
+The public Solana RPC endpoints enforce strict rate limits. For production use, configure a dedicated RPC provider (Helius, Triton, QuickNode).
+
+## Environment-Based Configuration
+
+```typescript
+// .env.local
+SYNAPSE_API_KEY=your-api-key
+SYNAPSE_NETWORK=mainnet
+SYNAPSE_REGION=us-east
+
+// src/lib/env.ts
+const config = {
+  rpcUrl: process.env.SYNAPSE_NETWORK === "mainnet"
+    ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_KEY}`
+    : "https://api.devnet.solana.com",
+  commitment: "confirmed" as const,
+};
+```
+
+## Rate Limiting Strategies
+
+### Client-Side Throttling
+
+```typescript
+const DELAY_MS = 100; // 10 requests per second
+
+async function throttledFetch<T>(
+  fetcher: () => Promise<T>,
+): Promise<T> {
+  await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+  return fetcher();
+}
+```
+
+### Batch Requests
+
+Combine related reads to reduce roundtrips:
+
+```typescript
+const [agent, stats, tools] = await Promise.all([
+  client.agent.fetch(),
+  client.agent.fetchStats(),
+  client.tools.fetchAll(),
+]);
+```
+
+### Retry with Backoff
+
+```typescript
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 500,
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      if (attempt === maxRetries) throw error;
+      const isRateLimit =
+        error instanceof Error && error.message.includes("429");
+      const delay = isRateLimit
+        ? baseDelay * Math.pow(2, attempt)
+        : baseDelay;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error("Unreachable");
+}
+```
+
+## Commitment Levels
+
+| Level | Finality | Latency | Recommended For |
+|-------|----------|---------|-----------------|
+| `processed` | Optimistic | ~400ms | Read-only queries |
+| `confirmed` | Supermajority | ~1s | Default for writes |
+| `finalized` | Max finality | ~12s | Payment settlement |
+
+Use `confirmed` as the default. Only escalate to `finalized` when verifying payment settlement or closing escrows.
+
+## Production Checklist
+
+1. Use a dedicated RPC endpoint (not the public Solana endpoint)
+2. Set `commitment: "confirmed"` as the default
+3. Implement retry logic with exponential backoff
+4. Add 429 (rate limit) detection with longer delays
+5. Monitor RPC latency and switch providers if degraded
+6. Cache `getAccountInfo` responses where appropriate (static PDAs)
+7. Use `getProgramAccounts` with `memcmp` filters to reduce response size
+8. Keep WebSocket connections alive for real-time subscription use cases

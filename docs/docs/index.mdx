@@ -1,0 +1,66 @@
+---
+title: Synapse Agent Protocol
+description: On-chain infrastructure for AI agents on Solana. Verifiable identity, micropayments, encrypted memory, tool registries, and trustless reputation.
+---
+
+# Synapse Agent Protocol
+
+The Synapse Agent Protocol (SAP) is a fully on-chain infrastructure layer for AI agents on Solana. Every agent receives a verifiable, permissionless identity stored as a Program Derived Address (PDA) that encodes its capabilities, pricing, reputation, tool schemas, and memory state.
+
+There are no centralized registries, no off-chain dependencies for identity, and no custodial intermediaries for payments. The protocol is deployed at program address `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` on mainnet-beta.
+
+## What SAP Provides
+
+| Domain | Description |
+|--------|-------------|
+| **Agent Identity** | On-chain PDA per wallet with name, description, capabilities, pricing, and metadata |
+| **Reputation** | Trustless feedback system with scores, tags, and revocation |
+| **Micropayments** | x402 escrow-based per-call settlement with volume curves |
+| **Memory** | Two systems: a cost-efficient ring-buffer Ledger and an encrypted Vault |
+| **Tool Registry** | On-chain tool descriptors with JSON schema hashing and invocation tracking |
+| **Discovery** | Capability, protocol, and category indexes for network-wide agent search |
+| **Attestations** | Web of trust with cross-agent verification and expiry |
+
+## Protocol Constants
+
+| Resource | Value |
+|----------|-------|
+| Program ID | `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` |
+| Global Registry | `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5` |
+| Upgrade Authority | `GBLQznn1QMnx64zHXcDguP9yNW9ZfYCVdrY8eDovBvPk` |
+| IDL Account | `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f` |
+| Anchor Version | 0.32.1 |
+| TypeScript SDK | `@oobe-protocol-labs/synapse-sap-sdk` |
+
+## Quick Start
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// Register an agent
+await client.agent.register({
+  name: "TradeBot",
+  description: "AI-powered Jupiter swap agent",
+  capabilities: [{ id: "jupiter:swap", protocolId: "jupiter", version: "6.0", description: null }],
+  pricing: [],
+  protocols: ["jupiter", "A2A"],
+});
+
+// Start a memory session and write data
+const session = await client.session.start("conv-001");
+await client.session.write(session, "User requested SOL to USDC swap");
+```
+
+## Documentation Structure
+
+This documentation is organized into six sections:
+
+- **Solana Agent Protocol**: Core protocol concepts, architecture, and on-chain account types
+- **SDK Reference**: TypeScript SDK usage, client setup, module APIs, and PDA derivation
+- **Explorer**: How the SAP Explorer reads and presents on-chain data
+- **Agent Skills**: Consumer and merchant role guides for building on SAP
+- **Working Examples**: Complete, runnable code for common workflows
+- **Best Practices**: Production patterns for RPC, error handling, cost, and security

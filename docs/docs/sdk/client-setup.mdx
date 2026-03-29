@@ -1,0 +1,108 @@
+---
+title: Client Setup
+description: Creating and configuring SapClient and SapConnection for different environments.
+---
+
+# Client Setup
+
+The SDK provides two main entry points: `SapClient` for direct Anchor provider usage and `SapConnection` for environment-based configuration.
+
+## SapClient
+
+`SapClient` is the root object from which all modules and registries are accessed. It requires an `AnchorProvider` or an existing Anchor `Program`.
+
+### From Provider
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+```
+
+### From Program
+
+```typescript
+const client = SapClient.fromProgram(myAnchorProgram);
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `program` | `Program` | Underlying Anchor program |
+| `walletPubkey` | `PublicKey` | Provider wallet (default authority and payer) |
+
+## SapConnection
+
+`SapConnection` wraps Solana `Connection` with cluster-aware configuration and factory methods.
+
+### Factory Methods
+
+| Method | Endpoint | Use Case |
+|--------|----------|----------|
+| `SapConnection.devnet()` | api.devnet.solana.com | Testing |
+| `SapConnection.mainnet(rpcUrl?)` | Custom or Solana default | Production |
+| `SapConnection.localnet()` | localhost:8899 | Local development |
+| `SapConnection.fromKeypair(url, keypair)` | Custom | Scripts, bots, CLIs |
+
+### Devnet
+
+```typescript
+const conn = SapConnection.devnet();
+const client = conn.fromKeypair(testKeypair);
+```
+
+### Mainnet with Synapse Gateway
+
+```typescript
+const conn = SapConnection.mainnet("https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=");
+const client = conn.createClient(wallet);
+```
+
+### Custom Configuration
+
+```typescript
+const conn = new SapConnection({
+  rpcUrl: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=",
+  wsUrl: "wss://us-1-mainnet.oobeprotocol.ai/ws?api_key=",
+  commitment: "finalized",
+  cluster: "mainnet-beta",
+});
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `rpcUrl` | `string` | Required | Solana JSON-RPC endpoint |
+| `wsUrl` | `string` | Auto-derived | WebSocket endpoint |
+| `commitment` | `Commitment` | `"confirmed"` | Default commitment level |
+| `cluster` | `SapCluster` | Auto-detected | Explicit cluster hint |
+
+## Environment-Based Setup
+
+A common pattern for applications that run across environments:
+
+```typescript
+function createClient(env: "development" | "staging" | "production") {
+  const keypair = Keypair.fromSecretKey(/* load from env or vault */);
+
+  const rpcUrls: Record<string, string> = {
+    development: "http://localhost:8899",
+    staging: "https://api.devnet.solana.com",
+    production: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=",
+  };
+
+  const { client } = SapConnection.fromKeypair(rpcUrls[env], keypair);
+  return client;
+}
+```
+
+## Commitment Levels
+
+| Level | Latency | Guarantee | When to Use |
+|-------|---------|-----------|-------------|
+| `processed` | ~400 ms | Optimistic, may be rolled back | Debug only |
+| `confirmed` | ~400 ms | Supermajority voted | Reads, most writes |
+| `finalized` | ~6 to 12 s | Rooted, irreversible | Escrow, attestations, critical writes |
+
+The SDK defaults to `"confirmed"` which is suitable for most operations.

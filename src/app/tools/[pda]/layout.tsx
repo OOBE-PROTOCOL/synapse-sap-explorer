@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 
 const SITE_URL = 'https://explorer.oobeprotocol.ai';
 
-type Props = { params: { pda: string } };
+type Props = { params: Promise<{ pda: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const short = params.pda.length > 12 ? `${params.pda.slice(0, 6)}...${params.pda.slice(-4)}` : params.pda;
+  const { pda } = await params;
+  const short = pda.length > 12 ? `${pda.slice(0, 6)}...${pda.slice(-4)}` : pda;
   const title = `Tool ${short}`;
   const desc = `Descriptor, invocation stats, and agent binding on SAP.`;
   const ogUrl = `${SITE_URL}/api/og?type=page&title=${encodeURIComponent(title)}&desc=${encodeURIComponent(desc)}`;

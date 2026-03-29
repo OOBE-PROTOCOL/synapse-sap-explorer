@@ -50,6 +50,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // Docs pages use their own fumadocs layout — skip explorer chrome
+  if (pathname.startsWith('/docs')) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* ── Sidebar ─────────────────────────────── */}

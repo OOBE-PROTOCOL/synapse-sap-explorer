@@ -1,0 +1,164 @@
+---
+title: Tools and Schemas
+description: Publishing verifiable tool descriptors on-chain, inscribing JSON schemas in transaction logs, and tracking invocations.
+---
+
+# Tools and Schemas
+
+Every agent on SAP can publish tool descriptors as on-chain PDAs that describe what the agent's endpoints do, what inputs they accept, and what outputs they return. Schemas are stored as SHA-256 hashes on-chain, with full JSON content inscribed into transaction logs for permanent, rent-free storage.
+
+## Tool Descriptor Structure
+
+```
+Tool Descriptor PDA
+  toolName:         "getWeather"
+  toolNameHash:     SHA256("getWeather")
+  protocolHash:     SHA256("mcp-v1")
+  inputSchemaHash:  SHA256('{"type":"object",...}')
+  outputSchemaHash: SHA256('{"type":"object",...}')
+  httpMethod:       Post (1)
+  category:         Data (5)
+  paramsCount:      3
+  requiredParams:   1
+  isCompound:       false
+  isActive:         true
+  totalInvocations: 1,247
+  version:          2
+```
+
+## Publishing a Tool
+
+### By Name (Recommended)
+
+```typescript
+import { HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@synapse-sap/sdk";
+
+await client.tools.publishByName(
+  "getWeather",
+  "mcp-v1",
+  "Fetch current weather for a location",
+  JSON.stringify({
+    type: "object",
+    properties: {
+      location: { type: "string", description: "City name or coordinates" },
+      units: { type: "string", enum: ["celsius", "fahrenheit"] },
+    },
+    required: ["location"],
+  }),
+  JSON.stringify({
+    type: "object",
+    properties: {
+      temperature: { type: "number" },
+      humidity: { type: "number" },
+      description: { type: "string" },
+    },
+  }),
+  HTTP_METHOD_VALUES.Post,
+  TOOL_CATEGORY_VALUES.Data,
+  2,     // paramsCount
+  1,     // requiredParams
+  false, // isCompound
+);
+```
+
+All string arguments are automatically SHA-256 hashed.
+
+## Schema Inscription
+
+On-chain tool PDAs store only 32-byte hashes. The full JSON schema content is inscribed into transaction logs, making it permanently available at zero ongoing rent cost.
+
+```typescript
+const inputSchema = JSON.stringify({
+  type: "object",
+  properties: {
+    location: { type: "string" },
+    units: { type: "string", enum: ["celsius", "fahrenheit"] },
+  },
+  required: ["location"],
+});
+
+await client.tools.inscribeSchema("getWeather", {
+  schemaType: 0,                                // 0 = input, 1 = output, 2 = description
+  schemaData: Buffer.from(inputSchema),
+  schemaHash: hashToArray(sha256(inputSchema)),
+  compression: 0,
+});
+```
+
+### Hash on-chain, Content in Logs
+
+The PDA holds only 32-byte SHA-256 hashes (minimal rent). TX logs hold the full schema content (zero ongoing cost). Verification is trivial: hash the log content and compare with the on-chain hash.
+
+## Updating a Tool
+
+Update metadata hashes. Bumps the on-chain `version` counter. All fields are optional:
+
+```typescript
+await client.tools.update("getWeather", {
+  descriptionHash: hashToArray(sha256("Updated description")),
+  inputSchemaHash: hashToArray(sha256(newInputSchema)),
+  paramsCount: 3,
+  requiredParams: 2,
+});
+```
+
+## Lifecycle Management
+
+```typescript
+// Deactivate (remains discoverable but marked unavailable)
+await client.tools.deactivate("getWeather");
+
+// Reactivate
+await client.tools.reactivate("getWeather");
+
+// Close (permanently remove, reclaim rent)
+await client.tools.close("getWeather");
+
+// Report invocations for analytics
+await client.tools.reportInvocations("getWeather", 5);
+```
+
+## Constants
+
+### Tool Categories
+
+| Name | Value |
+|------|-------|
+| Swap | 0 |
+| Lend | 1 |
+| Stake | 2 |
+| Nft | 3 |
+| Payment | 4 |
+| Data | 5 |
+| Governance | 6 |
+| Bridge | 7 |
+| Analytics | 8 |
+| Custom | 9 |
+
+### HTTP Methods
+
+| Name | Value |
+|------|-------|
+| Get | 0 |
+| Post | 1 |
+| Put | 2 |
+| Delete | 3 |
+| Compound | 4 |
+
+## PDA Derivation
+
+```typescript
+import { deriveAgent, deriveTool } from "@synapse-sap/sdk/pda";
+import { sha256 } from "@synapse-sap/sdk/utils";
+
+const [agentPda] = deriveAgent(agentWallet);
+const [toolPda] = deriveTool(agentPda, sha256("getWeather"));
+// Seeds: ["sap_tool", agentPda, SHA256(toolName)]
+```
+
+## Versioning Strategy
+
+1. Publish the initial tool version (version is set to 1)
+2. Update the tool hashes (version auto-increments)
+3. Inscribe new schemas after each update
+4. Deactivate deprecated tools instead of closing them so consumers can still read the descriptor

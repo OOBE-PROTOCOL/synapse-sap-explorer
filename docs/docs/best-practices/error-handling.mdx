@@ -1,0 +1,180 @@
+---
+title: Error Handling
+description: Structured error handling patterns for SAP SDK calls, Anchor errors, and API routes.
+---
+
+# Error Handling
+
+Robust error handling is critical for on-chain applications. This guide covers the SAP SDK error hierarchy, Anchor program errors, API route patterns, and recovery strategies.
+
+## Error Categories
+
+SAP operations can fail for several distinct reasons:
+
+| Category | Cause | Recovery |
+|----------|-------|----------|
+| **RPC errors** | Network timeout, 429 rate limit, node unavailable | Retry with backoff |
+| **Anchor errors** | Constraint violation, insufficient funds, wrong signer | Fix inputs, check state |
+| **Account errors** | PDA not found, account not initialized | Initialize first, check derivation |
+| **SDK errors** | Invalid parameters, type mismatch | Fix calling code |
+| **Simulation errors** | TX would fail (preflight check) | Inspect logs, fix instruction |
+
+## Basic Error Handling
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+
+try {
+  const result = await client.builder
+    .agent("MyAgent")
+    .description("Service agent")
+    .register();
+  console.log("Registered:", result.agentPda.toBase58());
+} catch (error: unknown) {
+  if (error instanceof Error) {
+    // Check for specific Anchor error codes
+    if (error.message.includes("0x0")) {
+      console.error("Account already exists (duplicate registration)");
+    } else if (error.message.includes("0x1")) {
+      console.error("Insufficient funds for account rent");
+    } else if (error.message.includes("0x1770")) {
+      console.error("Custom SAP error: agent already registered");
+    } else {
+      console.error("Unexpected error:", error.message);
+    }
+  }
+}
+```
+
+## Anchor Error Code Reference
+
+Common Anchor framework errors encountered in SAP:
+
+| Hex Code | Decimal | Meaning |
+|----------|---------|---------|
+| `0x0` | 0 | Account already initialized |
+| `0x1` | 1 | Insufficient lamports |
+| `0x7d3` | 2003 | Constraint violation (has_one) |
+| `0xbbf` | 3007 | Account not initialized |
+| `0xbc2` | 3010 | Account owned by wrong program |
+| `0x1770`+ | 6000+ | Custom program errors (SAP-specific) |
+
+## API Route Error Pattern
+
+Wrap all SDK calls in API routes with structured error responses:
+
+```typescript
+// src/app/api/sap/agent/route.ts
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  try {
+    const agent = await client.agent.fetch();
+    return NextResponse.json({ data: agent });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
+
+    // Classify the error for the client
+    if (message.includes("Account does not exist")) {
+      return NextResponse.json(
+        { error: "Agent not found", code: "NOT_FOUND" },
+        { status: 404 },
+      );
+    }
+
+    if (message.includes("429")) {
+      return NextResponse.json(
+        { error: "Rate limited", code: "RATE_LIMITED" },
+        { status: 429 },
+      );
+    }
+
+    console.error("[API] Agent fetch failed:", message);
+    return NextResponse.json(
+      { error: "Internal error", code: "INTERNAL" },
+      { status: 500 },
+    );
+  }
+}
+```
+
+## Client-Side Hook Pattern
+
+```typescript
+export function useAgent() {
+  const [data, setData] = useState<Agent | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/sap/agent")
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error || `HTTP ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((json) => setData(json.data))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return { data, error, loading };
+}
+```
+
+## Transaction Simulation
+
+Before sending a transaction, simulate it to catch errors early:
+
+```typescript
+try {
+  const result = await client.agent.register(params);
+} catch (error: unknown) {
+  if (
+    error instanceof Error &&
+    error.message.includes("Simulation failed")
+  ) {
+    // Extract program logs from the error
+    const logs = (error as any).logs as string[] | undefined;
+    if (logs) {
+      console.error("Program logs:");
+      for (const log of logs) {
+        console.error("  ", log);
+      }
+    }
+  }
+}
+```
+
+## Recovery Patterns
+
+### Idempotent Operations
+
+Many SAP operations are safe to retry. Prefer idempotent patterns:
+
+```typescript
+// Safe: start() checks if session exists before creating
+await client.session.start("session-id");
+
+// Safe: fetch returns null if not initialized
+const agent = await client.agent.fetchOrNull();
+```
+
+### Graceful Degradation
+
+When reads fail, show cached data rather than an error screen:
+
+```typescript
+const cached = sessionStorage.getItem("agent-data");
+
+try {
+  const fresh = await fetch("/api/sap/agent").then((r) => r.json());
+  sessionStorage.setItem("agent-data", JSON.stringify(fresh));
+  return fresh;
+} catch {
+  return cached ? JSON.parse(cached) : null;
+}
+```

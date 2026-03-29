@@ -1,0 +1,159 @@
+---
+title: Memory Systems
+description: Two on-chain memory architectures for agent conversation data. Ledger ring buffers and encrypted Vault storage.
+---
+
+# Memory Systems
+
+SAP provides two memory systems for persisting agent conversation data on-chain. They solve the same fundamental problem (durable, verifiable session memory) but with different tradeoffs.
+
+## Comparison
+
+| | Ledger (recommended) | Vault (legacy) |
+|---|---|---|
+| Architecture | 4 KB ring buffer PDA | Encrypted epoch pages |
+| Write cost | ~0.000005 SOL (TX fee only) | ~0.003 to 0.01 SOL (rent per page) |
+| Init cost | ~0.032 SOL (one-time rent) | ~0.005 SOL (vault + session) |
+| Encryption | None (cleartext on-chain) | AES-256-GCM (client-side) |
+| Structure | Ring buffer with sealed pages | Epoch pages with sequence numbers |
+| Integrity | Rolling Merkle hash | Content hash per inscription |
+| Best for | High-frequency writes, logs, conversation history | Sensitive data, encrypted storage |
+| Delegation | No | Yes (hot wallet delegates) |
+| High-level API | SessionManager | Manual (module methods) |
+
+Use the Ledger via SessionManager for most workloads. Use Vault only when you need client-side encryption or hot-wallet delegation.
+
+## Ledger
+
+The Ledger is a fixed-cost ring buffer optimized for high-frequency writes. After the one-time PDA creation (~0.032 SOL), every write costs only the Solana transaction fee (~0.000005 SOL) with zero additional rent. Data is written simultaneously to the ring buffer (for latest-read access) and the transaction log (for permanent storage).
+
+### How It Works
+
+```
+MemoryLedger PDA
+  ┌──────────────────────────────┐
+  │     4 KB Ring Buffer         │
+  │  [msg1] [msg2] [msg3] [...]  │
+  │  (overwrites oldest when full)│
+  └──────────────────────────────┘
+  merkleRoot: 0xabc...
+  numEntries: 3
+  numPages: 0
+            │
+            │ seal()
+            ▼
+  LedgerPage PDA (0)    ~0.031 SOL, write-once
+  (snapshot of ring buffer)
+```
+
+### Initialize
+
+```typescript
+await client.ledger.init(sessionPda);
+// Cost: ~0.032 SOL rent (one-time, reclaimable on close)
+```
+
+### Write
+
+```typescript
+import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+
+const data = Buffer.from("User requested SOL to USDC swap");
+const contentHash = hashToArray(sha256(data));
+
+await client.ledger.write(sessionPda, data, contentHash);
+// Cost: ~0.000005 SOL (TX fee only)
+```
+
+Each write appends to the ring buffer (overwrites oldest entry when full), emits data in the transaction log (permanent, retrievable via `getTransaction`), and updates the rolling Merkle hash for integrity verification.
+
+### Seal
+
+```typescript
+await client.ledger.seal(sessionPda);
+// Cost: ~0.031 SOL rent (write-once, never-delete)
+```
+
+Sealing creates a new `LedgerPage` PDA containing a snapshot of the current ring buffer, resets the ring buffer for new writes, and increments `numPages` on the ledger. Pages are immutable after creation.
+
+### Read and Decode
+
+```typescript
+const ledger = await client.ledger.fetchLedger(sessionPda);
+const entries = client.ledger.decodeRingBuffer(ledger.ring);
+entries.forEach((entry) => {
+  console.log(Buffer.from(entry).toString("utf-8"));
+});
+```
+
+### Close
+
+```typescript
+await client.ledger.close(sessionPda);
+// Reclaims ~0.032 SOL
+```
+
+## Vault
+
+The Vault provides encrypted, session-scoped memory with epoch-based pagination. Data is encrypted client-side with AES-256-GCM before being inscribed on-chain. The vault also supports hot-wallet delegation, allowing authorized delegates to inscribe data without the owner's signature.
+
+### Initialize Vault
+
+```typescript
+const vaultNonce = Array.from(crypto.getRandomValues(new Uint8Array(32)));
+await client.vault.initVault(vaultNonce);
+```
+
+### Open Session
+
+```typescript
+import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+
+const sessionHash = hashToArray(sha256("conversation-456"));
+await client.vault.openSession(sessionHash);
+```
+
+### Inscribe Data
+
+```typescript
+await client.vault.compactInscribe(sessionPda, vaultPda, {
+  sequence: 1,
+  encryptedData: Buffer.from(encryptedBytes),
+  nonce: encryptionNonce,
+  contentHash: contentHashArray,
+});
+```
+
+### Delegation (Hot Wallets)
+
+Vaults support delegated access for scenarios where a hot wallet needs to write on behalf of the vault owner:
+
+```typescript
+await client.vault.addDelegate(
+  hotWallet,
+  0xFF,                                        // permission bitmask
+  Math.floor(Date.now() / 1000) + 86400,       // expires in 24 hours
+);
+
+// Revoke when no longer needed
+await client.vault.revokeDelegate(hotWallet);
+```
+
+## Cost Summary
+
+| Operation | Ledger Cost | Notes |
+|-----------|------------|-------|
+| init / start | ~0.032 SOL | One-time rent for 4 KB ring buffer (reclaimable) |
+| write | ~0.000005 SOL | TX fee only, zero rent |
+| seal | ~0.031 SOL | Permanent page, write-once |
+| close | Reclaims ~0.032 SOL | Returns ring buffer rent |
+| 100 writes | ~0.0005 SOL | Just transaction fees |
+| 1,000 writes | ~0.005 SOL | Still just transaction fees |
+
+For high-frequency writes, the ledger is orders of magnitude cheaper than the vault.
+
+## Choosing Between Ledger and Vault
+
+**Use Ledger when** you need high-frequency writes, cost per write matters, data does not need to be encrypted on-chain, or you want the simplest API via SessionManager.
+
+**Use Vault when** data must be encrypted on-chain (AES-256-GCM), you need hot-wallet delegation for backend services, you need epoch-based pagination with custom sequencing, or you are working with an existing Vault-based codebase.

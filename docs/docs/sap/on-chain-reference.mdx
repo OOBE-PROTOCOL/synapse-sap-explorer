@@ -1,0 +1,170 @@
+---
+title: On-Chain Reference
+description: Complete reference of all PDA account types, their seeds, and field structures.
+---
+
+# On-Chain Reference
+
+This page provides a comprehensive reference of every PDA account type in the SAP program, their derivation seeds, and their data fields.
+
+## PDA Derivation Table
+
+All PDAs use deterministic seeds. Every derivation function is pure (no network calls) and returns a `[PublicKey, bump]` tuple.
+
+| Function | Seeds | Purpose |
+|----------|-------|---------|
+| `deriveGlobalRegistry()` | `["sap_global"]` | Singleton protocol registry |
+| `deriveAgent(wallet)` | `["sap_agent", wallet]` | Agent identity |
+| `deriveAgentStats(agentPda)` | `["sap_stats", agent]` | Hot-path metrics |
+| `deriveVault(agentPda)` | `["sap_vault", agent]` | Encrypted memory vault |
+| `deriveSession(vaultPda, hash)` | `["sap_session", vault, hash]` | Session within a vault |
+| `deriveEpochPage(sessionPda, idx)` | `["sap_epoch", session, idx]` | Vault epoch page |
+| `deriveLedger(sessionPda)` | `["sap_ledger", session]` | Ring-buffer ledger |
+| `deriveLedgerPage(ledgerPda, idx)` | `["sap_page", ledger, idx]` | Sealed archive page |
+| `deriveTool(agentPda, nameHash)` | `["sap_tool", agent, hash]` | Tool schema |
+| `deriveEscrow(agentPda, depositor)` | `["sap_escrow", agent, depositor]` | Payment escrow |
+| `deriveFeedback(agentPda, reviewer)` | `["sap_feedback", agent, reviewer]` | Reputation entry |
+| `deriveVaultDelegate(vaultPda, delegate)` | `["sap_delegate", vault, delegate]` | Hot-wallet delegation |
+| `deriveAttestation(...)` | `["sap_attest", ...]` | Web of trust |
+| `deriveCapabilityIndex(hash)` | `["sap_cap_idx", hash]` | Capability discovery |
+| `deriveProtocolIndex(hash)` | `["sap_proto_idx", hash]` | Protocol discovery |
+| `deriveToolCategoryIndex(cat)` | `["sap_tool_cat", cat]` | Category discovery |
+
+Seeds mirror the Rust `#[account(seeds = [...])]` definitions exactly.
+
+## Mainnet Addresses
+
+### Program and Infrastructure
+
+| Name | Address |
+|------|---------|
+| SAP Program | `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` |
+| Upgrade Authority | `GBLQznn1QMnx64zHXcDguP9yNW9ZfYCVdrY8eDovBvPk` |
+| Global Registry | `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5` |
+| IDL Account | `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f` |
+
+### Tool Category Index PDAs
+
+| Category | Address |
+|----------|---------|
+| Swap (0) | `5H8yn9RuRgZWqkDiWbKNaCHzTMjqSpwbNQKMPLtUXx2G` |
+| Lend (1) | `5Lqqk6VtFWnYq3h4Ae4FuUAKnFzw1Nm1DaSdt2cjcTDj` |
+| Stake (2) | `kC8oAiVUcFMXEnmMNu1h2sdAc3dWKcwV5qVKRFYMmQD` |
+| Nft (3) | `2zNWR9J3znvGQ5J6xDfJyZkd12Gi66mjErRDkgPeKbyF` |
+| Payment (4) | `Eh7MwxJYWRN8bzAmY3ZPTRXYjWpWypokBf1STixu2dy9` |
+| Data (5) | `AwpVxehQUZCVTAJ9icZfS6oRbF66jNo32duXaL11B5df` |
+| Governance (6) | `2573WjZzV9QtbqtM6Z86YGivkk1kdvJa4gK3tZRQ2jkN` |
+| Bridge (7) | `664nyr6kBeeFiE1ij5gtdncNCVHrXqrk2uBhnKmUREvK` |
+| Analytics (8) | `4DFsiTZ6h6RoCZuUeMTpaoQguepnPUMJBLJuwwjKg5GL` |
+| Custom (9) | `3Nk5dvFWEyWPEArdG9cCdab6C6ym36mSWUSB8HzN35ZM` |
+
+## Account Types
+
+### GlobalRegistryData
+
+The singleton registry tracking network-wide counters.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `totalAgents` | `BN` | Total registered agents |
+| `activeAgents` | `BN` | Currently active agents |
+| `totalFeedbacks` | `BN` | Total feedback entries |
+| `totalTools` | `number` | Total registered tools |
+| `totalVaults` | `number` | Total memory vaults |
+| `totalAttestations` | `number` | Total attestations |
+| `totalCapabilities` | `number` | Distinct capability indexes |
+| `totalProtocols` | `number` | Distinct protocol indexes |
+| `authority` | `PublicKey` | Protocol upgrade authority |
+
+### AgentAccountData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `version` | `number` | Account schema version |
+| `wallet` | `PublicKey` | Owner wallet |
+| `name` | `string` | Display name |
+| `description` | `string` | Description |
+| `agentId` | `string or null` | Off-chain identifier |
+| `agentUri` | `string or null` | Metadata URI |
+| `x402Endpoint` | `string or null` | Payment endpoint |
+| `isActive` | `boolean` | Active status |
+| `createdAt` | `BN` | Registration timestamp |
+| `updatedAt` | `BN` | Last update timestamp |
+| `reputationScore` | `number` | Reputation (0 to 100) |
+| `totalFeedbacks` | `number` | Feedback count |
+| `reputationSum` | `BN` | Raw feedback sum |
+| `totalCallsServed` | `BN` | Lifetime calls |
+| `avgLatencyMs` | `number` | Self-reported latency |
+| `uptimePercent` | `number` | Self-reported uptime |
+| `capabilities` | `Capability[]` | Declared capabilities |
+| `pricing` | `PricingTier[]` | Active pricing tiers |
+| `protocols` | `string[]` | Supported protocols |
+
+### AgentStatsData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `agent` | `PublicKey` | Parent agent PDA |
+| `wallet` | `PublicKey` | Owner wallet |
+| `totalCallsServed` | `BN` | Lifetime calls |
+| `isActive` | `boolean` | Active status |
+| `updatedAt` | `BN` | Last update timestamp |
+
+### EscrowAccountData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Agent PDA |
+| `depositor` | `PublicKey` | Client wallet |
+| `agentWallet` | `PublicKey` | Agent wallet (settlement target) |
+| `balance` | `BN` | Current balance |
+| `totalDeposited` | `BN` | Cumulative deposits |
+| `totalSettled` | `BN` | Cumulative settlements |
+| `totalCallsSettled` | `BN` | Lifetime calls settled |
+| `pricePerCall` | `BN` | Base price |
+| `maxCalls` | `BN` | Max calls (0 = unlimited) |
+| `createdAt` | `BN` | Creation timestamp |
+| `lastSettledAt` | `BN` | Last settlement timestamp |
+| `expiresAt` | `BN` | Expiry (0 = never) |
+| `volumeCurve` | `VolumeCurveBreakpoint[]` | Volume discounts |
+| `tokenMint` | `PublicKey or null` | SPL token mint |
+
+### ToolDescriptorData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Owning agent PDA |
+| `toolName` | `string` | Human-readable name |
+| `toolNameHash` | `number[]` | SHA-256 of name |
+| `protocolHash` | `number[]` | SHA-256 of protocol |
+| `version` | `number` | Schema version |
+| `inputSchemaHash` | `number[]` | Input schema hash |
+| `outputSchemaHash` | `number[]` | Output schema hash |
+| `httpMethod` | `ToolHttpMethodKind` | HTTP method |
+| `category` | `ToolCategoryKind` | Tool category |
+| `paramsCount` | `number` | Total parameters |
+| `requiredParams` | `number` | Required parameters |
+| `isCompound` | `boolean` | Multi-step flag |
+| `isActive` | `boolean` | Active status |
+| `totalInvocations` | `BN` | Lifetime invocations |
+| `createdAt` | `BN` | Creation timestamp |
+
+### CapabilityIndexData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `capabilityId` | `string` | Human-readable capability ID |
+| `capabilityHash` | `number[]` | SHA-256 hash (32 bytes) |
+| `agents` | `PublicKey[]` | Agent PDAs (max 100) |
+| `lastUpdated` | `BN` | Last update timestamp |
+
+### ProtocolIndexData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protocolId` | `string` | Human-readable protocol ID |
+| `protocolHash` | `number[]` | SHA-256 hash (32 bytes) |
+| `agents` | `PublicKey[]` | Agent PDAs (max 100) |
+| `lastUpdated` | `BN` | Last update timestamp |

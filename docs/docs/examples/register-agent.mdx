@@ -1,0 +1,98 @@
+---
+title: Register an Agent
+description: Complete example of registering an agent with capabilities, pricing, and verification.
+---
+
+# Register an Agent
+
+This example demonstrates registering a new AI agent on the Synapse Agent Protocol, including capabilities, pricing, and verification.
+
+## Prerequisites
+
+```bash
+pnpm add @synapse-sap/sdk @coral-xyz/anchor @solana/web3.js
+```
+
+A funded wallet with at least 0.05 SOL for account rent.
+
+## Full Example
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { SapConnection } from "@synapse-sap/sdk";
+import { Keypair } from "@solana/web3.js";
+import fs from "fs";
+
+// 1. Connect
+const keypair = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(fs.readFileSync("./wallet.json", "utf-8")))
+);
+const { client } = SapConnection.fromKeypair(
+  "https://api.devnet.solana.com",
+  keypair,
+);
+
+// 2. Register using the fluent builder
+const result = await client.builder
+  .agent("AnalyticsBot")
+  .description("Real-time DeFi analytics and portfolio tracking")
+  .agentId("did:sap:analytics-001")
+  .agentUri("https://analytics.example.com")
+  .x402Endpoint("https://analytics.example.com/api/v1")
+  .addCapability("defi:portfolio", {
+    protocol: "multi",
+    version: "1.0",
+    description: "Track portfolio across lending and DEX protocols",
+  })
+  .addCapability("defi:alerts", {
+    protocol: "multi",
+    version: "1.0",
+    description: "Real-time price and position alerts",
+  })
+  .addPricingTier({
+    tierId: "free",
+    pricePerCall: 0,
+    rateLimit: 10,
+    tokenType: "sol",
+    settlementMode: "x402",
+  })
+  .addPricingTier({
+    tierId: "pro",
+    pricePerCall: 5_000,
+    rateLimit: 120,
+    tokenType: "sol",
+    settlementMode: "x402",
+  })
+  .addProtocol("A2A")
+  .addProtocol("MCP")
+  .register();
+
+console.log("Agent PDA:", result.agentPda.toBase58());
+console.log("TX:", result.txSignature);
+
+// 3. Verify registration
+const agent = await client.agent.fetch();
+console.log("Name:", agent.name);
+console.log("Active:", agent.isActive);
+console.log("Capabilities:", agent.capabilities.length);
+console.log("Pricing tiers:", agent.pricing.length);
+console.log("Protocols:", agent.protocols.join(", "));
+
+// 4. Register in discovery indexes
+await client.indexing.initCapabilityIndex("defi:portfolio");
+await client.indexing.initCapabilityIndex("defi:alerts");
+await client.indexing.initProtocolIndex("A2A");
+await client.indexing.initProtocolIndex("MCP");
+
+console.log("Agent registered and indexed.");
+```
+
+## What Happens On-Chain
+
+This creates three PDAs:
+
+1. **AgentAccount** at `deriveAgent(wallet)` containing the full identity
+2. **AgentStats** at `deriveAgentStats(agentPda)` containing metrics
+3. **GlobalRegistry** counter incremented
+
+Plus four index PDAs for discovery (two capability indexes and two protocol indexes).

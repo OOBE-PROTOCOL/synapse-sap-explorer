@@ -1,0 +1,94 @@
+---
+title: AgentBuilder
+description: Fluent API for agent registration with type conversions, validation, and optional tool batching.
+---
+
+# AgentBuilder
+
+The `AgentBuilder` provides a fluent interface for agent registration. It handles type conversions (plain numbers to BN, string enums to Anchor variants), validates inputs against on-chain limits, and can batch tool publications alongside registration.
+
+Access via `client.builder`. Each call returns a new builder instance (not cached).
+
+## Basic Registration
+
+```typescript
+const result = await client.builder
+  .agent("TradeBot")
+  .description("AI-powered Jupiter swap agent")
+  .agentId("did:sap:tradebot-001")
+  .agentUri("https://tradebot.example.com")
+  .x402Endpoint("https://tradebot.example.com/.well-known/x402")
+  .addCapability("jupiter:swap", {
+    protocol: "jupiter",
+    version: "6.0",
+    description: "Execute token swaps",
+  })
+  .addCapability("jupiter:quote", {
+    protocol: "jupiter",
+    version: "6.0",
+    description: "Fetch swap quotes",
+  })
+  .addPricingTier({
+    tierId: "standard",
+    pricePerCall: 10_000,         // plain number, converted to BN
+    rateLimit: 60,
+    tokenType: "sol",             // string, converted to { sol: {} }
+    settlementMode: "x402",       // string, converted to { x402: {} }
+  })
+  .addProtocol("A2A")
+  .addProtocol("MCP")
+  .register();
+
+console.log("Agent PDA:", result.agentPda.toBase58());
+console.log("Stats PDA:", result.statsPda.toBase58());
+console.log("TX:", result.txSignature);
+```
+
+## Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `.agent(name)` | Set agent name |
+| `.description(text)` | Set description |
+| `.agentId(id)` | Set off-chain identifier |
+| `.agentUri(uri)` | Set metadata URI |
+| `.x402Endpoint(url)` | Set payment endpoint |
+| `.addCapability(id, opts)` | Add a capability declaration |
+| `.addPricingTier(opts)` | Add a pricing tier |
+| `.addProtocol(name)` | Add a supported protocol |
+| `.register()` | Submit registration transaction |
+| `.registerWithTools()` | Submit registration with tool publications |
+
+## Type Conversions
+
+The builder automatically handles conversions that would otherwise require manual work:
+
+| Input | Converted To |
+|-------|-------------|
+| `pricePerCall: 10_000` (number) | `new BN(10_000)` |
+| `tokenType: "sol"` (string) | `{ sol: {} }` (Anchor variant) |
+| `settlementMode: "x402"` (string) | `{ x402: {} }` (Anchor variant) |
+
+## Registration with Tools
+
+The builder can also register tools in the same flow:
+
+```typescript
+const result = await client.builder
+  .agent("DataBot")
+  .description("Real-time DeFi data feeds")
+  .addTool({
+    name: "getPrice",
+    protocol: "pyth",
+    description: "Fetch real-time price feed",
+    inputSchema: '{"token":"string"}',
+    outputSchema: '{"price":"number","confidence":"number"}',
+    httpMethod: "get",
+    category: "data",
+    paramsCount: 1,
+    requiredParams: 1,
+  })
+  .registerWithTools();
+
+// result.toolSignatures contains the tool publication TXs
+```

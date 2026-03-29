@@ -1,0 +1,9 @@
+{
+  "title": "Explorer",
+  "pages": [
+    "overview",
+    "pages",
+    "transaction-parsing",
+    "api-routes"
+  ]
+}

@@ -120,10 +120,10 @@ function extractInstructions(message: any): any[] {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { signature: string } },
+  { params }: { params: Promise<{ signature: string }> },
 ) {
   try {
-    const sig = params.signature;
+    const { signature: sig } = await params;
 
     const detail = await swr(`tx:${sig}`, async () => {
       // --- DB first (tx details are immutable once written) ---

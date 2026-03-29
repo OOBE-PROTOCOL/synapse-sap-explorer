@@ -1,0 +1,173 @@
+---
+title: Architecture
+description: Modular design of the SAP SDK, the SapClient tree, module and registry layers, and data flow patterns.
+---
+
+# Architecture
+
+The SAP SDK follows a layered, modular architecture. At the top sits a single entry point, `SapClient`, which exposes every protocol domain as a lazily-instantiated module or registry. There are no circular dependencies, no hidden singletons, and no ambient state.
+
+## System Overview
+
+```
+SapClient
+├── Modules (low-level instruction dispatch)
+│   ├── AgentModule
+│   ├── FeedbackModule
+│   ├── IndexingModule
+│   ├── ToolsModule
+│   ├── VaultModule
+│   ├── EscrowModule
+│   ├── AttestationModule
+│   └── LedgerModule
+├── Registries (high-level workflows)
+│   ├── DiscoveryRegistry
+│   ├── X402Registry
+│   ├── SessionManager
+│   └── AgentBuilder
+├── Events
+│   └── EventParser
+└── Shared Infrastructure
+    pda/ constants/ types/ utils/ errors/ idl/
+```
+
+Eight modules handle low-level instruction dispatch. Four registries compose modules into ergonomic workflows. One event parser decodes on-chain logs into typed events.
+
+## SapClient
+
+`SapClient` is the only object you instantiate. Everything else is derived from it.
+
+### Factory Methods
+
+| Method | Input | Notes |
+|--------|-------|-------|
+| `SapClient.from(provider, programId?)` | `AnchorProvider` | Auto-loads the embedded IDL. Most common path. |
+| `SapClient.fromProgram(program)` | `Program` | When you already have a configured Anchor program. |
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+```
+
+### Key Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `program` | `Program` | Underlying Anchor program for all RPC calls |
+| `walletPubkey` | `PublicKey` | Provider wallet, used as default authority and payer |
+
+## Module Layer
+
+Each module encapsulates a single protocol domain. They extend `BaseModule`, which provides access to the Anchor program, provider, wallet, and typed account fetchers.
+
+| Module | Domain | Key Operations |
+|--------|--------|---------------|
+| `AgentModule` | Identity lifecycle | register, update, deactivate, reactivate, close, reportCalls, updateReputation |
+| `FeedbackModule` | Trustless reputation | give, update, revoke, close |
+| `IndexingModule` | Discovery indexes | addCapability, addProtocol, addToolCategory |
+| `ToolsModule` | Tool schema registry | publish, inscribe, update, close |
+| `VaultModule` | Encrypted memory | initVault, openSession, inscribe, compactInscribe, closeSession, closeVault |
+| `EscrowModule` | Payment settlement | create, deposit, settle, withdraw, close |
+| `AttestationModule` | Web of trust | create, revoke, close |
+| `LedgerModule` | Ring-buffer memory | init, write, seal, close, decodeRingBuffer |
+
+### Lazy Singleton Pattern
+
+Every module accessor on `SapClient` is a getter that instantiates the module on first access and caches it for subsequent calls:
+
+```typescript
+// Inside SapClient
+#agent?: AgentModule;
+
+get agent(): AgentModule {
+  return (this.#agent ??= new AgentModule(this.program));
+}
+```
+
+This means zero overhead if you never touch a domain. If you never call `client.escrow`, the `EscrowModule` is never constructed. Repeated access returns the same instance.
+
+### BaseModule
+
+All modules extend `BaseModule`, which provides:
+
+```typescript
+abstract class BaseModule {
+  constructor(protected readonly program: SapProgram) {}
+
+  protected get methods(): any;
+  protected get provider(): AnchorProvider;
+  protected get walletPubkey(): PublicKey;
+
+  protected fetchAccount<T>(name: string, pda: PublicKey): Promise<T>;
+  protected fetchAccountNullable<T>(name: string, pda: PublicKey): Promise<T | null>;
+  protected bn(value: number | bigint): BN;
+}
+```
+
+Modules never reach into each other. They communicate only through the shared `program` reference. Composition happens at the registry layer.
+
+## Registry Layer
+
+Registries are higher-level abstractions that compose multiple modules into task-oriented workflows.
+
+| Registry | Purpose | Composes |
+|----------|---------|----------|
+| `DiscoveryRegistry` | Find agents by capability, protocol, or wallet | Agent + Indexing |
+| `X402Registry` | Micropayment lifecycle with pricing, headers, and settlement | Escrow + Agent |
+| `SessionManager` | Unified memory sessions with vault and ledger in one API | Vault + Ledger |
+| `AgentBuilder` | Fluent registration with validation and tool batching | Agent + Indexing + Tools |
+
+## Data Flow
+
+Every SDK operation follows the same pipeline:
+
+```
+Client code
+  │
+  ▼
+Module method       (e.g., client.agent.register(args))
+  │
+  ▼
+PDA derivation      deriveAgent(wallet) returns [agentPda, bump]
+  │
+  ▼
+Anchor methods      program.methods.registerAgent(...).accounts({...}).rpc()
+  │
+  ▼
+Solana RPC          sendTransaction, on-chain program execution
+  │
+  ▼
+PDA state mutated   AgentAccount, AgentStats, GlobalRegistry updated
+```
+
+For reads, the flow is simpler:
+
+```
+client.agent.fetch()
+  │
+  ▼
+PDA derivation      deriveAgent(wallet)
+  │
+  ▼
+program.account.agentAccount.fetch(pda)
+  │
+  ▼
+Deserialized TypeScript object (AgentAccountData)
+```
+
+## Embedded IDL
+
+The IDL (`synapse_agent_sap.json`) is shipped inside the SDK package. You never need to fetch or generate it. `SapClient.from()` loads it automatically. This means no build step is required, no external workspace dependency exists, and the SDK version always pins the IDL version.
+
+## Design Principles
+
+| Principle | Implementation |
+|-----------|---------------|
+| Zero ambient state | No globals, no module-level caches. Everything lives on SapClient. |
+| Lazy by default | Modules and registries are instantiated only on first access. |
+| Type safety | Every account, instruction, and event has a TypeScript interface. |
+| Deterministic PDAs | All addresses are derivable offline with no lookups needed. |
+| Embedded IDL | SDK version equals IDL version. No build step, no mismatch. |
+| Composition over inheritance | Registries compose modules. They do not extend them. |

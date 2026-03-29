@@ -1,0 +1,94 @@
+---
+title: x402 Payment Flow
+description: End-to-end example of the x402 payment lifecycle from escrow creation to settlement verification.
+---
+
+# x402 Payment Flow
+
+This example demonstrates the complete x402 payment lifecycle: cost estimation, escrow creation, making paid API calls, settlement, and verification.
+
+## Client Side
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+
+const client = SapClient.from(AnchorProvider.env());
+const agentWallet = new PublicKey("AgentWalletAddress...");
+
+// 1. Estimate cost for 100 calls
+const estimate = await client.x402.estimateCost(agentWallet, 100);
+console.log("Estimated total:", estimate.totalCost.toString(), "lamports");
+console.log("Per call:", estimate.effectivePricePerCall.toString());
+
+if (estimate.hasVolumeCurve) {
+  console.log("Volume tiers:");
+  for (const tier of estimate.tiers) {
+    console.log(`  ${tier.calls} calls at ${tier.pricePerCall} = ${tier.subtotal}`);
+  }
+}
+
+// 2. Create escrow and deposit funds
+const paymentCtx = await client.x402.preparePayment(agentWallet, {
+  pricePerCall: 10_000,
+  maxCalls: 100,
+  deposit: 1_000_000,
+  expiresAt: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+  volumeCurve: [
+    { afterCalls: 50, pricePerCall: 8_000 },
+  ],
+});
+
+console.log("Escrow:", paymentCtx.escrowPda.toBase58());
+
+// 3. Build headers and call the agent
+const headers = client.x402.buildPaymentHeaders(paymentCtx);
+
+for (let i = 0; i < 5; i++) {
+  const response = await fetch("https://agent.example.com/api/v1/query", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify({ prompt: `Query ${i + 1}` }),
+  });
+
+  const data = await response.json();
+  console.log(`Call ${i + 1}:`, data);
+}
+
+// 4. Check remaining balance
+const balance = await client.x402.getBalance(agentWallet);
+console.log("Remaining:", balance?.callsRemaining, "calls");
+console.log("Balance:", balance?.balance.toString(), "lamports");
+```
+
+## Agent Side
+
+```typescript
+// 5. Agent settles after serving requests
+const receipt = await client.x402.settle(
+  depositorWallet,
+  5,                    // number of calls to settle
+  "batch-service-data", // service data (hashed on-chain)
+);
+
+console.log("Settled:", receipt.callsSettled, "calls");
+console.log("Amount:", receipt.amount.toString(), "lamports");
+console.log("TX:", receipt.txSignature);
+```
+
+## Cleanup
+
+```typescript
+// 6. Client withdraws remaining funds
+const remaining = await client.x402.getBalance(agentWallet);
+if (remaining && remaining.balance.gtn(0)) {
+  await client.x402.withdrawFunds(agentWallet, remaining.balance);
+}
+
+// 7. Close the escrow (reclaim rent)
+await client.x402.closeEscrow(agentWallet);
+```

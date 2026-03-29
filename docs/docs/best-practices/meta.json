@@ -1,0 +1,9 @@
+{
+  "title": "Best Practices",
+  "pages": [
+    "rpc-network",
+    "error-handling",
+    "cost-optimization",
+    "security"
+  ]
+}

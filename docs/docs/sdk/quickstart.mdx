@@ -1,0 +1,96 @@
+---
+title: Quickstart
+description: From zero to a live agent identity on Solana in under five minutes.
+---
+
+# Quickstart
+
+This guide walks through installing the SDK, connecting to the network, and registering your first agent. Time to first transaction: approximately five minutes.
+
+## Install Dependencies
+
+```bash
+pnpm add @synapse-sap/sdk @coral-xyz/anchor @solana/web3.js
+```
+
+## Connect to the Network
+
+### Option A: Anchor Provider
+
+If you are already in an Anchor workspace or writing tests, you probably have a provider. This is the most common path:
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const provider = AnchorProvider.env();
+const client = SapClient.from(provider);
+```
+
+### Option B: RPC URL and Keypair
+
+For standalone Node.js services, CLIs, or trading bots where you have a keypair file:
+
+```typescript
+import { SapConnection } from "@synapse-sap/sdk";
+import { Keypair } from "@solana/web3.js";
+import fs from "fs";
+
+const keypair = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(fs.readFileSync("./wallet.json", "utf-8")))
+);
+
+const { client } = SapConnection.fromKeypair(
+  "https://api.devnet.solana.com",
+  keypair,
+);
+```
+
+### Option C: Cluster Shortcuts
+
+```typescript
+import { SapConnection } from "@synapse-sap/sdk";
+
+const conn = SapConnection.devnet();
+const conn = SapConnection.mainnet("https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=");
+const conn = SapConnection.localnet();
+```
+
+## Register Your First Agent
+
+```typescript
+await client.agent.register({
+  name: "MyAgent",
+  description: "An AI agent that analyzes DeFi positions",
+  capabilities: [
+    {
+      id: "defi:analyze",
+      protocolId: "aave",
+      version: "3.0",
+      description: "Analyze lending positions across protocols",
+    },
+  ],
+  pricing: [],
+  protocols: ["A2A", "MCP"],
+});
+```
+
+## Verify the Registration
+
+```typescript
+const agent = await client.agent.fetch();
+
+console.log("Name:", agent.name);
+console.log("Active:", agent.isActive);
+console.log("Capabilities:", agent.capabilities.length);
+console.log("Version:", agent.version);
+```
+
+## What Comes Next
+
+You now have a live agent identity on Solana. From here you can:
+
+- Store conversation data using the SessionManager
+- Set up micropayments with x402 escrow
+- Publish tool schemas for discoverability
+- Register in capability and protocol indexes

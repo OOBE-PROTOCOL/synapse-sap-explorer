@@ -1,0 +1,148 @@
+---
+title: Escrow API
+description: Low-level and high-level APIs for x402 escrow management, settlement, and balance tracking.
+---
+
+# Escrow API
+
+The SDK provides two layers for managing x402 escrow payments: the high-level `X402Registry` and the low-level `EscrowModule`.
+
+## X402Registry (High-Level)
+
+Access via `client.x402`. Handles cost estimation, payment preparation, header generation, settlement, and balance tracking.
+
+### Estimate Cost
+
+```typescript
+const estimate = await client.x402.estimateCost(agentWallet, 100);
+
+console.log(estimate.totalCost.toString());
+console.log(estimate.effectivePricePerCall.toString());
+console.log(estimate.hasVolumeCurve);
+```
+
+### Prepare Payment
+
+Creates escrow and deposits funds in a single transaction:
+
+```typescript
+const ctx = await client.x402.preparePayment(agentWallet, {
+  pricePerCall: 1_000,
+  maxCalls: 500,
+  deposit: 500_000,
+  expiresAt: 0,
+  volumeCurve: [
+    { afterCalls: 100, pricePerCall: 800 },
+  ],
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `pricePerCall` | `number or string or BN` | Required | Base price per call |
+| `maxCalls` | `number or string or BN` | 0 | Max calls (0 = unlimited) |
+| `deposit` | `number or string or BN` | Required | Initial deposit amount |
+| `expiresAt` | `number or string or BN` | 0 | Unix timestamp (0 = never) |
+| `volumeCurve` | `Array` | Empty | Volume discount breakpoints |
+| `tokenMint` | `PublicKey or null` | null | SPL token mint |
+| `tokenDecimals` | `number` | 9 | Token decimal places |
+
+### Build Headers
+
+```typescript
+const headers = client.x402.buildPaymentHeaders(ctx);
+// or from existing escrow:
+const headers = await client.x402.buildPaymentHeadersFromEscrow(agentWallet);
+```
+
+### Settle
+
+```typescript
+const receipt = await client.x402.settle(depositorWallet, 5, "service-data-v1");
+```
+
+### Batch Settle
+
+```typescript
+const batch = await client.x402.settleBatch(depositorWallet, [
+  { calls: 3, serviceData: "batch-1" },
+  { calls: 7, serviceData: "batch-2" },
+]);
+```
+
+### Balance
+
+```typescript
+const balance = await client.x402.getBalance(agentWallet);
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `balance` | `BN` | Current remaining balance |
+| `totalDeposited` | `BN` | Cumulative deposits |
+| `totalSettled` | `BN` | Cumulative settlements |
+| `callsRemaining` | `number` | Remaining calls |
+| `isExpired` | `boolean` | Expiry check |
+| `affordableCalls` | `number` | Calls the budget allows |
+
+### Additional Methods
+
+```typescript
+await client.x402.addFunds(agentWallet, 50_000);
+await client.x402.withdrawFunds(agentWallet, 25_000);
+await client.x402.closeEscrow(agentWallet);
+const exists = await client.x402.hasEscrow(agentWallet);
+const escrow = await client.x402.fetchEscrow(agentWallet);
+const events = await client.x402.verifySettlement(txSignature);
+```
+
+## EscrowModule (Low-Level)
+
+Access via `client.escrow`. Direct Anchor instruction wrappers.
+
+### Create
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+
+await client.escrow.create(agentWallet, {
+  pricePerCall: new BN(1_000_000),
+  maxCalls: new BN(100),
+  initialDeposit: new BN(100_000_000),
+  expiresAt: null,
+  volumeCurve: null,
+  tokenMint: null,
+  tokenDecimals: null,
+});
+```
+
+### Deposit
+
+```typescript
+await client.escrow.deposit(agentWallet, new BN(50_000_000));
+```
+
+### Settle
+
+```typescript
+import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+
+const serviceHash = hashToArray(sha256("service-record-001"));
+await client.escrow.settle(depositorWallet, new BN(5), serviceHash);
+```
+
+### Batch Settle
+
+```typescript
+await client.escrow.settleBatch(depositorWallet, [
+  { callsToSettle: new BN(3), serviceHash: hashToArray(sha256("batch-1")) },
+  { callsToSettle: new BN(7), serviceHash: hashToArray(sha256("batch-2")) },
+]);
+```
+
+### Withdraw and Close
+
+```typescript
+await client.escrow.withdraw(agentWallet, new BN(25_000_000));
+await client.escrow.close(agentWallet);
+```

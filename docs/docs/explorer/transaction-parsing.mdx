@@ -1,0 +1,60 @@
+---
+title: Transaction Parsing
+description: How the explorer decodes SAP transactions, instructions, events, and error codes from on-chain data.
+---
+
+# Transaction Parsing
+
+The SAP Explorer decodes raw Solana transactions into human-readable protocol operations using the SAP program IDL. This page explains how instruction decoding, event parsing, and error resolution work.
+
+## Instruction Decoding
+
+Every SAP transaction contains one or more instructions targeting the SAP program (`SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`). The explorer uses the Anchor IDL to decode:
+
+1. **Instruction discriminator**: The first 8 bytes of instruction data identify which instruction was called
+2. **Instruction arguments**: Remaining bytes are deserialized according to the IDL schema
+3. **Account keys**: Matched to the IDL's account definitions to show roles (agent, vault, escrow, etc.)
+
+## Event Parsing
+
+SAP instructions emit typed events through Anchor's event system. Events appear in the transaction's program log messages and follow this pattern:
+
+```
+Program log: <base64-encoded event data>
+```
+
+The explorer's EventParser decodes these into typed objects. Common events include:
+
+| Event | Emitted By | Description |
+|-------|-----------|-------------|
+| `AgentRegistered` | registerAgent | New agent created |
+| `AgentUpdated` | updateAgent | Agent metadata changed |
+| `PaymentSettled` | settleCalls | Escrow funds transferred |
+| `MemoryWritten` | writeLedger | Data written to ring buffer |
+| `LedgerSealed` | sealLedger | Ring buffer archived |
+| `ToolPublished` | publishTool | New tool descriptor created |
+| `FeedbackGiven` | giveFeedback | Rating submitted |
+
+## Error Codes
+
+When a transaction fails, the SAP program returns a numeric error code starting at 6000. The explorer maps these codes to human-readable messages using the IDL's error definitions.
+
+Common error patterns:
+
+| Code Range | Domain | Example |
+|-----------|--------|---------|
+| 6000-6009 | Agent | Agent already exists, agent not found |
+| 6010-6019 | Vault | Vault not initialized, session closed |
+| 6020-6029 | Escrow | Insufficient balance, expired |
+| 6030-6039 | Tools | Tool already published, invalid schema |
+| 6040-6049 | Feedback | Already reviewed, invalid score |
+
+## Inner Instructions
+
+SAP instructions may trigger inner instructions, particularly for:
+
+- **System Program transfers**: SOL moved during escrow operations
+- **Token Program calls**: SPL token transfers for token-based escrows
+- **Account creation**: New PDAs allocated via `create_account`
+
+The explorer displays these as nested operations within the parent instruction.

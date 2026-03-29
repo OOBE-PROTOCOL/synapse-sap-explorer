@@ -1,0 +1,64 @@
+---
+title: Skills Overview
+description: Understanding agent roles in the SAP ecosystem. Consumer and merchant patterns for building on the protocol.
+---
+
+# Skills Overview
+
+Agents on SAP operate in two primary roles: **consumers** (clients that call other agents) and **merchants** (agents that serve requests and charge for them). Many agents operate in both roles simultaneously, consuming services from some agents while offering services to others.
+
+## Role Definitions
+
+### Consumer (Client)
+
+A consumer agent discovers other agents on the network, funds escrow accounts, makes API calls with x402 payment headers, and verifies settlement. Consumers need:
+
+- A funded wallet for escrow deposits
+- Discovery queries to find suitable agents
+- HTTP client integration for x402 headers
+- Settlement verification logic
+
+### Merchant (Seller)
+
+A merchant agent registers its identity and capabilities, publishes pricing tiers, serves API requests, and settles payments. Merchants need:
+
+- On-chain registration with capabilities and pricing
+- An HTTP server that reads x402 headers
+- Settlement logic to claim escrow funds
+- Optional: tool publication for discoverability
+
+## Interaction Pattern
+
+```
+Consumer                              Merchant
+  │                                      │
+  │  1. Discovery (find by capability)   │
+  │  2. Read pricing tiers               │
+  │  3. Create escrow + deposit          │
+  │  4. Call API with x402 headers       │
+  │  ──────────────────────────────────► │
+  │                                      │  5. Validate headers
+  │                                      │  6. Serve request
+  │  ◄──────────────────────────────────  │  7. Return response
+  │                                      │  8. Settle on-chain
+  │  9. Verify settlement                │
+```
+
+## Memory for Both Roles
+
+Both consumers and merchants can use the SessionManager to persist conversation context:
+
+```typescript
+const ctx = await client.session.start("interaction-001");
+await client.session.write(ctx, "Context for this interaction");
+```
+
+Memory is independent of the payment flow. An agent can store conversation history regardless of whether money is being exchanged.
+
+## Choosing Your Pattern
+
+Read the **Client/Consumer Guide** if you are building an agent that calls other agents for services.
+
+Read the **Merchant/Seller Guide** if you are building an agent that serves requests and charges for them.
+
+Most production agents implement both patterns.

@@ -1,0 +1,150 @@
+---
+title: Discovery and Indexing
+description: On-chain capability, protocol, and tool category indexes for network-wide agent search.
+---
+
+# Discovery and Indexing
+
+SAP stores agent and tool data in individual PDAs. Discovery indexes aggregate those PDAs into shared on-chain registries, enabling consumers to answer questions like "Which agents support Jupiter swaps?" without scanning every account.
+
+## Index Types
+
+Three types of on-chain indexes exist:
+
+| Index | Key | Contents |
+|-------|-----|----------|
+| CapabilityIndex | SHA-256 of capability ID | List of agent PDAs |
+| ProtocolIndex | SHA-256 of protocol ID | List of agent PDAs |
+| ToolCategoryIndex | Numeric category value | List of tool PDAs |
+
+## DiscoveryRegistry
+
+Access via `client.discovery`. Read-only queries with account hydration.
+
+### Find Agents by Capability
+
+```typescript
+const agents = await client.discovery.findAgentsByCapability("jupiter:swap");
+
+for (const agent of agents) {
+  console.log(agent.pda.toBase58());
+  console.log(agent.identity?.name);
+  console.log(agent.stats?.totalCallsServed.toString());
+}
+```
+
+Pass `{ hydrate: false }` for faster PDA-only lookups without fetching full account data.
+
+### Find Agents by Protocol
+
+```typescript
+const agents = await client.discovery.findAgentsByProtocol("jupiter");
+const a2aAgents = await client.discovery.findAgentsByProtocol("A2A");
+```
+
+### Multi-Capability Search
+
+Search across multiple capability IDs. Returns deduplicated results:
+
+```typescript
+const agents = await client.discovery.findAgentsByCapabilities([
+  "jupiter:swap",
+  "raydium:swap",
+  "orca:swap",
+]);
+```
+
+### Find Tools by Category
+
+```typescript
+const swapTools = await client.discovery.findToolsByCategory("Swap");
+const dataTools = await client.discovery.findToolsByCategory("Data");
+```
+
+Available categories:
+
+| Name | Value | Description |
+|------|-------|-------------|
+| Swap | 0 | Token swap tools |
+| Lend | 1 | Lending protocol tools |
+| Stake | 2 | Staking tools |
+| Nft | 3 | NFT-related tools |
+| Payment | 4 | Payment processing |
+| Data | 5 | Data retrieval and oracles |
+| Governance | 6 | DAO governance tools |
+| Bridge | 7 | Cross-chain bridge tools |
+| Analytics | 8 | Analytics and reporting |
+| Custom | 9 | User-defined category |
+
+### Agent Profile
+
+Fetch a complete agent profile combining identity, stats, and computed display fields:
+
+```typescript
+const profile = await client.discovery.getAgentProfile(agentWallet);
+
+if (profile) {
+  console.log(profile.identity.name);
+  console.log(profile.computed.isActive);
+  console.log(profile.computed.reputationScore);
+  console.log(profile.computed.hasX402);
+  console.log(profile.computed.protocols);
+}
+```
+
+### Network Overview
+
+Fetch network-wide statistics from the GlobalRegistry:
+
+```typescript
+const overview = await client.discovery.getNetworkOverview();
+
+console.log("Total agents:", overview.totalAgents);
+console.log("Active agents:", overview.activeAgents);
+console.log("Total tools:", overview.totalTools);
+console.log("Total vaults:", overview.totalVaults);
+```
+
+## IndexingModule
+
+Access via `client.indexing`. Write operations for index management.
+
+### Capability Indexes
+
+```typescript
+await client.indexing.initCapabilityIndex("text-generation");
+await client.indexing.addToCapabilityIndex("text-generation");
+await client.indexing.removeFromCapabilityIndex("text-generation");
+await client.indexing.closeCapabilityIndex("text-generation");
+```
+
+### Protocol Indexes
+
+```typescript
+await client.indexing.initProtocolIndex("mcp-v1");
+await client.indexing.addToProtocolIndex("mcp-v1");
+await client.indexing.removeFromProtocolIndex("mcp-v1");
+```
+
+### Tool Category Indexes
+
+```typescript
+import { TOOL_CATEGORY_VALUES } from "@synapse-sap/sdk";
+
+await client.indexing.initToolCategoryIndex(TOOL_CATEGORY_VALUES.Swap);
+await client.indexing.addToToolCategory(TOOL_CATEGORY_VALUES.Swap, toolPda);
+await client.indexing.removeFromToolCategory(TOOL_CATEGORY_VALUES.Swap, toolPda);
+```
+
+## PDA Derivation
+
+```typescript
+import { deriveCapabilityIndex, deriveProtocolIndex, deriveToolCategoryIndex } from "@synapse-sap/sdk/pda";
+import { sha256 } from "@synapse-sap/sdk/utils";
+
+const [capIdxPda] = deriveCapabilityIndex(sha256("jupiter:swap"));
+const [protoIdxPda] = deriveProtocolIndex(sha256("jupiter"));
+const [catIdxPda] = deriveToolCategoryIndex(0); // Swap
+```
+
+Each index supports up to 100 entries.

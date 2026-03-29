@@ -41,10 +41,10 @@ import {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { address: string } },
+  { params }: { params: Promise<{ address: string }> },
 ) {
   try {
-    const address = params.address;
+    const { address } = await params;
 
     const result = await swr(`address:${address}`, async () => {
       const synConn = getSynapseConnection();

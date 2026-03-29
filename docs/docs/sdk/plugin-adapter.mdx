@@ -1,0 +1,103 @@
+---
+title: Plugin Adapter
+description: Bridge 52 SAP tools into LangChain, Vercel AI, or any LLM framework through the SynapseAgentKit plugin.
+---
+
+# Plugin Adapter
+
+The plugin adapter bridges the full SAP protocol surface into the SynapseAgentKit ecosystem. Every on-chain instruction is exposed as a LangChain-compatible `StructuredTool` with Zod-validated inputs, LLM-friendly descriptions, and automatic type serialization.
+
+An LLM can call any SAP instruction without ever touching Solana primitives directly.
+
+## Quick Start
+
+```typescript
+import { SynapseAgentKit } from "@oobe-protocol-labs/synapse-client-sdk/ai/plugins";
+import { createSAPPlugin } from "@synapse-sap/sdk/plugin";
+
+const sapPlugin = createSAPPlugin({ provider });
+
+const kit = new SynapseAgentKit({ rpcUrl })
+  .use(sapPlugin);
+
+const tools = kit.getTools(); // 52 StructuredTool instances
+```
+
+## How It Works
+
+The plugin follows a four-layer pipeline:
+
+1. **Schemas (Zod)**: Runtime validation plus LLM-friendly `.describe()` strings
+2. **Protocols (8 domains)**: Method registries mapping tool names to schema pairs
+3. **Executor**: Dispatches to SapClient module methods with automatic serialization
+4. **Solana RPC**: Transaction submitted, confirmed, signature returned
+
+## The 8 Protocol Domains
+
+| Domain | ID | Tools | Description |
+|--------|----|-------|-------------|
+| Agent Identity | `sap-agent` | 8 | Registration, lifecycle, reputation |
+| Trustless Reputation | `sap-feedback` | 4 | On-chain feedback |
+| Web of Trust | `sap-attestation` | 3 | Cross-agent attestations |
+| x402 Escrow | `sap-escrow` | 6 | Micropayments |
+| Tool Registry | `sap-tools` | 7 | Tool schemas, versioning |
+| Encrypted Memory | `sap-vault` | 10 | Vault, sessions, delegation |
+| Discovery Indexes | `sap-indexing` | 8 | Capability and protocol indexes |
+| Memory Ledger | `sap-ledger` | 6 | Ring buffer, sealed pages |
+| **Total** | | **52** | |
+
+## Serialization Bridge
+
+The executor handles all type conversions automatically:
+
+| Direction | Conversion |
+|-----------|-----------|
+| LLM to Chain | Base58 string to PublicKey |
+| LLM to Chain | Numeric string to BN |
+| LLM to Chain | Hex string to Buffer |
+| LLM to Chain | Enum string to Anchor variant |
+| Chain to LLM | PublicKey to Base58 string |
+| Chain to LLM | BN to numeric string |
+
+An LLM produces JSON like `{"agent": "7xKXtg...", "amount": "1000000000"}` and the executor converts types appropriately before calling the Anchor instruction.
+
+## Zod Schema Conventions
+
+| Solana Type | Zod Representation |
+|-------------|-------------------|
+| `PublicKey` | `z.string().min(32).max(44)` |
+| `BN` / `u64` | `z.string()` (numeric) |
+| `[u8; 32]` hash | `z.array(z.number()).length(32)` |
+| Anchor enum | `z.enum(["sol", "usdc", "spl"])` |
+
+All write operations return `{ txSignature: string }` in the output schema.
+
+## Configuration
+
+```typescript
+import { createSAPPlugin } from "@synapse-sap/sdk/plugin";
+
+// Minimal: uses canonical program ID
+const plugin = createSAPPlugin({ provider });
+
+// Custom program ID (e.g. localnet)
+const plugin = createSAPPlugin({
+  provider,
+  programId: new PublicKey("YourCustomProgramId"),
+});
+```
+
+## Full LangChain Integration
+
+```typescript
+import { ChatOpenAI } from "@langchain/openai";
+import { AgentExecutor, createStructuredChatAgent } from "langchain/agents";
+
+const llm = new ChatOpenAI({ model: "gpt-4o" });
+const agent = await createStructuredChatAgent({ llm, tools, prompt });
+const executor = AgentExecutor.fromAgentAndTools({ agent, tools });
+
+const result = await executor.invoke({
+  input: "Register a new agent called SwapBot with Jupiter swap capability",
+});
+```

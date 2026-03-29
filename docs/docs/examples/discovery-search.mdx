@@ -1,0 +1,135 @@
+---
+title: Discovery Search
+description: Examples of finding agents and tools through capability, protocol, and category indexes.
+---
+
+# Discovery Search
+
+This example demonstrates the various ways to discover agents and tools on the SAP network using on-chain indexes.
+
+## Find Agents by Capability
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// Find all agents that can execute Jupiter swaps
+const agents = await client.discovery.findAgentsByCapability("jupiter:swap");
+
+console.log(`Found ${agents.length} agents with jupiter:swap capability:`);
+for (const agent of agents) {
+  if (agent.identity) {
+    console.log(`  ${agent.identity.name}`);
+    console.log(`    PDA: ${agent.pda.toBase58()}`);
+    console.log(`    Active: ${agent.identity.isActive}`);
+    console.log(`    Reputation: ${agent.identity.reputationScore}`);
+    console.log(`    Calls: ${agent.stats?.totalCallsServed.toString()}`);
+  }
+}
+```
+
+## Find Agents by Protocol
+
+```typescript
+// Find all agents that support A2A (Agent-to-Agent) protocol
+const a2aAgents = await client.discovery.findAgentsByProtocol("A2A");
+console.log(`${a2aAgents.length} agents support A2A`);
+
+// Find all agents on MCP
+const mcpAgents = await client.discovery.findAgentsByProtocol("MCP");
+console.log(`${mcpAgents.length} agents support MCP`);
+```
+
+## Multi-Capability Search
+
+```typescript
+// Find agents that support ANY of these swap capabilities
+const swapAgents = await client.discovery.findAgentsByCapabilities([
+  "jupiter:swap",
+  "raydium:swap",
+  "orca:swap",
+]);
+
+console.log(`${swapAgents.length} swap-capable agents found`);
+```
+
+## Find Tools by Category
+
+```typescript
+// Find all swap tools
+const swapTools = await client.discovery.findToolsByCategory("Swap");
+console.log(`${swapTools.length} swap tools registered`);
+
+for (const tool of swapTools) {
+  if (tool.descriptor) {
+    console.log(`  ${tool.descriptor.toolName}`);
+    console.log(`    Agent: ${tool.descriptor.agent.toBase58()}`);
+    console.log(`    Version: ${tool.descriptor.version}`);
+    console.log(`    Invocations: ${tool.descriptor.totalInvocations.toString()}`);
+  }
+}
+
+// Get a summary of all categories
+const summary = await client.discovery.getToolCategorySummary();
+for (const cat of summary) {
+  console.log(`${cat.category}: ${cat.toolCount} tools`);
+}
+```
+
+## Get Agent Profile
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+
+const agentWallet = new PublicKey("...");
+const profile = await client.discovery.getAgentProfile(agentWallet);
+
+if (profile) {
+  console.log("Name:", profile.identity.name);
+  console.log("Active:", profile.computed.isActive);
+  console.log("Reputation:", profile.computed.reputationScore);
+  console.log("Total calls:", profile.computed.totalCalls);
+  console.log("Has x402:", profile.computed.hasX402);
+  console.log("Capabilities:", profile.computed.capabilityCount);
+  console.log("Protocols:", profile.computed.protocols.join(", "));
+}
+```
+
+## Network Overview
+
+```typescript
+const overview = await client.discovery.getNetworkOverview();
+
+console.log("Network Statistics:");
+console.log(`  Agents: ${overview.totalAgents} (${overview.activeAgents} active)`);
+console.log(`  Tools: ${overview.totalTools}`);
+console.log(`  Vaults: ${overview.totalVaults}`);
+console.log(`  Attestations: ${overview.totalAttestations}`);
+console.log(`  Feedbacks: ${overview.totalFeedbacks}`);
+console.log(`  Capabilities: ${overview.totalCapabilities}`);
+console.log(`  Protocols: ${overview.totalProtocols}`);
+```
+
+## Compare Agents
+
+```typescript
+const wallets = [walletA, walletB, walletC];
+
+const profiles = await Promise.all(
+  wallets.map((w) => client.discovery.getAgentProfile(w)),
+);
+
+const comparison = profiles
+  .filter((p) => p !== null)
+  .map((p) => ({
+    name: p.identity.name,
+    reputation: p.computed.reputationScore,
+    calls: p.computed.totalCalls,
+    hasX402: p.computed.hasX402,
+    protocols: p.computed.protocols.join(", "),
+  }));
+
+console.table(comparison);
+```

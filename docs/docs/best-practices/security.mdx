@@ -1,0 +1,198 @@
+---
+title: Security
+description: Security best practices for SAP integrations, including key management, input validation, escrow safety, and content integrity.
+---
+
+# Security
+
+On-chain applications handle real value. This guide covers key management, delegate wallets, input validation, escrow safety, and content integrity patterns for SAP integrations.
+
+## Key Management
+
+### Never Expose the Main Keypair
+
+The wallet that registers an agent becomes its permanent authority. Compromise of this keypair means loss of control over the agent, its escrows, and all associated accounts.
+
+```typescript
+// WRONG: hardcoded secret
+const keypair = Keypair.fromSecretKey(new Uint8Array([...]));
+
+// CORRECT: loaded from encrypted file at runtime
+import fs from "fs";
+const raw = fs.readFileSync(process.env.KEYPAIR_PATH!, "utf-8");
+const keypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(raw)));
+```
+
+### Environment Variable Discipline
+
+```bash
+# .env.local (NEVER committed to git)
+KEYPAIR_PATH=/secure/path/wallet.json
+SYNAPSE_API_KEY=sk-...
+HELIUS_KEY=...
+```
+
+Add to `.gitignore`:
+```
+.env.local
+*.json
+!package.json
+!tsconfig.json
+```
+
+## Delegate Wallets
+
+For automated systems, use a delegate wallet with limited authority:
+
+1. Create a dedicated keypair for the service
+2. Fund it with only the SOL needed for operations
+3. Register it as the agent authority
+4. Monitor its balance and top up programmatically
+
+This limits blast radius: if the delegate is compromised, the attacker can only operate within the agent's scope, not access your main treasury.
+
+## Input Validation
+
+### Server-Side Validation
+
+Never trust client input. Validate all parameters before constructing transactions:
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+
+function validatePublicKey(input: string): PublicKey {
+  try {
+    const key = new PublicKey(input);
+    if (!PublicKey.isOnCurve(key)) {
+      throw new Error("Key is not on curve");
+    }
+    return key;
+  } catch {
+    throw new Error(`Invalid public key: ${input}`);
+  }
+}
+
+function validateAmount(input: unknown): number {
+  const amount = Number(input);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Amount must be a positive finite number");
+  }
+  if (amount > 1_000_000_000_000) {
+    throw new Error("Amount exceeds maximum allowed");
+  }
+  return amount;
+}
+```
+
+### API Route Guards
+
+```typescript
+export async function POST(request: Request) {
+  const body = await request.json();
+
+  if (!body.agentId || typeof body.agentId !== "string") {
+    return NextResponse.json(
+      { error: "agentId is required" },
+      { status: 400 },
+    );
+  }
+
+  if (body.agentId.length > 64) {
+    return NextResponse.json(
+      { error: "agentId exceeds maximum length" },
+      { status: 400 },
+    );
+  }
+
+  // Proceed with validated input
+}
+```
+
+## Escrow Safety
+
+### Set Expiry Times
+
+Always set an expiration on escrows. Without expiry, funds remain locked indefinitely if the agent becomes unresponsive:
+
+```typescript
+const paymentCtx = await client.x402.preparePayment(agentWallet, {
+  pricePerCall: 10_000,
+  maxCalls: 100,
+  deposit: 1_000_000,
+  expiresAt: Math.floor(Date.now() / 1000) + 3600, // 1 hour max
+});
+```
+
+### Monitor Escrow Balances
+
+Implement alerts for escrow accounts approaching depletion:
+
+```typescript
+const balance = await client.x402.getBalance(agentWallet);
+if (balance && balance.callsRemaining < 10) {
+  console.warn("Escrow nearly depleted:", balance.callsRemaining, "calls remaining");
+  // Trigger top-up or notification
+}
+```
+
+### Withdraw Promptly
+
+After a service session completes, withdraw remaining funds:
+
+```typescript
+const remaining = await client.x402.getBalance(agentWallet);
+if (remaining && remaining.balance.gtn(0)) {
+  await client.x402.withdrawFunds(agentWallet, remaining.balance);
+}
+```
+
+## Content Integrity
+
+### Schema Hash Verification
+
+When publishing tools, the SDK stores a SHA-256 hash of the schema on-chain. Consumers can verify schema integrity:
+
+```typescript
+import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+
+const tool = await client.tools.fetch(agentPda, "myTool");
+const inscribedSchema = await client.tools.fetchInscription(agentPda, "myTool", 0);
+
+const expectedHash = hashToArray(sha256(inscribedSchema));
+const onChainHash = tool.inputSchemaHash;
+
+const isValid = expectedHash.every((byte, i) => byte === onChainHash[i]);
+if (!isValid) {
+  throw new Error("Schema has been tampered with");
+}
+```
+
+### Session Data Integrity
+
+For high-value sessions, hash conversation data before writing:
+
+```typescript
+import { createHash } from "crypto";
+
+function hashEntry(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+const entry = "Agent: Transfer approved. TX: 4xK9...";
+const hash = hashEntry(entry);
+
+await client.session.write(ctx, `${entry}|hash:${hash}`);
+```
+
+## Production Security Checklist
+
+1. Main keypair stored in encrypted vault (not in environment variables)
+2. Delegate wallets used for automated operations
+3. All user inputs validated server-side before transaction construction
+4. Escrow accounts always have expiration timestamps
+5. Schema hashes verified before trusting tool descriptors
+6. API routes require authentication (API key, JWT, or session tokens)
+7. Rate limiting applied to all public-facing endpoints
+8. Transaction simulation enabled (preflight checks) for all writes
+9. Monitoring and alerts for unusual account activity
+10. Regular key rotation for delegate wallets

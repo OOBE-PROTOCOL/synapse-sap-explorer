@@ -1,0 +1,128 @@
+---
+title: Tool Publishing
+description: Complete example of publishing a tool descriptor, inscribing schemas, and registering in category indexes.
+---
+
+# Tool Publishing
+
+This example demonstrates publishing a tool descriptor on-chain, inscribing full JSON schemas into transaction logs, and registering the tool in a category index for discoverability.
+
+## Full Example
+
+```typescript
+import { SapClient } from "@synapse-sap/sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+import { sha256, hashToArray } from "@synapse-sap/sdk/utils";
+import { HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@synapse-sap/sdk";
+import { deriveAgent } from "@synapse-sap/sdk/pda";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// 1. Define schemas
+const inputSchema = JSON.stringify({
+  type: "object",
+  properties: {
+    tokenA: {
+      type: "string",
+      description: "Input token mint address",
+    },
+    tokenB: {
+      type: "string",
+      description: "Output token mint address",
+    },
+    amount: {
+      type: "number",
+      description: "Amount in base units (lamports)",
+    },
+    slippage: {
+      type: "number",
+      description: "Maximum slippage percentage (e.g. 0.5 for 0.5%)",
+    },
+  },
+  required: ["tokenA", "tokenB", "amount"],
+});
+
+const outputSchema = JSON.stringify({
+  type: "object",
+  properties: {
+    txSignature: { type: "string" },
+    amountOut: { type: "number" },
+    priceImpact: { type: "number" },
+    route: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+});
+
+// 2. Publish tool descriptor
+await client.tools.publishByName(
+  "jupiterSwap",
+  "jupiter",
+  "Execute a token swap via Jupiter aggregator with optimal routing",
+  inputSchema,
+  outputSchema,
+  HTTP_METHOD_VALUES.Post,
+  TOOL_CATEGORY_VALUES.Swap,
+  4,     // paramsCount
+  3,     // requiredParams
+  false, // isCompound
+);
+
+console.log("Tool published.");
+
+// 3. Inscribe full schemas into TX logs (zero ongoing rent)
+await client.tools.inscribeSchema("jupiterSwap", {
+  schemaType: 0, // input
+  schemaData: Buffer.from(inputSchema),
+  schemaHash: hashToArray(sha256(inputSchema)),
+  compression: 0,
+});
+
+await client.tools.inscribeSchema("jupiterSwap", {
+  schemaType: 1, // output
+  schemaData: Buffer.from(outputSchema),
+  schemaHash: hashToArray(sha256(outputSchema)),
+  compression: 0,
+});
+
+console.log("Schemas inscribed.");
+
+// 4. Register in category index
+const [agentPda] = deriveAgent(client.walletPubkey);
+const [toolPda] = client.tools.deriveTool(agentPda, "jupiterSwap");
+
+await client.indexing.initToolCategoryIndex(TOOL_CATEGORY_VALUES.Swap);
+await client.indexing.addToToolCategory(TOOL_CATEGORY_VALUES.Swap, toolPda);
+
+console.log("Tool indexed under Swap category.");
+
+// 5. Verify
+const tool = await client.tools.fetch(agentPda, "jupiterSwap");
+console.log("Name:", tool.toolName);
+console.log("Version:", tool.version);
+console.log("Active:", tool.isActive);
+console.log("Category: Swap");
+console.log("Invocations:", tool.totalInvocations.toString());
+```
+
+## Updating a Tool
+
+When you update a tool's schema, inscribe the new versions and the on-chain version counter increments automatically:
+
+```typescript
+// Update schema hash (version bumps from 1 to 2)
+await client.tools.update("jupiterSwap", {
+  inputSchemaHash: hashToArray(sha256(newInputSchema)),
+  paramsCount: 5,
+  requiredParams: 3,
+});
+
+// Inscribe the updated schema
+await client.tools.inscribeSchema("jupiterSwap", {
+  schemaType: 0,
+  schemaData: Buffer.from(newInputSchema),
+  schemaHash: hashToArray(sha256(newInputSchema)),
+  compression: 0,
+});
+```

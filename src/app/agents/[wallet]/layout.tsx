@@ -4,12 +4,12 @@ const SITE_URL = 'https://explorer.oobeprotocol.ai';
 const API_BASE = process.env.NEXT_PUBLIC_BASE_URL || SITE_URL;
 
 type Props = {
-  params: { wallet: string };
+  params: Promise<{ wallet: string }>;
   children: React.ReactNode;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const wallet = params.wallet;
+  const { wallet } = await params;
   const shortWallet = wallet.length > 12 ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : wallet;
 
   try {

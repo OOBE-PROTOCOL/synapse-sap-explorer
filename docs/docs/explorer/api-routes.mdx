@@ -1,0 +1,77 @@
+---
+title: API Routes
+description: Server-side API endpoints that bridge the SAP SDK to the explorer frontend.
+---
+
+# API Routes
+
+The explorer exposes server-side API routes under `src/app/api/` that bridge the SAP SDK to client components. All SDK interactions happen server-side; the frontend only receives serialized JSON.
+
+## Route Structure
+
+```
+src/app/api/
+├── cluster/         GET    Network cluster info
+├── supply/          GET    Token supply data
+├── gateway/
+│   ├── agents/      GET    List gateway agents
+│   ├── execute/     POST   Execute agent command
+│   ├── marketplace/ GET    Agent marketplace data
+│   ├── pricing/     GET    Agent pricing info
+│   └── session/     POST   Manage gateway sessions
+├── defi/
+│   ├── balance/     GET    Wallet token balances
+│   ├── jupiter/     GET    Jupiter integration
+│   ├── tokens/      GET    Token list
+│   ├── quote/       GET    Swap quotes
+│   └── swap/        POST   Execute swaps
+├── nft/
+│   └── [owner]/     GET    NFT holdings by owner
+├── wallet/
+│   └── [address]/   GET    Wallet details
+├── agent/
+│   └── chat/        POST   Agent chat interface
+└── x402/
+    ├── facilitators/ GET   x402 facilitators
+    ├── paywall/      POST  Paywall check
+    ├── prepare-tx/   POST  Prepare payment TX
+    └── simulate/     POST  Simulate payment
+```
+
+## Design Principles
+
+**Server-only SDK.** The `SapClient` singleton is instantiated in API routes, never exposed to the browser.
+
+**Error handling.** Every route wraps SDK calls in try/catch and returns proper JSON error responses with appropriate HTTP status codes.
+
+**Caching.** Routes use Next.js revalidation with 5-minute TTLs to reduce RPC load. Critical data uses shorter intervals.
+
+**Type safety.** Request and response types are defined in TypeScript. API routes validate inputs before passing them to the SDK.
+
+## Example Route Pattern
+
+```typescript
+// src/app/api/gateway/agents/route.ts
+import { NextResponse } from "next/server";
+import { getSapClient } from "@/lib/sap/discovery";
+
+export async function GET() {
+  try {
+    const client = getSapClient();
+    const agents = await client.discovery.findAgentsByProtocol("A2A");
+
+    return NextResponse.json({
+      agents: agents.map((a) => ({
+        pda: a.pda.toBase58(),
+        name: a.identity?.name,
+        active: a.identity?.isActive,
+      })),
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to fetch agents" },
+      { status: 500 },
+    );
+  }
+}
+```

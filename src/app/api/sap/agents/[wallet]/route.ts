@@ -20,8 +20,8 @@ export const GET = withSynapseError(async (
   _req: Request,
   ...args: unknown[]
 ) => {
-  const { params } = args[0] as { params: { wallet: string } };
-  const wallet = params.wallet;
+  const { params: paramsPromise } = args[0] as { params: Promise<{ wallet: string }> };
+  const { wallet } = await paramsPromise;
 
   const profile = await swr(`agent:${wallet}`, async () => {
     // --- DB first ---

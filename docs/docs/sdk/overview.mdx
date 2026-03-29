@@ -1,0 +1,107 @@
+---
+title: SDK Overview
+description: The official TypeScript client for building on the Synapse Agent Protocol. Package structure, requirements, and module map.
+---
+
+# SDK Overview
+
+The `@oobe-protocol-labs/synapse-sap-sdk` is the official TypeScript SDK for interacting with the Synapse Agent Protocol on Solana. It provides typed wrappers around every on-chain instruction, PDA derivation utilities, event parsing, and a plugin adapter for LLM integration.
+
+## Requirements
+
+| Package | Min Version | Required | Notes |
+|---------|-------------|----------|-------|
+| `@coral-xyz/anchor` | 0.30.0 | Yes | Anchor runtime for program interaction |
+| `@solana/web3.js` | 1.90.0 | Yes | Solana RPC, keypairs, transactions |
+| `zod` | 3.20.0 | No | Only for plugin schemas (AI agent tooling) |
+| TypeScript | 5.7+ | Yes | Strict mode recommended |
+
+## Installation
+
+```bash
+# Using pnpm
+pnpm add @synapse-sap/sdk @coral-xyz/anchor @solana/web3.js
+
+# Using yarn
+yarn add @synapse-sap/sdk @coral-xyz/anchor @solana/web3.js
+
+# Optional: only needed for the plugin adapter (LangChain tools)
+pnpm add zod
+```
+
+## Package Structure
+
+```
+synapse-sap-sdk/src/
+├── core/
+│   ├── client.ts          SapClient root entry point
+│   └── connection.ts      SapConnection cluster helpers
+├── modules/
+│   ├── base.ts            BaseModule abstract class
+│   ├── agent.ts           AgentModule
+│   ├── feedback.ts        FeedbackModule
+│   ├── indexing.ts        IndexingModule
+│   ├── tools.ts           ToolsModule
+│   ├── vault.ts           VaultModule
+│   ├── escrow.ts          EscrowModule
+│   ├── attestation.ts     AttestationModule
+│   └── ledger.ts          LedgerModule
+├── registries/
+│   ├── discovery.ts       DiscoveryRegistry
+│   ├── x402.ts            X402Registry
+│   ├── session.ts         SessionManager
+│   └── builder.ts         AgentBuilder
+├── plugin/
+│   ├── index.ts           SynapseAgentKit (LangChain adapter)
+│   ├── protocols.ts       Protocol handlers
+│   └── schemas.ts         Zod schemas for 52 tools
+├── constants/
+│   ├── programs.ts        SAP_PROGRAM_ID
+│   ├── seeds.ts           PDA seed prefixes
+│   └── limits.ts          On-chain size/count limits
+├── pda/
+│   └── index.ts           All PDA derivation functions
+├── events/
+│   └── index.ts           EventParser
+├── errors/
+│   └── index.ts           Typed error handling
+├── types/
+│   ├── accounts.ts        Deserialized account interfaces
+│   ├── instructions.ts    Instruction argument DTOs
+│   ├── common.ts          Shared structs
+│   └── enums.ts           Anchor-style enum kinds
+├── utils/
+│   ├── hash.ts            SHA-256, content hashing
+│   ├── serialization.ts   Buffer encoding helpers
+│   └── validation.ts      Input validation guards
+└── idl/
+    └── synapse_agent_sap.json  Embedded IDL
+```
+
+## Module Map
+
+### Low-Level Modules (Instruction Dispatch)
+
+| Module | Access | Domain |
+|--------|--------|--------|
+| `AgentModule` | `client.agent` | Registration, updates, metrics |
+| `FeedbackModule` | `client.feedback` | On-chain reputation |
+| `IndexingModule` | `client.indexing` | Discovery index management |
+| `ToolsModule` | `client.tools` | Tool schemas, invocations |
+| `VaultModule` | `client.vault` | Encrypted memory |
+| `EscrowModule` | `client.escrow` | Payment escrow |
+| `AttestationModule` | `client.attestation` | Web of trust |
+| `LedgerModule` | `client.ledger` | Ring-buffer memory |
+
+### High-Level Registries (Workflow Orchestration)
+
+| Registry | Access | Composes |
+|----------|--------|----------|
+| `DiscoveryRegistry` | `client.discovery` | Agent + Indexing |
+| `X402Registry` | `client.x402` | Escrow + Agent |
+| `SessionManager` | `client.session` | Vault + Ledger |
+| `AgentBuilder` | `client.builder` | Agent + Indexing + Tools |
+
+## Conventions
+
+One module equals one file. There are no barrel re-exports between modules. Types in `types/` are read-only with no methods attached. PDA functions are pure with no side effects and no network calls. Registries compose modules while modules dispatch instructions.

@@ -1,0 +1,13 @@
+{
+  "title": "Solana Agent Protocol",
+  "pages": [
+    "overview",
+    "architecture",
+    "agent-lifecycle",
+    "memory-systems",
+    "payments",
+    "discovery",
+    "tools-schemas",
+    "on-chain-reference"
+  ]
+}
