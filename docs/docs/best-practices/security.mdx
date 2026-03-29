@@ -59,6 +59,89 @@ For automated systems, use a delegate wallet with limited authority. This is the
 
 This limits blast radius: if the delegate is compromised, the attacker can only operate within the agent's scope, not access your main treasury.
 
+## Vault Delegation & Permission Bitmask
+
+Vault delegation grants a hot-wallet limited access to vault operations. Permissions are controlled by a bitmask:
+
+| Bit | Permission | Description |
+|-----|-----------|-------------|
+| `0x01` | `INSCRIBE` | Can inscribe data into sessions |
+| `0x02` | `OPEN_SESSION` | Can open new sessions |
+| `0x04` | `CLOSE_SESSION` | Can close sessions |
+| `0x08` | `READ` | Can read vault data |
+
+```typescript
+// Grant inscribe + read permissions (0x01 | 0x08 = 0x09)
+const permissions = 0x01 | 0x08;
+await client.vault.addDelegate(vaultPda, hotWallet, permissions);
+
+// Delegated inscriptions include the delegate's signature
+await client.vault.inscribeDelegated(sessionPda, data, hash);
+
+// Revoke permissions at any time
+await client.vault.revokeDelegate(vaultPda, hotWallet);
+```
+
+Delegations have an `expiresAt` timestamp — after expiry they are automatically invalid. Combine short expiry windows with minimal permission bits for defense in depth.
+
+## Authority Model
+
+Every on-chain operation requires a specific signer. Understanding who can do what is essential:
+
+| Operation | Required Signer | Notes |
+|-----------|----------------|-------|
+| Register agent | Wallet owner | Creates agent PDA |
+| Update/close agent | Wallet owner | Only owner can modify |
+| Give feedback | Any wallet | One feedback per reviewer per agent |
+| Create escrow | Any wallet (depositor) | Depositor funds the escrow |
+| Settle escrow | Agent owner | Agent claims payment |
+| Withdraw escrow | Depositor wallet | Depositor reclaims unused funds |
+| Init vault | Agent owner | One vault per nonce per agent |
+| Inscribe | Agent owner or delegate | Delegate needs `INSCRIBE` (0x01) |
+| Open session | Agent owner or delegate | Delegate needs `OPEN_SESSION` (0x02) |
+| Close session | Agent owner or delegate | Delegate needs `CLOSE_SESSION` (0x04) |
+| Create attestation | Any wallet (attester) | One per attester-subject pair |
+| Revoke attestation | Attester wallet | Only attester can revoke |
+
+## Encryption
+
+Memory vault inscriptions are encrypted client-side before being stored on-chain. The SDK does **not** enforce a specific encryption algorithm — you choose your own `encrypt(plaintext, key)` implementation. Common choices:
+
+- **NaCl `secretbox`** — Recommended. Fast, authenticated, 24-byte nonce.
+- **AES-256-GCM** — Also suitable for structured data.
+
+```typescript
+import nacl from "tweetnacl";
+
+function encrypt(plaintext: string, key: Uint8Array): Buffer {
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength); // 24 bytes
+  const message = Buffer.from(plaintext, "utf-8");
+  const encrypted = nacl.secretbox(message, nonce, key);
+  // Prepend nonce so decrypt() can extract it
+  return Buffer.concat([nonce, Buffer.from(encrypted)]);
+}
+
+function decrypt(ciphertext: Buffer, key: Uint8Array): string {
+  const nonce = ciphertext.subarray(0, nacl.secretbox.nonceLength);
+  const message = ciphertext.subarray(nacl.secretbox.nonceLength);
+  const decrypted = nacl.secretbox.open(message, nonce, key);
+  if (!decrypted) throw new Error("Decryption failed");
+  return Buffer.from(decrypted).toString("utf-8");
+}
+```
+
+### Nonce Rotation
+
+Vaults track a `nonceVersion` counter. When you rotate:
+
+```typescript
+await client.vault.rotateNonce(vaultPda);
+// Increments nonceVersion, updates lastNonceRotation timestamp
+// New inscriptions should use the new nonce seed
+```
+
+Rotation invalidates the old encryption nonce without deleting existing inscriptions. Historical data can still be decrypted if you retain the old key. Rotate periodically (e.g. weekly) as a defense-in-depth measure.
+
 ## Input Validation
 
 ### Server-Side Validation
@@ -158,22 +241,28 @@ if (remaining && remaining.balance.gtn(0)) {
 
 ### Schema Hash Verification
 
-When publishing tools, the SDK stores a SHA-256 hash of the schema on-chain. Consumers can verify schema integrity:
+When publishing tools, the SDK stores a SHA-256 hash of the schema on-chain. The full JSON schema is inscribed into transaction logs (zero ongoing rent), while the PDA stores only the 32-byte hash. Consumers can verify schema integrity by hashing the original schema and comparing it with the on-chain hash:
 
 ```typescript
 import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
+// Fetch the tool descriptor (contains only the hash, not the full schema)
 const tool = await client.tools.fetch(agentPda, "myTool");
-const inscribedSchema = await client.tools.fetchInscription(agentPda, "myTool", 0);
 
-const expectedHash = hashToArray(sha256(inscribedSchema));
-const onChainHash = tool.inputSchemaHash;
+// The original schema (obtained from TX logs or off-chain cache)
+const originalSchema = '{"type":"object","properties":{"token":{"type":"string"}}}';
+
+// Compute the expected hash and compare with on-chain hash
+const expectedHash = hashToArray(sha256(originalSchema));
+const onChainHash = tool.inputSchemaHash;  // number[] (32 bytes)
 
 const isValid = expectedHash.every((byte, i) => byte === onChainHash[i]);
 if (!isValid) {
   throw new Error("Schema has been tampered with");
 }
 ```
+
+> **Note:** Full schemas are stored in transaction logs via `inscribeSchema()`, not in fetachable PDA accounts. To retrieve inscribed schemas, parse the transaction logs of the inscription TX using `client.parser`.
 
 ### Session Data Integrity
 

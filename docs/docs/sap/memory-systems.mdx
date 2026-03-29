@@ -66,8 +66,15 @@ MemoryLedger PDA
 ### Initialize
 
 ```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// sessionPda: the session PDA this ledger belongs to.
+// The ledger PDA is derived as ["sap_ledger", sessionPda].
+// Cost: ~0.032 SOL rent deposit (reclaimable when you close the ledger).
 await client.ledger.init(sessionPda);
-// Cost: ~0.032 SOL rent (one-time, reclaimable on close)
 ```
 
 ### Write
@@ -75,20 +82,30 @@ await client.ledger.init(sessionPda);
 ```typescript
 import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
+// Data to write: accepts Buffer, Uint8Array, or string.
+// Maximum size per write: 750 bytes (LIMITS.MAX_LEDGER_WRITE_SIZE).
 const data = Buffer.from("User requested SOL to USDC swap");
+
+// contentHash: SHA-256 hash of the data, converted to number[].
+// Used for the rolling Merkle tree that ensures data integrity.
 const contentHash = hashToArray(sha256(data));
 
+// write() does three things atomically:
+//   1. Appends to the ring buffer (overwrites oldest entry when full)
+//   2. Emits data in the transaction log (permanent, parseable via getTransaction)
+//   3. Updates the rolling Merkle hash on the ledger PDA
 await client.ledger.write(sessionPda, data, contentHash);
-// Cost: ~0.000005 SOL (TX fee only)
+// Cost: ~0.000005 SOL (TX fee only, zero additional rent)
 ```
-
-Each write appends to the ring buffer (overwrites oldest entry when full), emits data in the transaction log (permanent, retrievable via `getTransaction`), and updates the rolling Merkle hash for integrity verification.
 
 ### Seal
 
 ```typescript
+// seal() creates a new LedgerPage PDA containing a snapshot of
+// the current ring buffer, then resets the buffer for new writes.
+// Page PDA is derived as ["sap_page", ledgerPda, pageIndex_u32_le].
 await client.ledger.seal(sessionPda);
-// Cost: ~0.031 SOL rent (write-once, never-delete)
+// Cost: ~0.031 SOL rent (write-once, permanent, NOT reclaimable)
 ```
 
 Sealing creates a new `LedgerPage` PDA containing a snapshot of the current ring buffer, resets the ring buffer for new writes, and increments `numPages` on the ledger. Pages are immutable after creation.
@@ -98,11 +115,19 @@ Sealing creates a new `LedgerPage` PDA containing a snapshot of the current ring
 ### Read and Decode
 
 ```typescript
+// Fetch the raw ledger account data
 const ledger = await client.ledger.fetchLedger(sessionPda);
+
+// Decode the ring buffer bytes into individual entries.
+// Returns an array of Uint8Array entries (length-prefixed u16 LE format).
 const entries = client.ledger.decodeRingBuffer(ledger.ring);
 entries.forEach((entry) => {
-  console.log(Buffer.from(entry).toString("utf-8"));
+  const text = Buffer.from(entry).toString("utf-8");
+  console.log(text); // "User requested SOL to USDC swap"
 });
+
+// Ring buffer capacity: 4,096 bytes (LIMITS.RING_CAPACITY).
+// Oldest entries are overwritten when full.
 ```
 
 ### Close
@@ -121,8 +146,17 @@ The Vault provides encrypted, session-scoped memory with epoch-based pagination.
 ### Initialize Vault
 
 ```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// vaultNonce: 32 random bytes used as encryption salt.
+// Generate once and store securely — you need this nonce to
+// derive the same vault PDA in future sessions.
 const vaultNonce = Array.from(crypto.getRandomValues(new Uint8Array(32)));
 await client.vault.initVault(vaultNonce);
+// Creates a MemoryVault PDA at ["sap_vault", agentPda]
 ```
 
 ### Open Session
@@ -130,7 +164,10 @@ await client.vault.initVault(vaultNonce);
 ```typescript
 import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
-const sessionHash = hashToArray(sha256("conversation-456"));
+// Sessions are scoped by a unique ID. The ID is SHA-256 hashed
+// to derive the session PDA: ["sap_session", vaultPda, sessionHash].
+const sessionId = "conversation-456";
+const sessionHash = hashToArray(sha256(sessionId)); // number[] (32 bytes)
 await client.vault.openSession(sessionHash);
 ```
 
@@ -138,10 +175,10 @@ await client.vault.openSession(sessionHash);
 
 ```typescript
 await client.vault.compactInscribe(sessionPda, vaultPda, {
-  sequence: 1,
-  encryptedData: Buffer.from(encryptedBytes),
-  nonce: encryptionNonce,
-  contentHash: contentHashArray,
+  sequence: 1,                               // ordering number within the session
+  encryptedData: Buffer.from(encryptedBytes), // AES-256-GCM encrypted payload (max 750 bytes)
+  nonce: encryptionNonce,                     // 12-byte encryption nonce (number[])
+  contentHash: contentHashArray,              // SHA-256 hash of the plaintext (number[], 32 bytes)
 });
 ```
 
@@ -153,12 +190,12 @@ Vaults support delegated access for scenarios where a hot wallet needs to write 
 
 ```typescript
 await client.vault.addDelegate(
-  hotWallet,
-  0xFF,                                        // permission bitmask
-  Math.floor(Date.now() / 1000) + 86400,       // expires in 24 hours
+  hotWallet,                                   // PublicKey of the delegate wallet
+  0xFF,                                        // permission bitmask: 0xFF = full write access
+  Math.floor(Date.now() / 1000) + 86400,       // Unix timestamp: expires in 24 hours
 );
 
-// Revoke when no longer needed
+// Revoke access immediately when no longer needed
 await client.vault.revokeDelegate(hotWallet);
 ```
 

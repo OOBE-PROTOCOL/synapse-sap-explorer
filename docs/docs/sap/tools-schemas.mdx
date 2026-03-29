@@ -39,13 +39,18 @@ Tool Descriptor PDA
 ### By Name (Recommended)
 
 ```typescript
-import { HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { SapClient, HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
 
+const client = SapClient.from(AnchorProvider.env());
+
+// publishByName auto-hashes all string arguments to SHA-256.
+// The tool PDA is derived as ["sap_tool", agentPda, SHA256(toolName)].
 await client.tools.publishByName(
-  "getWeather",
-  "mcp-v1",
-  "Fetch current weather for a location",
-  JSON.stringify({
+  "getWeather",                    // toolName:      human-readable name (max 32 chars)
+  "mcp-v1",                        // protocolId:    protocol this tool belongs to
+  "Fetch current weather for a location", // description:  what the tool does
+  JSON.stringify({                  // inputSchema:   JSON Schema for input validation
     type: "object",
     properties: {
       location: { type: "string", description: "City name or coordinates" },
@@ -53,7 +58,7 @@ await client.tools.publishByName(
     },
     required: ["location"],
   }),
-  JSON.stringify({
+  JSON.stringify({                  // outputSchema:  JSON Schema for output format
     type: "object",
     properties: {
       temperature: { type: "number" },
@@ -61,11 +66,11 @@ await client.tools.publishByName(
       description: { type: "string" },
     },
   }),
-  HTTP_METHOD_VALUES.Post,
-  TOOL_CATEGORY_VALUES.Data,
-  2,     // paramsCount
-  1,     // requiredParams
-  false, // isCompound
+  HTTP_METHOD_VALUES.Post,          // httpMethod:    0=Get, 1=Post, 2=Put, 3=Delete, 4=Compound
+  TOOL_CATEGORY_VALUES.Data,        // category:      0=Swap, 1=Lend, ..., 5=Data, ..., 9=Custom
+  2,                                // paramsCount:   total parameters in the input schema
+  1,                                // requiredParams: how many are mandatory
+  false,                            // isCompound:    true for multi-step tools that chain calls
 );
 ```
 
@@ -78,6 +83,8 @@ On-chain tool PDAs store only 32-byte hashes. The full JSON schema content is in
 **Why this split approach?** Storing a full JSON schema in a Solana account might cost 0.01 SOL or more in ongoing rent, depending on the schema size. By storing only a 32-byte hash in the account (constant, minimal rent) and writing the full content into the transaction log (one-time transaction fee, zero ongoing cost), SAP reduces the cost by orders of magnitude. The hash acts as a fingerprint: anyone can retrieve the full schema from the TX log and verify it matches the on-chain hash.
 
 ```typescript
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+
 const inputSchema = JSON.stringify({
   type: "object",
   properties: {
@@ -87,12 +94,17 @@ const inputSchema = JSON.stringify({
   required: ["location"],
 });
 
-await client.tools.inscribeSchema("getWeather", {
-  schemaType: 0,                                // 0 = input, 1 = output, 2 = description
-  schemaData: Buffer.from(inputSchema),
-  schemaHash: hashToArray(sha256(inputSchema)),
-  compression: 0,
-});
+// inscribeSchema writes the full JSON schema into the TX log.
+// The PDA stores only the 32-byte hash; the full content lives in logs.
+await client.tools.inscribeSchema(
+  "getWeather",                    // toolName: must match the published tool name
+  {
+    schemaType: 0,                 // 0 = input schema, 1 = output schema, 2 = description
+    schemaData: Buffer.from(inputSchema), // raw bytes (max 750 bytes per inscription)
+    schemaHash: hashToArray(sha256(inputSchema)), // SHA-256 hash as number[] (32 bytes)
+    compression: 0,                // 0 = none, future: 1 = gzip, etc.
+  },
+);
 ```
 
 ### Hash on-chain, Content in Logs
@@ -104,27 +116,38 @@ The PDA holds only 32-byte SHA-256 hashes (minimal rent). TX logs hold the full 
 Update metadata hashes. Bumps the on-chain `version` counter. All fields are optional:
 
 ```typescript
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+
+// update() takes the toolName and an UpdateToolArgs object.
+// All fields are optional — only pass what you want to change.
 await client.tools.update("getWeather", {
-  descriptionHash: hashToArray(sha256("Updated description")),
-  inputSchemaHash: hashToArray(sha256(newInputSchema)),
-  paramsCount: 3,
-  requiredParams: 2,
+  descriptionHash: hashToArray(sha256("Updated description")),  // new description hash
+  inputSchemaHash: hashToArray(sha256(newInputSchema)),         // new input schema hash
+  paramsCount: 3,                    // updated parameter count
+  requiredParams: 2,                 // updated required count
+  // outputSchemaHash: null,         // null = no change
+  // httpMethod: null,               // null = no change
+  // category: null,                 // null = no change
 });
+// The on-chain version counter increments automatically on each update.
 ```
 
 ## Lifecycle Management
 
 ```typescript
-// Deactivate (remains discoverable but marked unavailable)
+// Deactivate: tool remains on-chain but isActive = false.
+// Consumers can still read the descriptor, but discovery excludes it.
 await client.tools.deactivate("getWeather");
 
-// Reactivate
+// Reactivate: sets isActive = true, tool is discoverable again.
 await client.tools.reactivate("getWeather");
 
-// Close (permanently remove, reclaim rent)
+// Close: permanently removes the PDA. Reclaims ~0.008 SOL rent.
+// WARNING: this is irreversible. Prefer deactivation for deprecated tools.
 await client.tools.close("getWeather");
 
-// Report invocations for analytics
+// Report invocations: increments the on-chain totalInvocations counter.
+// Used for analytics and discovery ranking. Accepts number or bigint.
 await client.tools.reportInvocations("getWeather", 5);
 ```
 
@@ -161,9 +184,10 @@ await client.tools.reportInvocations("getWeather", 5);
 import { deriveAgent, deriveTool } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 import { sha256 } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
-const [agentPda] = deriveAgent(agentWallet);
-const [toolPda] = deriveTool(agentPda, sha256("getWeather"));
-// Seeds: ["sap_tool", agentPda, SHA256(toolName)]
+// Pure math, no network calls. Same result every time for the same inputs.
+const [agentPda] = deriveAgent(agentWallet);               // ["sap_agent", wallet]
+const toolNameHash = sha256("getWeather");                  // Uint8Array (32 bytes)
+const [toolPda] = deriveTool(agentPda, toolNameHash);      // ["sap_tool", agent, hash]
 ```
 
 ## Versioning Strategy

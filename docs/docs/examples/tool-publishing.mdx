@@ -18,7 +18,9 @@ import { deriveAgent } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 
 const client = SapClient.from(AnchorProvider.env());
 
-// 1. Define schemas
+// 1. Define schemas.
+// These are standard JSON Schemas that describe your tool's input and output.
+// They will be stored permanently in Solana TX logs (zero ongoing rent).
 const inputSchema = JSON.stringify({
   type: "object",
   properties: {
@@ -55,32 +57,53 @@ const outputSchema = JSON.stringify({
   },
 });
 
-// 2. Publish tool descriptor
+// 2. Publish tool descriptor on-chain.
+// publishByName takes 10 positional arguments:
+//   toolName     — unique per agent (max 32 chars, hashed for PDA)
+//   providerName — display name of the underlying service
+//   description  — what this tool does (max 256 chars)
+//   inputSchema  — JSON string (only the hash is stored on the PDA)
+//   outputSchema — JSON string (only the hash is stored on the PDA)
+//   httpMethod   — HTTP_METHOD_VALUES: Get=0, Post=1, Put=2, Delete=3, Compound=4
+//   category     — TOOL_CATEGORY_VALUES: Swap=0, Lend=1, Stake=2, Nft=3,
+//                  Payment=4, Data=5, Governance=6, Bridge=7, Analytics=8, Custom=9
+//   paramsCount  — total number of parameters (input schema properties)
+//   requiredParams — how many are required (input schema required array length)
+//   isCompound   — true if this tool wraps multiple sub-tools into one call
 await client.tools.publishByName(
-  "jupiterSwap",
-  "jupiter",
-  "Execute a token swap via Jupiter aggregator with optimal routing",
-  inputSchema,
-  outputSchema,
-  HTTP_METHOD_VALUES.Post,
-  TOOL_CATEGORY_VALUES.Swap,
-  4,     // paramsCount
-  3,     // requiredParams
-  false, // isCompound
+  "jupiterSwap",                              // toolName
+  "jupiter",                                  // providerName
+  "Execute a token swap via Jupiter aggregator with optimal routing", // description
+  inputSchema,                                // inputSchema JSON
+  outputSchema,                               // outputSchema JSON
+  HTTP_METHOD_VALUES.Post,                    // httpMethod = 1 (Post)
+  TOOL_CATEGORY_VALUES.Swap,                  // category = 0 (Swap)
+  4,                                          // paramsCount (total params)
+  3,                                          // requiredParams
+  false,                                      // isCompound
 );
 
 console.log("Tool published.");
 
-// 3. Inscribe full schemas into TX logs (zero ongoing rent)
+// 3. Inscribe full schemas into TX logs (zero ongoing rent).
+// The schema data goes into the TX log, not the PDA. This means:
+//   - No rent cost for the data itself
+//   - Schemas are immutable once inscribed
+//   - Reading requires parsing TX logs (use client.parser)
+// Parameters:
+//   schemaType:  0 = input, 1 = output
+//   schemaData:  Buffer of the raw schema JSON
+//   schemaHash:  32-byte SHA-256 hash (must match on-chain hash)
+//   compression: 0 = none, 1 = zstd (for schemas > 500 bytes)
 await client.tools.inscribeSchema("jupiterSwap", {
-  schemaType: 0, // input
-  schemaData: Buffer.from(inputSchema),
-  schemaHash: hashToArray(sha256(inputSchema)),
-  compression: 0,
+  schemaType: 0,                              // 0 = input schema
+  schemaData: Buffer.from(inputSchema),       // raw JSON bytes
+  schemaHash: hashToArray(sha256(inputSchema)),  // 32-byte SHA-256
+  compression: 0,                             // 0 = no compression
 });
 
 await client.tools.inscribeSchema("jupiterSwap", {
-  schemaType: 1, // output
+  schemaType: 1,                              // 1 = output schema
   schemaData: Buffer.from(outputSchema),
   schemaHash: hashToArray(sha256(outputSchema)),
   compression: 0,
@@ -88,7 +111,9 @@ await client.tools.inscribeSchema("jupiterSwap", {
 
 console.log("Schemas inscribed.");
 
-// 4. Register in category index
+// 4. Register in category index for discoverability.
+// initToolCategoryIndex creates the index PDA (one-time, idempotent).
+// addToToolCategory adds the tool to the index (max 100 tools per index).
 const [agentPda] = deriveAgent(client.walletPubkey);
 const [toolPda] = client.tools.deriveTool(agentPda, "jupiterSwap");
 
@@ -97,13 +122,15 @@ await client.indexing.addToToolCategory(TOOL_CATEGORY_VALUES.Swap, toolPda);
 
 console.log("Tool indexed under Swap category.");
 
-// 5. Verify
+// 5. Verify the tool was published correctly.
 const tool = await client.tools.fetch(agentPda, "jupiterSwap");
-console.log("Name:", tool.toolName);
-console.log("Version:", tool.version);
-console.log("Active:", tool.isActive);
-console.log("Category: Swap");
-console.log("Invocations:", tool.totalInvocations.toString());
+console.log("Name:", tool.toolName);                       // "jupiterSwap"
+console.log("Version:", tool.version);                     // 1 (auto-incrementing)
+console.log("Active:", tool.isActive);                     // true
+console.log("Category: Swap");                             // TOOL_CATEGORY_VALUES.Swap
+console.log("HTTP method: Post");                          // HTTP_METHOD_VALUES.Post
+console.log("Params:", tool.paramsCount, "(", tool.requiredParams, "required)");
+console.log("Invocations:", tool.totalInvocations.toString()); // starts at 0
 ```
 
 ## Updating a Tool
@@ -111,18 +138,22 @@ console.log("Invocations:", tool.totalInvocations.toString());
 When you update a tool's schema, inscribe the new versions and the on-chain version counter increments automatically:
 
 ```typescript
-// Update schema hash (version bumps from 1 to 2)
+// Update schema hash (version auto-increments from 1 to 2).
+// Only pass the fields you want to change — all others are left untouched.
 await client.tools.update("jupiterSwap", {
-  inputSchemaHash: hashToArray(sha256(newInputSchema)),
-  paramsCount: 5,
-  requiredParams: 3,
+  inputSchemaHash: hashToArray(sha256(newInputSchema)),  // new 32-byte hash
+  paramsCount: 5,           // updated total params
+  requiredParams: 3,        // unchanged, but must still pass it
+  // description: "...",    // optional: override description
+  // outputSchemaHash: ..., // optional: update output schema too
 });
 
-// Inscribe the updated schema
+// Inscribe the updated schema (same call as before).
+// Each inscription is tied to the current tool version.
 await client.tools.inscribeSchema("jupiterSwap", {
-  schemaType: 0,
+  schemaType: 0,                              // input
   schemaData: Buffer.from(newInputSchema),
   schemaHash: hashToArray(sha256(newInputSchema)),
-  compression: 0,
+  compression: 0,                             // 0 = none, 1 = zstd
 });
 ```

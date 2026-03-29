@@ -48,12 +48,22 @@ Access via `client.x402`. This registry wraps the full payment lifecycle.
 Before committing funds, estimate how much N calls will cost, including volume-curve discounts. This helps clients budget accurately and avoid over-depositing (which locks up capital) or under-depositing (which interrupts service):
 
 ```typescript
-const estimate = await client.x402.estimateCost(agentWallet, 100);
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
 
-console.log(estimate.totalCost.toString());
-console.log(estimate.effectivePricePerCall.toString());
-console.log(estimate.hasVolumeCurve);
-console.log(estimate.tiers);
+const client = SapClient.from(AnchorProvider.env());
+
+// estimateCost reads the agent's pricing from on-chain data
+// and applies volume curve discounts if they exist.
+const estimate = await client.x402.estimateCost(
+  agentWallet,   // PublicKey: the agent you want to call
+  100,           // number:    how many calls to estimate
+);
+
+console.log(estimate.totalCost.toString());            // BN: total lamports needed
+console.log(estimate.effectivePricePerCall.toString()); // BN: weighted avg price
+console.log(estimate.hasVolumeCurve);                  // boolean: applies discounts?
+console.log(estimate.tiers);                           // per-tier breakdown array
 ```
 
 ### Prepare Payment
@@ -62,15 +72,20 @@ Creates an escrow and deposits funds in a single transaction:
 
 ```typescript
 const ctx = await client.x402.preparePayment(agentWallet, {
-  pricePerCall: 1_000,
-  maxCalls: 500,
-  deposit: 500_000,
-  expiresAt: 0,
-  volumeCurve: [
-    { afterCalls: 100, pricePerCall: 800 },
-    { afterCalls: 300, pricePerCall: 600 },
+  pricePerCall: 1_000,       // base price in lamports per API call
+  maxCalls: 500,             // maximum calls allowed (0 = unlimited)
+  deposit: 500_000,          // lamports to deposit upfront into the escrow
+  expiresAt: 0,              // Unix timestamp for escrow expiry (0 = never expires)
+  volumeCurve: [             // optional: tiered pricing (max 5 breakpoints)
+    { afterCalls: 100, pricePerCall: 800 },  // after 100 calls: 800 lamports each
+    { afterCalls: 300, pricePerCall: 600 },  // after 300 calls: 600 lamports each
   ],
+  // tokenMint: null,        // optional: SPL token mint (null = native SOL)
+  // tokenDecimals: 9,       // optional: token decimals (default: 9 for SOL)
 });
+
+console.log("Escrow PDA:", ctx.escrowPda.toBase58());
+console.log("TX:", ctx.txSignature);
 ```
 
 ### Build Payment Headers
@@ -78,11 +93,19 @@ const ctx = await client.x402.preparePayment(agentWallet, {
 Generate HTTP headers to include in every request to the agent. These headers prove that the caller has a funded escrow, allowing the agent to serve the request with confidence that payment is guaranteed:
 
 ```typescript
-const headers = client.x402.buildPaymentHeaders(ctx);
+// buildPaymentHeaders turns the PaymentContext into HTTP headers.
+// Pass these with every API request to the agent's x402 endpoint.
+const headers = client.x402.buildPaymentHeaders(
+  ctx,                         // PaymentContext from preparePayment()
+  // { network: "mainnet-beta" }  // optional: defaults to "mainnet-beta"
+);
 
 const response = await fetch(agentEndpoint, {
   method: "POST",
-  headers: { "Content-Type": "application/json", ...headers },
+  headers: {
+    "Content-Type": "application/json",
+    ...headers,                // merges all X-Payment-* headers
+  },
   body: JSON.stringify({ prompt: "Analyze SOL/USDC liquidity" }),
 });
 ```
@@ -107,14 +130,18 @@ const response = await fetch(agentEndpoint, {
 After serving requests, the agent settles to claim payment:
 
 ```typescript
+// settle() is called by the AGENT after serving requests.
+// The agent's wallet must be the escrow's agentWallet.
 const receipt = await client.x402.settle(
-  depositorWallet,
-  5,
-  "service-data-v1",
+  depositorWallet,             // PublicKey: the client who funded the escrow
+  5,                           // number:    how many calls to settle
+  "service-data-v1",           // string:    service proof (auto-hashed to SHA-256)
 );
 
-console.log(receipt.callsSettled);
-console.log(receipt.amount.toString());
+console.log(receipt.callsSettled);         // 5
+console.log(receipt.amount.toString());    // lamports transferred to agent
+console.log(receipt.txSignature);          // Solana TX signature
+console.log(receipt.serviceHash);          // number[] (32 bytes)
 ```
 
 ### Batch Settlement
@@ -122,22 +149,37 @@ console.log(receipt.amount.toString());
 Settle up to 10 service records in a single transaction:
 
 ```typescript
-const batch = await client.x402.settleBatch(depositorWallet, [
-  { calls: 3, serviceData: "batch-1-data" },
-  { calls: 7, serviceData: "batch-2-data" },
-]);
+// settleBatch processes up to 10 settlements in one Solana TX.
+// More gas-efficient than calling settle() 10 times.
+const batch = await client.x402.settleBatch(
+  depositorWallet,             // PublicKey: the client who funded the escrow
+  [
+    { calls: 3, serviceData: "batch-1-data" }, // 3 calls from first batch
+    { calls: 7, serviceData: "batch-2-data" }, // 7 calls from second batch
+  ],  // max 10 entries per batch (LIMITS.MAX_BATCH_SETTLEMENTS)
+);
+
+console.log(batch.totalCalls);       // 10
+console.log(batch.totalAmount.toString()); // total lamports
+console.log(batch.settlementCount);  // 2
 ```
 
 ### Check Balance
 
 ```typescript
-const balance = await client.x402.getBalance(agentWallet);
+// getBalance returns null if no escrow exists for this agent+depositor pair.
+const balance = await client.x402.getBalance(
+  agentWallet,     // PublicKey: the agent's wallet
+  // depositor,    // optional: defaults to the connected wallet
+);
 
 if (balance) {
-  console.log(balance.balance.toString());
-  console.log(balance.callsRemaining);
-  console.log(balance.isExpired);
-  console.log(balance.affordableCalls);
+  console.log(balance.balance.toString());     // BN: current lamport balance
+  console.log(balance.callsRemaining);         // number: maxCalls - settled (Infinity if unlimited)
+  console.log(balance.isExpired);              // boolean: has the escrow expired?
+  console.log(balance.affordableCalls);        // number: calls affordable at current price
+  console.log(balance.totalDeposited.toString()); // BN: cumulative deposits
+  console.log(balance.totalSettled.toString());   // BN: cumulative settlements
 }
 ```
 
@@ -208,7 +250,8 @@ await client.escrow.create(agentWallet, {
 ```typescript
 import { deriveAgent, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 
-const [agentPda] = deriveAgent(agentWallet);
-const [escrowPda] = deriveEscrow(agentPda, depositorWallet);
-// Seeds: ["sap_escrow", agentPda, depositor]
+// All PDA derivations are pure math — no network calls.
+// Given any wallet addresses, you can compute the escrow PDA offline.
+const [agentPda] = deriveAgent(agentWallet);        // ["sap_agent", wallet]
+const [escrowPda] = deriveEscrow(agentPda, depositorWallet); // ["sap_escrow", agent, depositor]
 ```

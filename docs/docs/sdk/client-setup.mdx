@@ -17,6 +17,9 @@ The SDK provides two main entry points: `SapClient` for direct Anchor provider u
 import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
 import { AnchorProvider } from "@coral-xyz/anchor";
 
+// AnchorProvider.env() reads ANCHOR_PROVIDER_URL and ANCHOR_WALLET
+// from process environment. Common in scripts and tests.
+// Default commitment: "confirmed" (voted by 2/3 of validators).
 const client = SapClient.from(AnchorProvider.env());
 ```
 
@@ -49,6 +52,8 @@ const client = SapClient.fromProgram(myAnchorProgram);
 ### Devnet
 
 ```typescript
+// SapConnection.devnet() creates a connection to api.devnet.solana.com.
+// Call .fromKeypair() to get a SapClient with signing capability.
 const conn = SapConnection.devnet();
 const client = conn.fromKeypair(testKeypair);
 ```
@@ -56,6 +61,9 @@ const client = conn.fromKeypair(testKeypair);
 ### Mainnet with Synapse Gateway
 
 ```typescript
+// For production, use a dedicated RPC provider.
+// The Synapse Gateway provides optimal routing for SAP operations.
+// Replace the URL with your own endpoint and API key.
 const conn = SapConnection.mainnet("https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=");
 const client = conn.createClient(wallet);
 ```
@@ -63,11 +71,12 @@ const client = conn.createClient(wallet);
 ### Custom Configuration
 
 ```typescript
+// Full manual configuration for advanced use cases.
 const conn = new SapConnection({
-  rpcUrl: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=",
-  wsUrl: "wss://us-1-mainnet.oobeprotocol.ai/ws?api_key=",
-  commitment: "finalized",
-  cluster: "mainnet-beta",
+  rpcUrl: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=",  // required
+  wsUrl: "wss://us-1-mainnet.oobeprotocol.ai/ws?api_key=",      // optional: auto-derived from rpcUrl
+  commitment: "finalized",                                       // optional: default "confirmed"
+  cluster: "mainnet-beta",                                       // optional: auto-detected from URL
 });
 ```
 
@@ -86,6 +95,10 @@ A common pattern for applications that run across environments:
 function createClient(env: "development" | "staging" | "production") {
   const keypair = Keypair.fromSecretKey(/* load from env or vault */);
 
+  // Map each environment to the appropriate RPC endpoint.
+  // Development uses localnet (free, instant finality).
+  // Staging uses devnet (free, slower, shared rate limit).
+  // Production uses a dedicated RPC provider (paid, fast, no rate limit).
   const rpcUrls: Record<string, string> = {
     development: "http://localhost:8899",
     staging: "https://api.devnet.solana.com",

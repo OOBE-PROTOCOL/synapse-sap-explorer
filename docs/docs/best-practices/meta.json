@@ -4,6 +4,7 @@
     "rpc-network",
     "error-handling",
     "cost-optimization",
-    "security"
+    "security",
+    "troubleshooting"
   ]
 }

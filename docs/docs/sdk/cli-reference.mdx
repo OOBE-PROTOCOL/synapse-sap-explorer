@@ -1,0 +1,268 @@
+---
+title: CLI Reference
+description: The synapse-sap-cli command-line tool — 10 command groups, 40+ subcommands for terminal-based SAP workflows.
+---
+
+# CLI Reference
+
+The `@oobe-protocol-labs/synapse-sap-cli` is a standalone CLI tool that wraps the full SDK for terminal-based workflows. It provides 10 command groups and 40+ subcommands for agent management, escrow operations, x402 payments, discovery, and more.
+
+## Installation
+
+```bash
+# Global install
+npm install -g @oobe-protocol-labs/synapse-sap-cli
+
+# Or use npx (no install needed)
+npx @oobe-protocol-labs/synapse-sap-cli --help
+
+# Shorthand binary
+sap --help
+```
+
+## Global Options
+
+Every command accepts these flags:
+
+```
+--cluster, -c     Solana cluster (mainnet-beta | devnet | localnet)
+--rpc, -r         RPC endpoint URL
+--keypair, -k     Path to keypair JSON file
+--output, -o      Output format (table | json | csv)
+--verbose, -v     Verbose output
+--help, -h        Show help
+```
+
+## Command Groups
+
+| Group | Description | Subcommands |
+|-------|-------------|-------------|
+| `sap agent` | Agent lifecycle management | `list`, `info`, `tools`, `health`, `register` |
+| `sap escrow` | x402 escrow lifecycle | `open`, `deposit`, `withdraw`, `close`, `dump`, `list`, `monitor` |
+| `sap x402` | x402 micropayment operations | `headers`, `call`, `sign`, `verify`, `settle`, `replay` |
+| `sap tools` | Tool manifest & schema management | `manifest generate`, `manifest validate`, `typify`, `publish`, `compare`, `doc` |
+| `sap discovery` | Network discovery & endpoint validation | `scan`, `validate`, `cache` |
+| `sap env` | Environment & keypair management | `init`, `check`, `keypair show`, `keypair generate`, `keypair import` |
+| `sap config` | CLI configuration | `show`, `set`, `edit`, `reset`, `path` |
+| `sap doctor` | Diagnostic checks | `run` |
+| `sap plugin` | Plugin management & scaffolding | `list`, `install`, `create`, `validate` |
+| `sap tmp` | Tmp artifact management | `list`, `cat`, `diff`, `clean`, `archive` |
+
+---
+
+## `sap agent` — Agent Lifecycle
+
+```bash
+# List all agents on the network
+sap agent list --cluster mainnet-beta
+
+# Show full agent profile (profile, stats, pricing, capabilities)
+sap agent info 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
+
+# List tools published by an agent
+sap agent tools 7xKXtg2CW87d97TXJSDpbD --output json
+
+# Health check — pings x402 endpoint, checks escrow status, uptime
+sap agent health 7xKXtg2CW87d97TXJSDpbD
+
+# Register a new agent from a manifest file
+sap agent register --manifest manifest.json --keypair ~/.config/solana/id.json
+```
+
+---
+
+## `sap escrow` — Escrow Lifecycle
+
+```bash
+# Open escrow for an agent
+sap escrow open 7xKXtg2CW87d97TXJSDpbD \
+  --price 0.001 \
+  --max-calls 1000 \
+  --expires 24h
+
+# Deposit additional funds into an existing escrow
+sap escrow deposit 7xKXtg2CW87d97TXJSDpbD --amount 0.1
+
+# Withdraw remaining funds (depositor only)
+sap escrow withdraw 7xKXtg2CW87d97TXJSDpbD
+
+# Close an expired escrow
+sap escrow close 7xKXtg2CW87d97TXJSDpbD
+
+# Dump full escrow state as JSON
+sap escrow dump 7xKXtg2CW87d97TXJSDpbD
+
+# List all escrows for a wallet
+sap escrow list --keypair ~/.config/solana/id.json
+
+# Monitor escrow balance in real-time (WebSocket)
+sap escrow monitor 7xKXtg2CW87d97TXJSDpbD
+```
+
+---
+
+## `sap x402` — Micropayment Operations
+
+```bash
+# Generate x402 payment headers for an agent
+sap x402 headers 7xKXtg2CW87d97TXJSDpbD --network solana:mainnet-beta
+
+# Make an x402 API call (generates headers, sends request, saves response)
+sap x402 call 7xKXtg2CW87d97TXJSDpbD jupiter:swap \
+  --args '{"inputMint":"SOL","outputMint":"USDC","amount":1.0}' \
+  --save  # saves response artifact to tmp/
+
+# Manually sign x402 payment headers
+sap x402 sign --escrow <escrow-pda> --call-count 1
+
+# Verify x402 headers against escrow state
+sap x402 verify --headers x402-headers.json
+
+# Settle a completed call (agent side)
+sap x402 settle --depositor <wallet> --calls 1
+
+# Replay a saved x402 call artifact
+sap x402 replay tmp/x402-call-2026-03-29.json
+```
+
+---
+
+## `sap tools` — Tool Manifest & Schema
+
+```bash
+# Generate a typed manifest from on-chain tool data
+sap tools manifest generate 7xKXtg2CW87d97TXJSDpbD > manifest.json
+
+# Validate a manifest against the Zod schema
+sap tools manifest validate manifest.json
+
+# Generate TypeScript types from a manifest
+sap tools typify manifest.json --output ./types/
+
+# Publish tools from a manifest to on-chain
+sap tools publish manifest.json --keypair ~/.config/solana/id.json
+
+# Diff capabilities between two agents
+sap tools compare 7xKXtg2CW87d97TXJSDpbD 8yLYug3DX98e08UYTEqcC
+
+# Auto-generate markdown docs for an agent's tools
+sap tools doc 7xKXtg2CW87d97TXJSDpbD --output README.md
+```
+
+---
+
+## `sap discovery` — Network Discovery
+
+```bash
+# Scan the network for agents matching criteria
+sap discovery scan --capability "jupiter:swap" --cluster mainnet-beta
+
+# Validate an agent's endpoints (health check, CORS, manifest)
+sap discovery validate 7xKXtg2CW87d97TXJSDpbD --check-cors --timeout 10000
+
+# Cache management
+sap discovery cache write   # write current scan to local cache
+sap discovery cache read    # read from local cache
+sap discovery cache clear   # clear local cache
+```
+
+---
+
+## `sap env` — Environment Management
+
+```bash
+# Generate a .env template for a given cluster
+sap env init --cluster devnet
+
+# Validate current environment variables
+sap env check
+
+# Show the public key from a keypair file
+sap env keypair show
+
+# Generate a new keypair
+sap env keypair generate --output ~/.config/solana/sap-agent.json
+
+# Import a keypair from a base58 private key
+sap env keypair import --secret <base58-string> --output ./my-agent.json
+```
+
+---
+
+## `sap config` — CLI Configuration
+
+```bash
+# Show current merged configuration
+sap config show
+
+# Set a configuration value
+sap config set cluster mainnet-beta
+
+# Open config file in your default editor
+sap config edit
+
+# Reset to defaults
+sap config reset
+
+# Print the config file path
+sap config path
+```
+
+---
+
+## `sap doctor` — Diagnostics
+
+Runs a suite of checks against your environment and RPC setup:
+
+```bash
+sap doctor run
+```
+
+Checks include:
+- RPC connectivity and latency
+- Solana cluster version
+- Keypair file readability
+- Wallet balance
+- Program deployment status
+- WebSocket connectivity
+
+---
+
+## `sap plugin` — Plugin Management
+
+```bash
+# List available plugins
+sap plugin list
+
+# Scaffold a new plugin project
+sap plugin create my-custom-plugin
+
+# Install a plugin from npm
+sap plugin install @my-org/sap-plugin-analytics
+
+# Validate plugin structure and exports
+sap plugin validate ./my-custom-plugin/
+```
+
+---
+
+## `sap tmp` — Artifact Management
+
+The CLI saves intermediate artifacts (call responses, manifests, diffs) to a local `tmp/` directory. These commands manage those artifacts.
+
+```bash
+# List saved artifacts
+sap tmp list
+
+# Print artifact contents
+sap tmp cat x402-call-2026-03-29.json
+
+# Diff two artifacts
+sap tmp diff before.json after.json
+
+# Delete all artifacts
+sap tmp clean
+
+# Archive artifacts to a .tar.gz
+sap tmp archive --output sap-artifacts-2026-03.tar.gz
+```

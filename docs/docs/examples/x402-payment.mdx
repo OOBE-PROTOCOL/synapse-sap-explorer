@@ -15,9 +15,10 @@ import { AnchorProvider } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 
 const client = SapClient.from(AnchorProvider.env());
-const agentWallet = new PublicKey("AgentWalletAddress...");
+const agentWallet = new PublicKey("AgentWalletAddress..."); // the agent you want to pay
 
-// 1. Estimate cost for 100 calls
+// 1. Estimate cost for 100 calls.
+// Reads the agent's on-chain pricing and applies volume curve discounts.
 const estimate = await client.x402.estimateCost(agentWallet, 100);
 console.log("Estimated total:", estimate.totalCost.toString(), "lamports");
 console.log("Per call:", estimate.effectivePricePerCall.toString());
@@ -29,20 +30,23 @@ if (estimate.hasVolumeCurve) {
   }
 }
 
-// 2. Create escrow and deposit funds
+// 2. Create escrow and deposit funds.
+// preparePayment sends one Solana TX that creates the escrow PDA
+// and deposits the specified lamports.
 const paymentCtx = await client.x402.preparePayment(agentWallet, {
-  pricePerCall: 10_000,
-  maxCalls: 100,
-  deposit: 1_000_000,
-  expiresAt: Math.floor(Date.now() / 1000) + 3600, // 1 hour
-  volumeCurve: [
-    { afterCalls: 50, pricePerCall: 8_000 },
+  pricePerCall: 10_000,         // 10,000 lamports per call (~$0.0015)
+  maxCalls: 100,                // max 100 calls (0 = unlimited)
+  deposit: 1_000_000,           // deposit 1,000,000 lamports upfront
+  expiresAt: Math.floor(Date.now() / 1000) + 3600, // expires in 1 hour (0 = never)
+  volumeCurve: [                // optional: tiered pricing
+    { afterCalls: 50, pricePerCall: 8_000 }, // 20% discount after 50 calls
   ],
 });
 
 console.log("Escrow:", paymentCtx.escrowPda.toBase58());
 
-// 3. Build headers and call the agent
+// 3. Build x402 HTTP headers and call the agent.
+// Include these headers with every HTTP request to the agent's endpoint.
 const headers = client.x402.buildPaymentHeaders(paymentCtx);
 
 for (let i = 0; i < 5; i++) {
@@ -50,7 +54,7 @@ for (let i = 0; i < 5; i++) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...headers,
+      ...headers,  // merges X-Payment-Protocol, X-Payment-Escrow, etc.
     },
     body: JSON.stringify({ prompt: `Query ${i + 1}` }),
   });
@@ -59,36 +63,45 @@ for (let i = 0; i < 5; i++) {
   console.log(`Call ${i + 1}:`, data);
 }
 
-// 4. Check remaining balance
+// 4. Check remaining balance.
 const balance = await client.x402.getBalance(agentWallet);
 console.log("Remaining:", balance?.callsRemaining, "calls");
 console.log("Balance:", balance?.balance.toString(), "lamports");
+console.log("Expired:", balance?.isExpired);
+console.log("Affordable:", balance?.affordableCalls, "more calls");
 ```
 
 ## Agent Side
 
 ```typescript
-// 5. Agent settles after serving requests
+// 5. Agent settles after serving requests.
+// settle() must be called by the agent's wallet (the escrow's agentWallet).
 const receipt = await client.x402.settle(
-  depositorWallet,
-  5,                    // number of calls to settle
-  "batch-service-data", // service data (hashed on-chain)
+  depositorWallet,              // PublicKey: the client who funded the escrow
+  5,                            // number of calls to settle (claim payment for)
+  "batch-service-data",         // service data string (auto-hashed to SHA-256)
 );
 
 console.log("Settled:", receipt.callsSettled, "calls");
-console.log("Amount:", receipt.amount.toString(), "lamports");
+console.log("Amount:", receipt.amount.toString(), "lamports transferred to agent");
 console.log("TX:", receipt.txSignature);
+console.log("Service hash:", receipt.serviceHash); // number[] (32 bytes)
 ```
 
 ## Cleanup
 
 ```typescript
-// 6. Client withdraws remaining funds
+// 6. Client withdraws remaining funds from the escrow.
 const remaining = await client.x402.getBalance(agentWallet);
 if (remaining && remaining.balance.gtn(0)) {
-  await client.x402.withdrawFunds(agentWallet, remaining.balance);
+  await client.x402.withdrawFunds(
+    agentWallet,           // the agent's wallet (identifies the escrow)
+    remaining.balance,     // BN: amount to withdraw
+  );
+  console.log("Withdrawn:", remaining.balance.toString(), "lamports");
 }
 
-// 7. Close the escrow (reclaim rent)
+// 7. Close the escrow PDA (balance must be 0). Reclaims ~0.004 SOL rent.
 await client.x402.closeEscrow(agentWallet);
+console.log("Escrow closed.");
 ```

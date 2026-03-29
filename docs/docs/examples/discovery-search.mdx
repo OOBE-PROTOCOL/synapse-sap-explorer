@@ -15,7 +15,9 @@ import { AnchorProvider } from "@coral-xyz/anchor";
 
 const client = SapClient.from(AnchorProvider.env());
 
-// Find all agents that can execute Jupiter swaps
+// Find all agents that registered the "jupiter:swap" capability.
+// Returns agents from the on-chain CapabilityIndex PDA.
+// The capability string must match exactly (case-sensitive).
 const agents = await client.discovery.findAgentsByCapability("jupiter:swap");
 
 console.log(`Found ${agents.length} agents with jupiter:swap capability:`);
@@ -24,7 +26,7 @@ for (const agent of agents) {
     console.log(`  ${agent.identity.name}`);
     console.log(`    PDA: ${agent.pda.toBase58()}`);
     console.log(`    Active: ${agent.identity.isActive}`);
-    console.log(`    Reputation: ${agent.identity.reputationScore}`);
+    console.log(`    Reputation: ${agent.identity.reputationScore}`); // 0–100
     console.log(`    Calls: ${agent.stats?.totalCallsServed.toString()}`);
   }
 }
@@ -33,11 +35,11 @@ for (const agent of agents) {
 ## Find Agents by Protocol
 
 ```typescript
-// Find all agents that support A2A (Agent-to-Agent) protocol
+// Find all agents that support A2A (Agent-to-Agent) protocol.
+// Protocol names must match exactly as registered (e.g. "A2A", "MCP").
 const a2aAgents = await client.discovery.findAgentsByProtocol("A2A");
 console.log(`${a2aAgents.length} agents support A2A`);
 
-// Find all agents on MCP
 const mcpAgents = await client.discovery.findAgentsByProtocol("MCP");
 console.log(`${mcpAgents.length} agents support MCP`);
 ```
@@ -45,7 +47,9 @@ console.log(`${mcpAgents.length} agents support MCP`);
 ## Multi-Capability Search
 
 ```typescript
-// Find agents that support ANY of these swap capabilities
+// Find agents that support ANY of these swap capabilities.
+// Uses OR logic — returns agents that have at least one match.
+// Each capability string is looked up in its own CapabilityIndex PDA.
 const swapAgents = await client.discovery.findAgentsByCapabilities([
   "jupiter:swap",
   "raydium:swap",
@@ -58,7 +62,10 @@ console.log(`${swapAgents.length} swap-capable agents found`);
 ## Find Tools by Category
 
 ```typescript
-// Find all swap tools
+// Find all swap tools in the ToolCategoryIndex.
+// Categories use PascalCase matching TOOL_CATEGORY_VALUES keys:
+//   "Swap" | "Lend" | "Stake" | "Nft" | "Payment"
+//   "Data" | "Governance" | "Bridge" | "Analytics" | "Custom"
 const swapTools = await client.discovery.findToolsByCategory("Swap");
 console.log(`${swapTools.length} swap tools registered`);
 
@@ -66,12 +73,13 @@ for (const tool of swapTools) {
   if (tool.descriptor) {
     console.log(`  ${tool.descriptor.toolName}`);
     console.log(`    Agent: ${tool.descriptor.agent.toBase58()}`);
-    console.log(`    Version: ${tool.descriptor.version}`);
+    console.log(`    Version: ${tool.descriptor.version}`);           // auto-incrementing
     console.log(`    Invocations: ${tool.descriptor.totalInvocations.toString()}`);
   }
 }
 
-// Get a summary of all categories
+// Get a summary of ALL categories with tool counts.
+// Returns one entry per non-empty category.
 const summary = await client.discovery.getToolCategorySummary();
 for (const cat of summary) {
   console.log(`${cat.category}: ${cat.toolCount} tools`);
@@ -83,15 +91,19 @@ for (const cat of summary) {
 ```typescript
 import { PublicKey } from "@solana/web3.js";
 
+// getAgentProfile fetches the agent PDA + stats PDA + escrow in one call.
+// Returns null if the agent does not exist.
 const agentWallet = new PublicKey("...");
 const profile = await client.discovery.getAgentProfile(agentWallet);
 
 if (profile) {
+  // profile.identity — raw on-chain AgentIdentity account
   console.log("Name:", profile.identity.name);
+  // profile.computed — pre-computed convenience fields
   console.log("Active:", profile.computed.isActive);
-  console.log("Reputation:", profile.computed.reputationScore);
-  console.log("Total calls:", profile.computed.totalCalls);
-  console.log("Has x402:", profile.computed.hasX402);
+  console.log("Reputation:", profile.computed.reputationScore);  // 0–100
+  console.log("Total calls:", profile.computed.totalCalls);      // BN.toString()
+  console.log("Has x402:", profile.computed.hasX402);            // boolean
   console.log("Capabilities:", profile.computed.capabilityCount);
   console.log("Protocols:", profile.computed.protocols.join(", "));
 }
@@ -100,6 +112,8 @@ if (profile) {
 ## Network Overview
 
 ```typescript
+// getNetworkOverview reads the GlobalRegistry PDA which tracks
+// aggregate counts across the entire SAP network.
 const overview = await client.discovery.getNetworkOverview();
 
 console.log("Network Statistics:");

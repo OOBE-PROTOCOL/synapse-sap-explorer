@@ -8,6 +8,7 @@
     "payments",
     "discovery",
     "tools-schemas",
+    "feedback-attestations",
     "on-chain-reference"
   ]
 }

@@ -21,28 +21,83 @@ SAP operations can fail for several distinct reasons. Identifying the category q
 | **SDK errors** | Invalid parameters, type mismatch | Fix calling code | TypeScript compile error or runtime type check |
 | **Simulation errors** | TX would fail (preflight check) | Inspect logs, fix instruction | Error contains "Simulation failed" |
 
-## Basic Error Handling
+## SDK Error Hierarchy
+
+The SDK provides a structured error hierarchy so you can handle each failure mode differently. All SDK errors extend `SapError`:
+
+```
+SapError (base)
+├── SapValidationError     — invalid inputs, length limits, type mismatches
+├── SapRpcError            — network timeouts, 429 rate limits, node failures
+├── SapAccountNotFoundError — PDA doesn't exist, account not initialized
+├── SapTimeoutError        — operation exceeded timeout threshold
+└── SapPermissionError     — wrong signer, delegate lacks permission
+```
 
 ```typescript
-import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import {
+  SapError,
+  SapValidationError,
+  SapRpcError,
+  SapAccountNotFoundError,
+  SapTimeoutError,
+  SapPermissionError,
+} from "@oobe-protocol-labs/synapse-sap-sdk";
 
 try {
-  const result = await client.builder
+  await client.builder
     .agent("MyAgent")
     .description("Service agent")
     .register();
-  console.log("Registered:", result.agentPda.toBase58());
+} catch (error: unknown) {
+  if (error instanceof SapAccountNotFoundError) {
+    // PDA doesn't exist yet — expected on first run
+  } else if (error instanceof SapValidationError) {
+    // Bad inputs — fix calling code
+    console.error("Validation:", error.message);
+  } else if (error instanceof SapRpcError) {
+    // Network issue — retry with backoff
+    console.error("RPC:", error.message);
+  } else if (error instanceof SapTimeoutError) {
+    // Timed out — retry or increase timeout
+    console.error("Timeout:", error.message);
+  } else if (error instanceof SapPermissionError) {
+    // Wrong signer or delegate lacks permission
+    console.error("Permission:", error.message);
+  } else if (error instanceof SapError) {
+    // Other SDK error
+    console.error("SAP:", error.message);
+  } else {
+    console.error("Unexpected:", error);
+  }
+}
+```
+
+## `classifyAnchorError` and `extractAnchorErrorCode`
+
+The SDK provides two utilities that convert raw Anchor error messages into structured information:
+
+```typescript
+import {
+  classifyAnchorError,
+  extractAnchorErrorCode,
+} from "@oobe-protocol-labs/synapse-sap-sdk";
+
+try {
+  await client.agent.register(/* ... */);
 } catch (error: unknown) {
   if (error instanceof Error) {
-    // Check for specific Anchor error codes
-    if (error.message.includes("0x0")) {
-      console.error("Account already exists (duplicate registration)");
-    } else if (error.message.includes("0x1")) {
-      console.error("Insufficient funds for account rent");
-    } else if (error.message.includes("0x1770")) {
-      console.error("Custom SAP error: agent already registered");
-    } else {
-      console.error("Unexpected error:", error.message);
+    // Extract the numeric error code from the message
+    const code = extractAnchorErrorCode(error);
+    // code → 6000 (number) or null if not an Anchor error
+
+    // Classify into a structured object
+    const classified = classifyAnchorError(error);
+    // classified → { code: 6000, name: "AgentAlreadyRegistered", ... }
+    // or null if the error isn't from Anchor
+
+    if (code === 6000) {
+      console.log("Agent already registered — skipping.");
     }
   }
 }
@@ -60,6 +115,23 @@ Common Anchor framework errors encountered in SAP:
 | `0xbbf` | 3007 | Account not initialized |
 | `0xbc2` | 3010 | Account owned by wrong program |
 | `0x1770`+ | 6000+ | Custom program errors (SAP-specific) |
+
+## SAP Program Error Codes
+
+These are the custom errors defined by the SAP program (offset from 6000):
+
+| Code | Name | Description |
+|------|------|-------------|
+| 6000 | `AgentAlreadyRegistered` | This wallet already has a registered agent |
+| 6001 | `AgentNotFound` | No agent PDA exists for this wallet |
+| 6009 | `EscrowExpired` | Escrow past its `expiresAt` timestamp |
+| 6010 | `EscrowInsufficientBalance` | Balance too low for settlement |
+| 6015 | `VaultAlreadyInitialized` | Vault with this nonce already exists |
+| 6017 | `SessionClosed` | Session is closed, no further writes |
+| 6018 | `DataExceedsMaxWriteSize` | Data exceeds 750-byte limit |
+| 6019 | `RingBufferOverflow` | Ring buffer full, seal page first |
+
+See the [Troubleshooting](./troubleshooting) guide for detailed fixes for each error.
 
 ## API Route Error Pattern
 
@@ -162,7 +234,7 @@ Many SAP operations are safe to retry. Prefer idempotent patterns:
 await client.session.start("session-id");
 
 // Safe: fetch returns null if not initialized
-const agent = await client.agent.fetchOrNull();
+const agent = await client.agent.fetchNullable();
 ```
 
 ### Graceful Degradation

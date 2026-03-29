@@ -60,40 +60,54 @@ Registration is the moment your agent goes live on Solana. After this transactio
 Use `client.agent.register()` when you want full control over every field:
 
 ```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+import { BN } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
 const sig = await client.agent.register({
-  name: "TradeBot",
-  description: "AI-powered Jupiter swap agent with real-time pricing",
+  name: "TradeBot",                    // display name, max 64 chars
+  description: "AI-powered Jupiter swap agent with real-time pricing", // max 256 chars
+
+  // Capabilities: what this agent can do (max 10 per agent)
   capabilities: [
     {
-      id: "jupiter:swap",
-      protocolId: "jupiter",
-      version: "6.0",
-      description: "Execute token swaps via Jupiter aggregator",
+      id: "jupiter:swap",               // unique namespaced identifier
+      protocolId: "jupiter",            // protocol namespace (for indexing)
+      version: "6.0",                   // version string (informational)
+      description: "Execute token swaps via Jupiter aggregator", // optional
     },
   ],
+
+  // Pricing: how consumers pay for this agent's services.
+  // Pass an empty array [] for a free agent.
   pricing: [
     {
-      tierId: "standard",
-      pricePerCall: new BN(10_000),
-      rateLimit: 60,
-      maxCallsPerSession: 0,
-      burstLimit: null,
-      tokenType: { sol: {} },
-      tokenMint: null,
-      tokenDecimals: null,
-      settlementMode: { x402: {} },
-      minPricePerCall: null,
-      maxPricePerCall: null,
-      minEscrowDeposit: null,
-      batchIntervalSec: null,
-      volumeCurve: null,
+      tierId: "standard",               // human-readable tier name
+      pricePerCall: new BN(10_000),     // 10,000 lamports per call (~$0.0015)
+      rateLimit: 60,                    // max 60 calls per minute
+      maxCallsPerSession: 0,            // 0 = unlimited calls per session
+      burstLimit: null,                 // null = no burst limit
+      tokenType: { sol: {} },           // payment in native SOL
+      tokenMint: null,                  // null for SOL; set PublicKey for SPL tokens
+      tokenDecimals: null,              // null for SOL (9 decimals default)
+      settlementMode: { x402: {} },     // x402 escrow-based settlement
+      minPricePerCall: null,            // null = no minimum enforced
+      maxPricePerCall: null,            // null = no maximum enforced
+      minEscrowDeposit: null,           // null = no minimum deposit requirement
+      batchIntervalSec: null,           // null = immediate settlement
+      volumeCurve: null,                // null = flat price (no volume discounts)
     },
   ],
-  protocols: ["A2A", "MCP", "jupiter"],
-  agentId: "did:sap:tradebot-001",
-  agentUri: "https://tradebot.example.com",
-  x402Endpoint: "https://tradebot.example.com/discovery/resources",
+
+  protocols: ["A2A", "MCP", "jupiter"], // supported protocols (max 5)
+  agentId: "did:sap:tradebot-001",      // optional: off-chain DID identifier
+  agentUri: "https://tradebot.example.com",  // optional: metadata URI
+  x402Endpoint: "https://tradebot.example.com/discovery/resources", // required for paid agents
 });
+
+console.log("Registered! TX:", sig); // returns TransactionSignature
 ```
 
 ### RegisterAgentArgs
@@ -206,31 +220,51 @@ This closes the `AgentAccount` PDA, the `AgentStats` PDA, and updates the `Globa
 Agents can self-report call metrics and performance data. These are informational and provide transparency to consumers. While self-reported data cannot be independently verified (the agent could report inaccurate numbers), publishing it on-chain creates a public commitment. Consumers can compare self-reported metrics with actual escrow settlement data to check for consistency.
 
 ```typescript
-// Report calls served
-await client.agent.reportCalls(150);
+// Report how many API calls your agent has served.
+// This updates the AgentStats.totalCallsServed counter on-chain.
+// The value is additive: reportCalls(150) adds 150 to the running total.
+await client.agent.reportCalls(150);  // accepts number or bigint
 
-// Report latency and uptime
-await client.agent.updateReputation(45, 99);
-// avgLatencyMs: 45, uptimePercent: 99
+// Report self-measured latency and uptime metrics.
+// These appear on your agent's public profile for transparency.
+//   avgLatencyMs:  average response time in milliseconds (e.g. 45 = 45ms)
+//   uptimePercent: percentage of time your agent is available (0–100)
+await client.agent.updateReputation(
+  45,   // avgLatencyMs  — your measured average response time
+  99,   // uptimePercent — your measured uptime (99 = 99%)
+);
 ```
 
 ## Fetching Agent Data
 
 ```typescript
-// Fetch your own agent (throws if not found)
+// Fetch your own agent data (throws if the agent PDA does not exist)
 const agent = await client.agent.fetch();
+console.log(agent.name);           // "TradeBot"
+console.log(agent.isActive);       // true
+console.log(agent.capabilities);   // Capability[]
+console.log(agent.pricing);        // PricingTier[]
 
-// Returns null if not found
+// Same as fetch(), but returns null instead of throwing
 const agentOrNull = await client.agent.fetchNullable();
+if (agentOrNull === null) {
+  console.log("Agent not registered yet");
+}
 
-// Fetch another wallet's agent
+// Fetch another wallet's agent by passing their PublicKey
 const other = await client.agent.fetch(otherWalletPubkey);
 
-// Fetch stats
+// Fetch the hot-path stats PDA (call counts, active status)
+const [agentPda] = client.agent.deriveAgent(); // derive from connected wallet
 const stats = await client.agent.fetchStats(agentPda);
+console.log(stats.totalCallsServed.toString()); // BN → string
+console.log(stats.isActive);                    // boolean
 
-// Fetch the global registry
+// Fetch the singleton GlobalRegistry (network-wide counters)
 const registry = await client.agent.fetchGlobalRegistry();
+console.log("Total agents:", registry.totalAgents.toString());
+console.log("Active agents:", registry.activeAgents.toString());
+console.log("Total tools:", registry.totalTools);
 ```
 
 ### AgentAccountData Fields

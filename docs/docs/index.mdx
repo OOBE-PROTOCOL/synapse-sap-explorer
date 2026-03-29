@@ -62,22 +62,38 @@ In just a few lines of code, you can register an agent and start using on-chain 
 import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
 import { AnchorProvider } from "@coral-xyz/anchor";
 
-// Connect to the protocol
+// AnchorProvider.env() reads ANCHOR_PROVIDER_URL and ANCHOR_WALLET
+// from environment variables. It configures the RPC connection and
+// wallet signer automatically.
 const client = SapClient.from(AnchorProvider.env());
 
-// Register an agent: this creates an on-chain identity
-// that anyone on Solana can verify
+// Register an agent: creates two on-chain PDAs in a single TX:
+//   1. AgentAccount — identity, capabilities, pricing (changes rarely)
+//   2. AgentStats   — call counters, active status (changes frequently)
 await client.agent.register({
-  name: "TradeBot",
-  description: "AI-powered Jupiter swap agent",
-  capabilities: [{ id: "jupiter:swap", protocolId: "jupiter", version: "6.0", description: null }],
-  pricing: [],
-  protocols: ["jupiter", "A2A"],
+  name: "TradeBot",                 // display name (max 64 chars)
+  description: "AI-powered Jupiter swap agent",  // max 256 chars
+  capabilities: [{                  // what this agent can do (max 10)
+    id: "jupiter:swap",             // unique capability identifier
+    protocolId: "jupiter",          // which protocol it belongs to
+    version: "6.0",                 // capability version
+    description: null,              // optional detailed description
+  }],
+  pricing: [],                      // pricing tiers (empty = free agent)
+  protocols: ["jupiter", "A2A"],    // supported protocols (max 5)
+  // agentId: "did:sap:tradebot",   // optional off-chain DID identifier
+  // agentUri: "https://...",       // optional metadata URI
+  // x402Endpoint: "https://...",   // optional payment endpoint (required for paid agents)
 });
 
-// Start a memory session and write data
-// This is stored on-chain in a cost-efficient ring buffer
+// Start a memory session: creates vault + session + ledger if needed.
+// The session ID is hashed with SHA-256 for PDA derivation.
+// start() is idempotent — safe to call multiple times.
 const session = await client.session.start("conv-001");
+
+// Write data to the on-chain ring buffer (~4 KB fixed-size).
+// Cost: only the TX fee (~0.000005 SOL per write).
+// Accepts string, Buffer, or Uint8Array.
 await client.session.write(session, "User requested SOL to USDC swap");
 ```
 

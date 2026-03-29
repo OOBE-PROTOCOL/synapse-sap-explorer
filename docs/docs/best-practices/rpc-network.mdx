@@ -134,6 +134,37 @@ Commitment levels determine how "confirmed" a transaction needs to be before the
 
 Use `confirmed` as the default. Only escalate to `finalized` when verifying payment settlement or closing escrows where absolute certainty is required.
 
+## Dual-Connection Strategy (v0.6.0)
+
+Some authenticated RPC providers reject WebSocket connections (returning HTTP 400). This breaks SPL token operations and real-time subscriptions. The SDK's `createDualConnection()` solves this by using your primary authenticated RPC for transactions and a public fallback for WebSocket subscriptions.
+
+```typescript
+import { createDualConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const { primary, fallback } = createDualConnection({
+  // Authenticated RPC for transactions and account reads
+  primaryUrl: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY",
+  // Optional: explicit fallback URL (auto-detected from cluster if omitted)
+  fallbackUrl: "https://api.mainnet-beta.solana.com",
+});
+
+// primary  → use for SapConnection / transaction signing
+// fallback → use for WebSocket subscriptions, token accounts
+```
+
+**When to use:** If you see WebSocket 400 errors, or if your RPC provider requires API keys that are incompatible with WebSocket upgrades. The dual-connection strategy costs nothing extra — it simply routes subscription traffic to a public node.
+
+### `findATA` Utility
+
+The SDK also provides `findATA()` for SPL Associated Token Account lookup, which uses the fallback connection automatically:
+
+```typescript
+import { findATA } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const ata = await findATA(walletPublicKey, tokenMint);
+// Returns the ATA address, using fallback connection if primary fails
+```
+
 ## Production Checklist
 
 1. Use a dedicated RPC endpoint (not the public Solana endpoint)

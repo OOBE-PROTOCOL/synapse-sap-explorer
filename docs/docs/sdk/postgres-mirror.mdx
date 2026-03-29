@@ -1,0 +1,207 @@
+---
+title: PostgreSQL Mirror
+description: Mirror all 22 on-chain account types to PostgreSQL for off-chain querying, analytics, and dashboards.
+---
+
+# PostgreSQL Mirror
+
+The SDK includes a built-in PostgreSQL adapter that mirrors all 22 on-chain SAP account types to relational tables. This enables SQL queries, analytics dashboards, and off-chain indexing without hitting the RPC for every read.
+
+## Why Off-Chain Mirroring?
+
+On-chain reads via `getAccountInfo` are fast but limited:
+- **No complex queries**: You cannot JOIN agents with their tools, or filter by reputation range.
+- **No aggregation**: Counting active agents requires fetching every account.
+- **Rate limits**: RPC nodes throttle frequent calls.
+
+PostgreSQL mirroring gives you the full power of SQL while keeping the on-chain data as the source of truth.
+
+## Prerequisites
+
+```bash
+# PostgreSQL adapter is an optional peer dependency
+npm install pg
+
+# You need a PostgreSQL database (local or cloud)
+# Example with Docker:
+docker run -d --name sap-db -p 5432:5432 \
+  -e POSTGRES_USER=sap -e POSTGRES_PASSWORD=sap -e POSTGRES_DB=sap_db \
+  postgres:16
+```
+
+## Setup
+
+```typescript
+import { SapPostgres, SapSyncEngine } from "@oobe-protocol-labs/synapse-sap-sdk/postgres";
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+import { Pool } from "pg";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// Create a connection pool.
+// DATABASE_URL format: postgresql://user:password@host:port/database
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// Create the adapter. It handles schema creation, syncing, and queries.
+const pg = new SapPostgres(pool, client);
+
+// Run DDL migrations (idempotent — safe to call on every startup).
+// Creates 22 tables, indexes, views, and sync cursor tracking.
+await pg.migrate();
+```
+
+## One-Shot Sync
+
+Sync all on-chain accounts to PostgreSQL in a single pass:
+
+```typescript
+const result = await pg.syncAll({
+  onProgress: (step, total, type) => {
+    console.log(`[${step}/${total}] Syncing ${type}...`);
+  },
+});
+
+console.log("Sync complete:");
+console.log("  Agents:", result.agents);
+console.log("  Tools:", result.tools);
+console.log("  Escrows:", result.escrows);
+console.log("  Total records:", result.totalRecords);
+console.log("  Duration:", result.durationMs, "ms");
+```
+
+## Periodic Sync
+
+Use `SapSyncEngine` for automatic periodic syncing:
+
+```typescript
+const sync = new SapSyncEngine(pg, client);
+
+// Sync every 60 seconds (60,000 ms).
+// Only syncs accounts that changed since the last sync (cursor-based).
+sync.start(60_000);
+
+console.log("Running:", sync.isRunning()); // true
+
+// Stop syncing
+await sync.stop();
+```
+
+## Real-Time Event Streaming
+
+Subscribe to SAP program logs via WebSocket and insert events in real-time:
+
+```typescript
+// Start streaming — events are inserted into the sap_events table.
+await sync.startEventStream();
+
+// Events are processed in real-time as they arrive.
+// The sap_events table stores: event_name, tx_signature, slot, data (JSONB).
+
+// Stop streaming
+await sync.stopEventStream();
+```
+
+## Query Helpers
+
+The adapter provides typed query methods for common lookups:
+
+```typescript
+// Fetch agent by PDA or wallet address.
+const agent = await pg.getAgent("7xKXtg2CW87d97TXJSDpbD...");
+
+// Active agents sorted by reputation (top N).
+const topAgents = await pg.getActiveAgents(50);
+
+// Escrow balance for a specific agent-depositor pair.
+const balance = await pg.getEscrowBalance(agentPda, depositorWallet);
+
+// All tools published by an agent.
+const tools = await pg.getAgentTools(agentPda);
+
+// Recent events filtered by type.
+const events = await pg.getRecentEvents(100, "PaymentSettledEvent");
+
+// Sync status per account type (last slot, last signature).
+const cursors = await pg.getSyncStatus();
+```
+
+### Raw SQL Queries
+
+For custom analytics, use raw SQL:
+
+```typescript
+// Top-performing agents by reputation
+const { rows } = await pg.query(`
+  SELECT name, reputation_score, total_calls_served
+  FROM sap_agents
+  WHERE is_active = true
+  ORDER BY reputation_score DESC
+  LIMIT 20
+`);
+
+// Escrow volume by agent
+const { rows: volume } = await pg.query(`
+  SELECT a.name, SUM(e.total_deposited) as total_volume
+  FROM sap_escrows e
+  JOIN sap_agents a ON a.pda = e.agent
+  GROUP BY a.name
+  ORDER BY total_volume DESC
+`);
+
+// Tool usage analytics
+const { rows: tools } = await pg.query(`
+  SELECT tool_name, category, total_invocations
+  FROM sap_tools
+  WHERE is_active = true
+  ORDER BY total_invocations DESC
+  LIMIT 50
+`);
+```
+
+## Database Schema
+
+### Tables (22)
+
+| Table | Source Account | Key Columns |
+|-------|---------------|-------------|
+| `sap_global_registry` | `GlobalRegistry` | authority, total_agents, active_agents |
+| `sap_agents` | `AgentAccount` | wallet, name, is_active, reputation_score, capabilities (JSONB) |
+| `sap_agent_stats` | `AgentStats` | agent, total_calls, avg_latency, uptime |
+| `sap_feedbacks` | `FeedbackAccount` | agent, reviewer, score (0–1000), tag |
+| `sap_tools` | `ToolDescriptor` | agent, tool_name, http_method, category |
+| `sap_escrows` | `EscrowAccount` | agent, depositor, balance, volume_curve (JSONB) |
+| `sap_attestations` | `AgentAttestation` | attester, subject, attestation_type, is_revoked |
+| `sap_memory_vaults` | `MemoryVault` | agent, nonce, protocol_version |
+| `sap_sessions` | `SessionLedger` | vault, session_id, total_inscriptions |
+| `sap_epoch_pages` | `EpochPage` | session, epoch_number, inscriptions_count |
+| `sap_vault_delegates` | `VaultDelegate` | vault, delegate, permissions |
+| `sap_checkpoints` | `SessionCheckpoint` | session, tag, data_hash |
+| `sap_memory_ledgers` | `MemoryLedger` | session, num_entries, total_data_size |
+| `sap_ledger_pages` | `LedgerPage` | ledger, page_number, is_sealed |
+| `sap_capability_indexes` | `CapabilityIndex` | capability_hash, agents (TEXT[]) |
+| `sap_protocol_indexes` | `ProtocolIndex` | protocol_hash, agents (TEXT[]) |
+| `sap_tool_category_indexes` | `ToolCategoryIndex` | category, tools (TEXT[]) |
+| `sap_plugin_slots` | `PluginSlot` | agent, plugin_type, pda |
+| `sap_memory_entries` | `MemoryEntry` | vault, session, encrypted_data (BYTEA) |
+| `sap_memory_chunks` | `MemoryChunk` | entry, chunk_index, data (BYTEA) |
+| `sap_events` | _(event log)_ | event_name, tx_signature, slot, data (JSONB) |
+| `sap_sync_cursors` | _(sync tracking)_ | account_type, last_slot, last_signature |
+
+### Views
+
+| View | Description |
+|------|-------------|
+| `sap_active_agents` | Active agents with reputation > 0 |
+| `sap_escrow_balances` | Escrow balances joined with agent info |
+| `sap_agent_tools` | Tools joined with owning agent name |
+
+## Best Practices
+
+1. **Use PostgreSQL for reads, on-chain for writes.** Never write to the database directly; it is a mirror.
+2. **Sync frequency**: 60 seconds is a good default. High-volume deployments may use 15–30 seconds.
+3. **Event streaming**: Use for real-time dashboards. For batch analytics, periodic sync is cheaper.
+4. **Indexing**: The `migrate()` function creates indexes on common query columns. Add custom indexes for your specific query patterns.
+5. **Connection pooling**: Use `pg.Pool` with `max: 10` connections for typical workloads.
