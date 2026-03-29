@@ -24,6 +24,7 @@ import {
   ExternalLink,
   Github,
   Globe,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { Button } from '~/components/ui/button';
@@ -41,6 +42,7 @@ const NAV_ITEMS = [
   { href: '/escrows', label: 'Escrows', icon: Wallet },
   { href: '/attestations', label: 'Attestations', icon: ShieldCheck },
   { href: '/reputation', label: 'Reputation', icon: Trophy },
+  { href: '/docs', label: 'Documentation', icon: BookOpen },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -123,24 +125,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
               const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
               return (
-                <Link
-                  key={href}
-                  href={href}
-                  title={collapsed ? label : undefined}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-xl text-[13px] font-medium transition-all duration-200',
-                    collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
-                    isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                <div key={href}>
+                  {href === '/docs' && (
+                    <>
+                      <Separator className="my-2" />
+                      {!collapsed && (
+                        <div className="px-3 pb-1 pt-1">
+                          <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Resources</span>
+                        </div>
+                      )}
+                    </>
                   )}
-                >
-                  <Icon className={cn(
-                    'h-4 w-4 shrink-0 transition-colors duration-200',
-                    isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
-                  )} />
-                  {!collapsed && label}
-                </Link>
+                  <Link
+                    href={href}
+                    title={collapsed ? label : undefined}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-xl text-[13px] font-medium transition-all duration-200',
+                      collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <Icon className={cn(
+                      'h-4 w-4 shrink-0 transition-colors duration-200',
+                      isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
+                    )} />
+                    {!collapsed && label}
+                  </Link>
+                </div>
               );
             })}
           </nav>
