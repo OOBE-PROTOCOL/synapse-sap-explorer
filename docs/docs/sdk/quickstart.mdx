@@ -1,0 +1,274 @@
+---
+title: Quickstart
+description: From zero to a live agent identity on Solana in under five minutes. Covers both SDK packages, environment setup, and first registration.
+---
+
+# Quickstart
+
+This guide walks through installing the SDK, connecting to the network, and registering your first agent. Time to first transaction: approximately five minutes.
+
+By the end of this page, you will have a live agent identity on the Solana blockchain that anyone can verify. No prior Solana experience is required, though basic TypeScript familiarity is assumed.
+
+## Which Package Do I Need?
+
+The Synapse Agent Protocol ecosystem provides two npm packages. Both are published under the `@oobe-protocol-labs` scope and serve different purposes.
+
+### @oobe-protocol-labs/synapse-sap-sdk
+
+This is the package most developers will use. It is a pure TypeScript SDK that wraps the entire SAP protocol into a clean, typed API. It works in any JavaScript/TypeScript environment: Node.js backend services, Next.js server components and API routes, CLIs, trading bots, and AI agent frameworks.
+
+What it provides:
+- **`SapClient`** with 8 domain modules (agent, escrow, vault, ledger, tools, feedback, attestation, indexing) and 4 high-level registries (discovery, x402, session, builder)
+- **`SapConnection`** for RPC-first connection setup compatible with the Synapse RPC gateway
+- **52-tool plugin adapter** for LangChain and SynapseAgentKit integration
+- **17 PDA derivation functions**, all pure (no network calls)
+- **Typed interfaces** for all 17 account types, 11 instruction DTOs, and 38 event types
+- **Built-in IDL** so you never need an external Anchor workspace
+- **CLI tool** (`synapse-sap`) for terminal-based interaction with the protocol
+- **Dual output** (ESM + CommonJS) with full TypeScript declarations and subpath exports
+
+This is what the Synapse Explorer uses under the hood. Every API route that reads agent data, parses transactions, or computes PDA addresses imports from this package.
+
+```bash
+npm install @oobe-protocol-labs/synapse-sap-sdk @coral-xyz/anchor @solana/web3.js
+```
+
+### @oobe-protocol-labs/synapse-sap
+
+This is the Anchor program repository itself. It contains the Rust smart contract source code, the generated IDL, and the integration test suite (187 tests across 10 suites). You need this package only if you are:
+
+- **Contributing to the protocol** by modifying the Rust program
+- **Running integration tests** with `anchor test` against a local validator
+- **Deploying your own instance** of the SAP program
+- **Verifying the on-chain binary** using `solana-verify`
+
+What it contains:
+- The Solana program in Rust (72 instructions, 22 account types, 45 events, 91 error codes)
+- The `synapse-sap-sdk` as a git submodule (so the SDK always stays in sync with the program)
+- Integration test suites covering lifecycle, reputation, tools, vault, escrow, attestations, indexing, ledger, security
+- Deploy scripts for devnet and mainnet
+- Protocol documentation in `docs/`
+
+Most developers will **never need to install this directly**. The compiled program is already deployed at `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` on both devnet and mainnet-beta. The SDK embeds the IDL, so there is no need to clone the program source to use the protocol.
+
+### Which one should I pick?
+
+| Scenario | Package |
+|----------|---------|
+| Build an AI agent that lives on Solana | `@oobe-protocol-labs/synapse-sap-sdk` |
+| Create a Next.js app that reads agent data | `@oobe-protocol-labs/synapse-sap-sdk` |
+| Run a trading bot with x402 micropayments | `@oobe-protocol-labs/synapse-sap-sdk` |
+| Integrate SAP tools into LangChain | `@oobe-protocol-labs/synapse-sap-sdk` |
+| Build a CLI that manages escrows | `@oobe-protocol-labs/synapse-sap-sdk` |
+| Modify the Rust program itself | `@oobe-protocol-labs/synapse-sap` |
+| Run `anchor test` locally | `@oobe-protocol-labs/synapse-sap` |
+| Audit or verify the on-chain binary | `@oobe-protocol-labs/synapse-sap` |
+
+If you are reading this documentation to build something, you want the SDK.
+
+## Install Dependencies
+
+```bash
+# Using npm
+npm install @oobe-protocol-labs/synapse-sap-sdk @coral-xyz/anchor @solana/web3.js
+
+# Using pnpm
+pnpm add @oobe-protocol-labs/synapse-sap-sdk @coral-xyz/anchor @solana/web3.js
+
+# Using yarn
+yarn add @oobe-protocol-labs/synapse-sap-sdk @coral-xyz/anchor @solana/web3.js
+
+# Optional: only needed for the plugin adapter (LangChain/AI agent tools)
+pnpm add zod
+```
+
+The SDK requires `@coral-xyz/anchor` (>=0.30.0) and `@solana/web3.js` (>=1.90.0) as peer dependencies. These provide the Solana RPC layer and the Anchor runtime that the SDK uses internally to construct and send transactions.
+
+## Connect to the Network
+
+The SDK needs two things to work: a connection to a Solana RPC node (to send and receive data) and a wallet keypair (to sign transactions). There are three ways to provide these, depending on your environment.
+
+### Option A: Anchor Provider
+
+If you are already in an Anchor workspace or writing tests, you probably have a provider. This is the most common path for developers already in the Solana ecosystem:
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+// AnchorProvider.env() reads ANCHOR_WALLET and ANCHOR_PROVIDER_URL
+// from environment variables (set automatically by `anchor test`)
+const provider = AnchorProvider.env();
+const client = SapClient.from(provider);
+```
+
+### Option B: RPC URL and Keypair
+
+For standalone Node.js services, CLIs, or trading bots where you have a keypair file. This is the most common path for production services and the recommended approach for new developers:
+
+```typescript
+import { SapConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { Keypair } from "@solana/web3.js";
+import fs from "fs";
+
+// Load your wallet keypair from a JSON file
+const keypair = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(fs.readFileSync("./wallet.json", "utf-8")))
+);
+
+// SapConnection.fromKeypair handles everything:
+// creates a Connection, wraps it in an AnchorProvider,
+// resolves the correct program ID for the cluster,
+// and returns a ready-to-use SapClient
+const { client } = SapConnection.fromKeypair(
+  "https://api.devnet.solana.com",
+  keypair,
+);
+```
+
+### Option C: Cluster Shortcuts
+
+For quick prototyping, development, or when using the OOBE Protocol RPC gateway:
+
+```typescript
+import { SapConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+// Devnet (free, no API key needed, best for learning)
+const devnet = SapConnection.devnet();
+
+// Mainnet with OOBE Protocol RPC (recommended for production)
+const mainnet = SapConnection.mainnet(
+  "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
+);
+
+// Localnet (for local development with solana-test-validator)
+const local = SapConnection.localnet();
+
+// Then create a client from any connection:
+const client = devnet.fromKeypair(myKeypair);
+```
+
+### Option D: Fluent Builder
+
+If you want to register an agent with tools and capabilities in one fluent chain, the AgentBuilder is the fastest path:
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const client = SapClient.from(provider);
+
+await client.builder
+  .agent("SwapBot")
+  .description("AI-powered DEX aggregator using Jupiter")
+  .x402Endpoint("https://api.mybot.com/x402")
+  .addCapability("jupiter:swap", {
+    protocol: "jupiter",
+    description: "Execute token swaps",
+  })
+  .addPricingTier({
+    tierId: "standard",
+    pricePerCall: 1000,
+    rateLimit: 60,
+    tokenType: "sol",
+    settlementMode: "x402",
+  })
+  .register();
+```
+
+## Register Your First Agent
+
+Registration is a single Solana transaction that creates your agent's on-chain identity. After this call succeeds, your agent exists on the blockchain with a unique address that anyone can look up.
+
+For testing, use devnet where transactions are free. Get devnet SOL from [faucet.solana.com](https://faucet.solana.com/).
+
+```typescript
+await client.agent.register({
+  name: "MyAgent",
+  description: "An AI agent that analyzes DeFi positions",
+  capabilities: [
+    {
+      id: "defi:analyze",
+      protocolId: "aave",
+      version: "3.0",
+      description: "Analyze lending positions across protocols",
+    },
+  ],
+  pricing: [],
+  protocols: ["A2A", "MCP"],
+});
+```
+
+**What happens behind the scenes:** The SDK computes two PDA addresses from your wallet (the AgentAccount PDA and the AgentStats PDA), constructs a `registerAgent` instruction with the correct Anchor discriminator and serialized arguments, and sends it as a signed transaction. This single call creates both PDAs and increments the protocol's global agent counter. The transaction costs approximately 0.01 SOL in rent deposit (refundable if the agent is closed later) plus the standard Solana transaction fee (~0.000005 SOL).
+
+## Verify the Registration
+
+```typescript
+const agent = await client.agent.fetch();
+
+console.log("Name:", agent.name);
+console.log("Active:", agent.isActive);
+console.log("Capabilities:", agent.capabilities.length);
+console.log("Version:", agent.version);
+```
+
+## Import Paths
+
+The SDK supports both root imports and deep (subpath) imports. Deep imports are useful for tree-shaking or when you only need specific functionality:
+
+```typescript
+// Root import (simplest)
+import { SapClient, SapConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+// Deep imports (tree-shakeable, zero-cost for types)
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk/core";
+import { deriveAgent, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { SAP_PROGRAM_ADDRESS, SEEDS } from "@oobe-protocol-labs/synapse-sap-sdk/constants";
+import { sha256, serializeAccount } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+import { EventParser } from "@oobe-protocol-labs/synapse-sap-sdk/events";
+import { SapError, SapRpcError } from "@oobe-protocol-labs/synapse-sap-sdk/errors";
+import { createSAPPlugin } from "@oobe-protocol-labs/synapse-sap-sdk/plugin";
+import { SAP_IDL } from "@oobe-protocol-labs/synapse-sap-sdk/idl";
+
+// Type-only imports (zero runtime cost)
+import type { AgentAccountData, EscrowAccountData } from "@oobe-protocol-labs/synapse-sap-sdk/types";
+```
+
+## CLI Tool
+
+The SDK ships with a full CLI for interacting with SAP from the terminal. After installing the SDK, you can use it for agent management, escrow operations, diagnostics, and more:
+
+```bash
+# Agent discovery
+synapse-sap agent list --active --protocol jupiter
+synapse-sap agent info <WALLET> --fetch-tools
+
+# Escrow management
+synapse-sap escrow open <AGENT_WALLET> --deposit 100000 --max-calls 100
+synapse-sap escrow list
+
+# Diagnostics
+synapse-sap doctor run
+```
+
+See the [CLI README](https://github.com/oobe-protocol/synapse-sap-sdk/tree/main/cli) for the full command reference.
+
+## What Comes Next
+
+You now have a live agent identity on Solana. Anyone with your wallet address can compute your agent PDA and read your capabilities, description, and status. From here you can:
+
+- **Store conversation data** using the SessionManager (see [Memory Session](/docs/examples/memory-session))
+- **Set up micropayments** with x402 escrow to monetize your agent's services (see [x402 Payments](/docs/sap/payments))
+- **Publish tool schemas** so other agents and consumers can understand your API (see [Tool Publishing](/docs/examples/tool-publishing))
+- **Register in capability and protocol indexes** so consumers can discover you (see [Discovery](/docs/sap/discovery))
+- **Integrate with LangChain** using the 52-tool plugin adapter (see [Plugin Adapter](/docs/sdk/plugin-adapter))
+
+Each of these steps is covered in detail in the corresponding SDK and Examples sections.
+
+## Repositories
+
+| Repository | URL | Description |
+|------------|-----|-------------|
+| SAP Program | [github.com/oobe-protocol/synapse-sap](https://github.com/oobe-protocol/synapse-sap) | Anchor program (Rust), 72 instructions, 187 tests |
+| SDK | [github.com/oobe-protocol/synapse-sap-sdk](https://github.com/oobe-protocol/synapse-sap-sdk) | TypeScript SDK (npm), 8 modules, 4 registries, CLI |
+| Explorer | [github.com/OOBE-PROTOCOL/synapse-sap-explorer](https://github.com/OOBE-PROTOCOL/synapse-sap-explorer) | This Next.js explorer |
+| npm | [npmjs.com/package/@oobe-protocol-labs/synapse-sap-sdk](https://www.npmjs.com/package/@oobe-protocol-labs/synapse-sap-sdk) | Published SDK package (v0.6.0) |

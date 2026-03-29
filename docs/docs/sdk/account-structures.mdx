@@ -1,0 +1,374 @@
+---
+title: Account Data Structures
+description: Field-by-field reference for all 22 on-chain account types returned by fetch() and fetchNullable().
+---
+
+# Account Data Structures
+
+All 22 on-chain account types with field-by-field reference. These interfaces are what `fetch()` and `fetchNullable()` return. Every field is `readonly` in the SDK types.
+
+## Core Accounts
+
+### AgentAccountData
+
+Core agent identity PDA. Stores profile, reputation, pricing, and capabilities.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `version` | `number` | Account schema version |
+| `wallet` | `PublicKey` | Owner wallet |
+| `name` | `string` | Agent name (max 64 bytes) |
+| `description` | `string` | Agent description (max 256 bytes) |
+| `agentId` | `string \| null` | Off-chain DID/UUID identifier |
+| `agentUri` | `string \| null` | Extended metadata URI |
+| `x402Endpoint` | `string \| null` | x402 payment endpoint URL |
+| `isActive` | `boolean` | Currently accepting calls |
+| `createdAt` | `BN` | Unix timestamp of registration |
+| `updatedAt` | `BN` | Unix timestamp of last update |
+| `reputationScore` | `number` | Computed reputation (0–100) |
+| `totalFeedbacks` | `number` | Total feedbacks received |
+| `reputationSum` | `BN` | Raw sum of all feedback scores |
+| `totalCallsServed` | `BN` | Lifetime calls served |
+| `avgLatencyMs` | `number` | Average latency in ms |
+| `uptimePercent` | `number` | Uptime percentage (0–100) |
+| `capabilities` | `Capability[]` | Declared capabilities for discovery |
+| `pricing` | `PricingTier[]` | Active pricing tiers |
+| `protocols` | `string[]` | Supported protocol identifiers |
+| `activePlugins` | `PluginRef[]` | Enabled plugin references |
+
+### AgentStatsData
+
+Lightweight hot-path metrics PDA. Separated from `AgentAccountData` to minimize compute cost of frequent counter updates.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `agent` | `PublicKey` | Agent PDA this tracks |
+| `wallet` | `PublicKey` | Owner wallet |
+| `totalCallsServed` | `BN` | Lifetime calls counter |
+| `isActive` | `boolean` | Agent active status |
+| `updatedAt` | `BN` | Last update timestamp |
+
+### GlobalRegistryData
+
+Network-wide statistics singleton PDA. There is exactly one of these on each cluster.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `totalAgents` | `BN` | Total registered agents |
+| `activeAgents` | `BN` | Currently active agents |
+| `totalFeedbacks` | `BN` | Total feedbacks network-wide |
+| `totalCapabilities` | `number` | Distinct capability count |
+| `totalProtocols` | `number` | Distinct protocol count |
+| `lastRegisteredAt` | `BN` | Last agent registration timestamp |
+| `initializedAt` | `BN` | Registry initialization timestamp |
+| `authority` | `PublicKey` | Upgrade authority |
+| `totalTools` | `number` | Published tools count |
+| `totalVaults` | `number` | Memory vaults count |
+| `totalEscrows` | `number` | Escrow accounts count |
+| `totalAttestations` | `number` | Attestations count |
+
+---
+
+## Feedback & Attestation
+
+### FeedbackAccountData
+
+Trustless reputation entry. Unique PDA keyed by `[agent, reviewer]`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `agent` | `PublicKey` | Target agent PDA |
+| `reviewer` | `PublicKey` | Reviewer wallet |
+| `score` | `number` | Reputation score (1–100) |
+| `tag` | `string` | Freeform tag (max 32 bytes) |
+| `commentHash` | `number[] \| null` | SHA-256 of off-chain comment |
+| `createdAt` | `BN` | Creation timestamp |
+| `updatedAt` | `BN` | Last update timestamp |
+| `isRevoked` | `boolean` | Whether revoked |
+
+### AgentAttestationData
+
+Web-of-trust attestation PDA.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `agent` | `PublicKey` | Agent being attested |
+| `attester` | `PublicKey` | Attester wallet |
+| `attestationType` | `string` | Type (e.g. `"kyc"`, `"audit"`) |
+| `metadataHash` | `number[]` | SHA-256 of off-chain metadata |
+| `isActive` | `boolean` | Currently active |
+| `expiresAt` | `BN` | Expiry timestamp |
+| `createdAt` | `BN` | Creation timestamp |
+| `updatedAt` | `BN` | Last update timestamp |
+
+---
+
+## Tool Registry
+
+### ToolDescriptorData
+
+On-chain tool schema registry PDA.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `agent` | `PublicKey` | Owning agent PDA |
+| `toolNameHash` | `number[]` | SHA-256 of tool name (PDA seed) |
+| `toolName` | `string` | Human-readable name (max 32 bytes) |
+| `protocolHash` | `number[]` | SHA-256 of protocol identifier |
+| `version` | `number` | Schema version |
+| `descriptionHash` | `number[]` | SHA-256 of description |
+| `inputSchemaHash` | `number[]` | SHA-256 of input JSON Schema |
+| `outputSchemaHash` | `number[]` | SHA-256 of output JSON Schema |
+| `httpMethod` | `ToolHttpMethodKind` | HTTP method variant |
+| `category` | `ToolCategoryKind` | Discovery category |
+| `paramsCount` | `number` | Total parameters |
+| `requiredParams` | `number` | Required parameters |
+| `isCompound` | `boolean` | Multi-step operation |
+| `isActive` | `boolean` | Currently enabled |
+| `totalInvocations` | `BN` | Lifetime invocation counter |
+| `createdAt` | `BN` | Creation timestamp |
+| `updatedAt` | `BN` | Last update timestamp |
+| `previousVersion` | `PublicKey` | PDA of previous version (zero key if first) |
+
+---
+
+## Escrow & Payment
+
+### EscrowAccountData
+
+x402 pre-funded micropayment escrow PDA.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `agent` | `PublicKey` | Agent PDA |
+| `depositor` | `PublicKey` | Consumer wallet that funded escrow |
+| `agentWallet` | `PublicKey` | Agent wallet for settlements |
+| `balance` | `BN` | Current remaining balance |
+| `totalDeposited` | `BN` | Cumulative deposited |
+| `totalSettled` | `BN` | Cumulative settled to agent |
+| `totalCallsSettled` | `BN` | Cumulative calls settled |
+| `pricePerCall` | `BN` | Base price per call |
+| `maxCalls` | `BN` | Maximum funded calls |
+| `createdAt` | `BN` | Creation timestamp |
+| `lastSettledAt` | `BN` | Last settlement timestamp |
+| `expiresAt` | `BN` | Expiry timestamp |
+| `volumeCurve` | `VolumeCurveBreakpoint[]` | Volume discount breakpoints |
+| `tokenMint` | `PublicKey \| null` | SPL token mint (null = native SOL) |
+| `tokenDecimals` | `number` | Token decimal places |
+
+---
+
+## Memory Vault
+
+### MemoryVaultData
+
+Encrypted inscription vault PDA. Uses NaCl encryption with nonce rotation.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `agent` | `PublicKey` | Owning agent PDA |
+| `wallet` | `PublicKey` | Vault owner wallet |
+| `vaultNonce` | `number[]` | Current encryption nonce seed (32 bytes) |
+| `totalSessions` | `number` | Total sessions created |
+| `totalInscriptions` | `BN` | Total inscriptions across all sessions |
+| `totalBytesInscribed` | `BN` | Total bytes inscribed |
+| `createdAt` | `BN` | Creation timestamp |
+| `protocolVersion` | `number` | Protocol version |
+| `nonceVersion` | `number` | Nonce version (increments on rotation) |
+| `lastNonceRotation` | `BN` | Last nonce rotation timestamp |
+
+### SessionLedgerData
+
+Compact session index PDA within a MemoryVault.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `vault` | `PublicKey` | Parent vault PDA |
+| `sessionHash` | `number[]` | SHA-256 session ID |
+| `sequenceCounter` | `number` | Next inscription sequence |
+| `totalBytes` | `BN` | Total bytes in session |
+| `currentEpoch` | `number` | Current epoch index |
+| `totalEpochs` | `number` | Total epochs |
+| `createdAt` | `BN` | Creation timestamp |
+| `lastInscribedAt` | `BN` | Last inscription timestamp |
+| `isClosed` | `boolean` | Whether session is closed |
+| `merkleRoot` | `number[]` | Running Merkle root |
+| `totalCheckpoints` | `number` | Checkpoint count |
+| `tipHash` | `number[]` | Latest inscription hash |
+
+### EpochPageData
+
+Per-epoch scan target within a session.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `session` | `PublicKey` | Parent session PDA |
+| `epochIndex` | `number` | Zero-based epoch index |
+| `startSequence` | `number` | First inscription sequence |
+| `inscriptionCount` | `number` | Inscriptions in epoch |
+| `totalBytes` | `number` | Bytes in epoch |
+| `firstTs` | `BN` | First inscription timestamp |
+| `lastTs` | `BN` | Last inscription timestamp |
+
+### VaultDelegateData
+
+Hot-wallet authorization PDA for vault operations.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `vault` | `PublicKey` | Parent vault PDA |
+| `delegate` | `PublicKey` | Delegate wallet |
+| `permissions` | `number` | Permission bitmask (see Security docs) |
+| `expiresAt` | `BN` | Delegation expiry |
+| `createdAt` | `BN` | Creation timestamp |
+
+### SessionCheckpointData
+
+Fast-sync snapshot PDA for session integrity verification.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `session` | `PublicKey` | Parent session PDA |
+| `checkpointIndex` | `number` | Zero-based index |
+| `merkleRoot` | `number[]` | Merkle root at checkpoint |
+| `sequenceAt` | `number` | Sequence at checkpoint |
+| `epochAt` | `number` | Epoch at checkpoint |
+| `totalBytesAt` | `BN` | Cumulative bytes |
+| `inscriptionsAt` | `BN` | Cumulative inscriptions |
+| `createdAt` | `BN` | Checkpoint timestamp |
+
+---
+
+## Ledger
+
+### MemoryLedgerData
+
+Unified ring-buffer memory ledger PDA.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `session` | `PublicKey` | Parent session PDA |
+| `authority` | `PublicKey` | Write authority |
+| `numEntries` | `number` | Current ring buffer entries |
+| `merkleRoot` | `number[]` | Running Merkle root |
+| `latestHash` | `number[]` | Latest entry hash |
+| `totalDataSize` | `BN` | Total data in bytes |
+| `createdAt` | `BN` | Creation timestamp |
+| `updatedAt` | `BN` | Last update timestamp |
+| `numPages` | `number` | Sealed pages count |
+| `ring` | `number[]` | Ring-buffer raw bytes |
+
+### LedgerPageData
+
+Sealed archive page. Write-once, immutable after sealing.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `ledger` | `PublicKey` | Parent ledger PDA |
+| `pageIndex` | `number` | Zero-based page index |
+| `sealedAt` | `BN` | Seal timestamp |
+| `entriesInPage` | `number` | Entries in page |
+| `dataSize` | `number` | Page data size in bytes |
+| `merkleRootAtSeal` | `number[]` | Merkle root at seal time |
+| `data` | `number[]` | Archived data bytes |
+
+---
+
+## Discovery Index Accounts
+
+### CapabilityIndexData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `capabilityId` | `string` | Human-readable capability |
+| `capabilityHash` | `number[]` | SHA-256 hash (PDA seed) |
+| `agents` | `PublicKey[]` | Agents declaring this capability |
+| `totalPages` | `number` | Total pages for pagination |
+| `lastUpdated` | `BN` | Last update timestamp |
+
+### ProtocolIndexData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `protocolId` | `string` | Human-readable protocol |
+| `protocolHash` | `number[]` | SHA-256 hash (PDA seed) |
+| `agents` | `PublicKey[]` | Agents supporting this protocol |
+| `totalPages` | `number` | Total pages |
+| `lastUpdated` | `BN` | Last update timestamp |
+
+### ToolCategoryIndexData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bump` | `number` | PDA bump seed |
+| `category` | `number` | Numeric category discriminant |
+| `tools` | `PublicKey[]` | Tool descriptor PDAs |
+| `totalPages` | `number` | Total pages |
+| `lastUpdated` | `BN` | Last update timestamp |
+
+---
+
+## Shared Structs
+
+These structs appear as fields inside the account data types above.
+
+### Capability
+
+```typescript
+interface Capability {
+  readonly id: string;               // e.g. "jupiter:swap"
+  readonly description: string | null;
+  readonly protocolId: string | null;
+  readonly version: string | null;
+}
+```
+
+### PricingTier
+
+```typescript
+interface PricingTier {
+  readonly tierId: string;
+  readonly pricePerCall: BN;
+  readonly tokenType: TokenTypeKind;        // Sol | Usdc | Spl
+  readonly settlementMode: SettlementModeKind; // Instant | Escrow | Batched | X402
+  readonly rateLimit: number;
+  readonly maxCallsPerEpoch: BN;
+  readonly volumeCurve: VolumeCurveBreakpoint[];
+  readonly tokenMint: PublicKey | null;
+  readonly tokenDecimals: number;
+}
+```
+
+### VolumeCurveBreakpoint
+
+```typescript
+interface VolumeCurveBreakpoint {
+  readonly afterCalls: number;    // Threshold after which tier activates
+  readonly pricePerCall: BN;      // New price per call (token base units)
+}
+```
+
+### PluginRef
+
+```typescript
+interface PluginRef {
+  readonly pluginType: PluginTypeKind;  // Memory | Validation | Delegation | Analytics | Governance | Custom
+  readonly pda: PublicKey;
+}
+```

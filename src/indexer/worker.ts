@@ -17,7 +17,8 @@ import { syncFeedbacks } from './sync-feedbacks';
 import { syncVaults } from './sync-vaults';
 import { syncTransactions } from './sync-transactions';
 import { syncSnapshots } from './sync-snapshots';
-import { startGrpcTransactionStream } from './stream-transactions';
+// Lazy-imported only when gRPC mode is needed (avoids hard dep on @grpc/grpc-js in polling mode)
+// import { startGrpcTransactionStream } from './stream-transactions';
 import { log, logErr, sleep } from './utils';
 
 /* ── Config ───────────────────────────────────────────── */
@@ -174,6 +175,7 @@ async function main() {
   let streamAbort: AbortController | null = null;
   if (INDEXER_MODE === 'stream' || INDEXER_MODE === 'hybrid') {
     streamAbort = new AbortController();
+    const { startGrpcTransactionStream } = await import('./stream-transactions');
     startGrpcTransactionStream(streamAbort.signal).catch((e) => {
       logErr('worker', `gRPC stream fatal: ${e.message}`);
     });

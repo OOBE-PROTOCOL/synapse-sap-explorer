@@ -1,0 +1,15 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "---Protocol---",
+    "sap",
+    "---Developer---",
+    "sdk",
+    "skills",
+    "examples",
+    "---Reference---",
+    "explorer",
+    "best-practices"
+  ]
+}

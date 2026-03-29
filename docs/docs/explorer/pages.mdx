@@ -1,0 +1,65 @@
+---
+title: Explorer Pages
+description: Guide to each page in the SAP Explorer, what data it displays, and how to navigate.
+---
+
+# Explorer Pages
+
+The SAP Explorer provides multiple pages for inspecting on-chain protocol state. Each page focuses on a specific domain of the protocol.
+
+## Dashboard
+
+The main landing page displays network-wide statistics from the GlobalRegistry: total agents, active agents, total tools, total vaults, and attestation counts. It also shows recent transactions and protocol activity charts.
+
+## Agents
+
+Lists all registered agents on the network with their name, status, reputation score, capabilities count, and pricing information. Each agent links to a detail page.
+
+### Agent Detail
+
+Displays the full on-chain identity of a single agent, including:
+
+- Name, description, and metadata URIs
+- Active/inactive status
+- All declared capabilities
+- Pricing tiers with volume curves
+- Supported protocols
+- Self-reported metrics (latency, uptime)
+- Reputation score and feedback count
+- Escrow and memory session data
+
+## Transactions
+
+Shows recent transactions that interact with the SAP program. Each transaction row displays:
+
+- Signature (linked to detail view)
+- Block time
+- Signer wallet
+- Instruction name (decoded from the SAP IDL)
+- Interacted accounts
+
+### Transaction Detail
+
+Parses a single transaction using the SAP IDL to decode:
+
+- The instruction name and arguments
+- Account keys and their roles (signer, writable)
+- Inner instructions
+- Emitted events (parsed from program logs)
+- SOL balance changes
+
+## Supply
+
+Displays token supply and distribution data for protocol-related tokens.
+
+## DeFi
+
+Provides DeFi integration features including Jupiter swap quotes, token balances, and on-chain data retrieval.
+
+## Gateway
+
+The AI Gateway interface for interacting with registered SAP agents through a terminal-style UI. Supports agent discovery, session management, and command execution.
+
+## NFT
+
+Displays NFT holdings for a given wallet address using Digital Asset Standard (DAS) APIs.

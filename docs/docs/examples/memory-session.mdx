@@ -1,0 +1,98 @@
+---
+title: Memory Session
+description: Complete example of creating a memory session, writing data, reading entries, sealing, and cleanup.
+---
+
+# Memory Session
+
+This example demonstrates the full memory lifecycle using the SessionManager: starting a session, writing conversation data, reading entries back, sealing to permanent storage, and cleaning up.
+
+## Full Example
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// 1. Start a session.
+// start() is idempotent: it creates vault + session + ledger only if they
+// do not exist yet. Safe to call multiple times with the same session ID.
+// The session ID is SHA-256 hashed internally for PDA derivation.
+const ctx = await client.session.start("customer-support-001");
+
+console.log("Session PDA:", ctx.sessionPda.toBase58());
+console.log("Ledger PDA:", ctx.ledgerPda.toBase58());
+console.log("Vault PDA:", ctx.vaultPda.toBase58());
+
+// 2. Write conversation data.
+// Each write costs ~0.000005 SOL (TX fee only, zero rent).
+// Data is written to both the ring buffer (fast reads) and TX log (permanent).
+// Maximum size per write: 750 bytes (LIMITS.MAX_LEDGER_WRITE_SIZE).
+const w1 = await client.session.write(ctx, "User: What are the current lending rates?");
+const w2 = await client.session.write(ctx, "Agent: Checking Aave and Compound...");
+await client.session.write(ctx, "Agent: Aave USDC supply rate is 3.2%");
+await client.session.write(ctx, "Agent: Compound USDC supply rate is 2.8%");
+await client.session.write(ctx, "User: Deposit 1000 USDC into Aave");
+await client.session.write(ctx, "Agent: Transaction submitted. TX: 4xK9...");
+
+console.log("Write TX:", w1.txSignature);
+console.log("Data size:", w1.dataSize, "bytes");
+
+// 3. Read latest entries from ring buffer.
+// This is FREE — uses getAccountInfo() on any standard RPC.
+// Returns entries currently in the ~4 KB ring buffer.
+const entries = await client.session.readLatest(ctx);
+console.log(`\n${entries.length} entries in ring buffer:`);
+for (const entry of entries) {
+  console.log(`  [${entry.size} bytes] ${entry.text}`);
+}
+
+// 4. Check session status.
+// Returns vault/session/ledger existence, closure state, and metrics.
+const status = await client.session.getStatus(ctx);
+console.log("\nSession status:");
+console.log("  Vault exists:", status.vaultExists);
+console.log("  Session exists:", status.sessionExists);
+console.log("  Ledger exists:", status.ledgerExists);
+console.log("  Is closed:", status.isClosed);
+console.log("  Total entries:", status.totalEntries);
+console.log("  Total data:", status.totalDataSize, "bytes");
+console.log("  Sealed pages:", status.numPages);
+console.log("  Merkle root:", status.merkleRoot);
+
+// 5. Seal to permanent archive.
+// Creates a LedgerPage PDA (~0.031 SOL, write-once, permanent).
+// The ring buffer is reset after sealing, ready for new writes.
+const sealResult = await client.session.seal(ctx);
+console.log("\nSealed page index:", sealResult.pageIndex);
+console.log("Seal TX:", sealResult.txSignature);
+
+// 6. Read all data: sealed pages (history) + current ring buffer (latest).
+// Returns entries in chronological order (oldest first).
+const allEntries = await client.session.readAll(ctx);
+console.log(`\n${allEntries.length} total entries across all pages`);
+
+// 7. Clean up: close ledger + session. Reclaims ~0.032 SOL rent.
+// close() is idempotent — skips steps already done.
+// WARNING: always seal() before close() to preserve ring buffer data.
+await client.session.close(ctx);
+console.log("\nSession closed. Rent reclaimed.");
+```
+
+## Cost Breakdown
+
+| Operation | Cost |
+|-----------|------|
+| `start()` (first time) | ~0.032 SOL (ledger rent) |
+| Each `write()` | ~0.000005 SOL (TX fee only) |
+| `seal()` | ~0.031 SOL (permanent page) |
+| `close()` | Reclaims ~0.032 SOL |
+| **6 writes + 1 seal** | **~0.031 SOL net** |
+
+## Key Points
+
+- `start()` is idempotent: safe to call multiple times
+- `readLatest()` is free (just a `getAccountInfo` call)
+- Always `seal()` before `close()` to avoid losing ring buffer data
+- The ring buffer is approximately 4 KB; monitor utilization for high-frequency writes

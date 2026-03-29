@@ -1,0 +1,140 @@
+---
+title: Network Normalization
+description: Normalize Solana network identifiers for x402 header interoperability (v0.6.0).
+---
+
+# Network Normalization
+
+Added in v0.6.0. Different x402 providers use different formats for the same Solana network. Coinbase accepts `solana:mainnet-beta`, while Kamiyo requires the genesis-hash form `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`. This module ensures both clients and agents canonicalize before comparing, preventing the common "SAP network mismatch" error.
+
+## Network Constants
+
+```typescript
+import { SapNetwork } from "@oobe-protocol-labs/synapse-sap-sdk";
+import type { SapNetworkId } from "@oobe-protocol-labs/synapse-sap-sdk";
+```
+
+| Constant | Value | Used By |
+|----------|-------|---------|
+| `SapNetwork.SOLANA_MAINNET` | `"solana:mainnet-beta"` | Coinbase, Phantom |
+| `SapNetwork.SOLANA_MAINNET_GENESIS` | `"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"` | Kamiyo, Helius x402 |
+| `SapNetwork.SOLANA_DEVNET` | `"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"` | Devnet providers |
+| `SapNetwork.SOLANA_DEVNET_NAMED` | `"solana:devnet"` | Local / test flows |
+
+## Functions
+
+```typescript
+import {
+  normalizeNetworkId,
+  isNetworkEquivalent,
+  getNetworkGenesisHash,
+  getNetworkClusterName,
+  isKnownNetwork,
+} from "@oobe-protocol-labs/synapse-sap-sdk";
+```
+
+### `normalizeNetworkId(raw)`
+
+Normalize a raw network identifier to its canonical form. Case-insensitive, strips whitespace, resolves aliases.
+
+```typescript
+normalizeNetworkId("solana:mainnet-beta");
+// → "solana:mainnet-beta"
+
+normalizeNetworkId("  MAINNET  ");
+// → "solana:mainnet-beta"
+
+normalizeNetworkId("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+// → "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+
+normalizeNetworkId("unknown-chain");
+// → "unknown-chain" (passthrough for unrecognized identifiers)
+```
+
+### `isNetworkEquivalent(a, b)`
+
+Check if two identifiers refer to the same network, even if they use different formats. This is the key function that prevents the "SAP network mismatch" error.
+
+```typescript
+isNetworkEquivalent("solana:mainnet-beta", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+// → true (both are mainnet)
+
+isNetworkEquivalent("solana:devnet", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1");
+// → true (both are devnet)
+
+isNetworkEquivalent("solana:mainnet-beta", "solana:devnet");
+// → false (different networks)
+```
+
+### `getNetworkGenesisHash(networkId)`
+
+Get the genesis-hash form (CAIP-2). Required by Kamiyo, Helius x402.
+
+```typescript
+getNetworkGenesisHash("mainnet");
+// → "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+
+getNetworkGenesisHash("devnet");
+// → "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"
+```
+
+### `getNetworkClusterName(networkId)`
+
+Get the human-readable cluster-name form. Accepted by Coinbase, Phantom.
+
+```typescript
+getNetworkClusterName("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp");
+// → "solana:mainnet-beta"
+
+getNetworkClusterName("EtWTRABZaYq6iMfeYKouRu166VU2xqa1");
+// → "solana:devnet"
+```
+
+### `isKnownNetwork(networkId)`
+
+Check if the identifier is recognized by the SDK.
+
+```typescript
+isKnownNetwork("solana:mainnet-beta"); // → true
+isKnownNetwork("solana:devnet");       // → true
+isKnownNetwork("ethereum:mainnet");    // → false
+```
+
+## Alias Resolution Table
+
+| Input | Resolved To |
+|-------|-------------|
+| `"solana:mainnet-beta"` | `"solana:mainnet-beta"` |
+| `"solana:mainnet"` | `"solana:mainnet-beta"` |
+| `"mainnet-beta"` | `"solana:mainnet-beta"` |
+| `"mainnet"` | `"solana:mainnet-beta"` |
+| `"5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"` | `"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"` |
+| `"solana:devnet"` | `"solana:devnet"` |
+| `"devnet"` | `"solana:devnet"` |
+| `"EtWTRABZaYq6iMfeYKouRu166VU2xqa1"` | `"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"` |
+
+## Usage in x402 Headers
+
+When building payment headers, specify the network format the provider expects:
+
+```typescript
+// Use the genesis-hash form for Kamiyo-compatible providers
+const ctx = await client.x402.preparePayment(agentWallet, {
+  pricePerCall: 1_000,
+  deposit: 100_000,
+  networkIdentifier: SapNetwork.SOLANA_MAINNET_GENESIS,
+});
+```
+
+### Cross-Network Validation
+
+Before making a paid call, verify that your network matches the agent's:
+
+```typescript
+const clientNetwork = normalizeNetworkId(process.env.NETWORK ?? "mainnet");
+const agentNetwork = normalizeNetworkId(agentManifest.supportedNetworks[0]);
+
+if (!isNetworkEquivalent(clientNetwork, agentNetwork)) {
+  throw new Error(`Network mismatch: client=${clientNetwork}, agent=${agentNetwork}`);
+}
+```

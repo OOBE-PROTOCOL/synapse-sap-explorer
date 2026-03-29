@@ -175,10 +175,40 @@ export const escrows = sapExpSchema.table('escrows', {
     tokenMint:         text('token_mint'),
     tokenDecimals:     smallint('token_decimals').notNull().default(9),
     volumeCurve:       jsonb('volume_curve').$type<VolumeCurveEntry[]>().notNull().default([]),
+    status:            text('status').notNull().default('active'),       // active | closed | depleted | expired
     createdAt:         timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt:          timestamp('closed_at', { withTimezone: true }),
     lastSettledAt:     timestamp('last_settled_at', { withTimezone: true }),
     expiresAt:         timestamp('expires_at', { withTimezone: true }),
     indexedAt:         timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * escrow_events (lifecycle history)
+ * ═══════════════════════════════════════════════ */
+
+export type EscrowEventType =
+    | 'create_escrow'
+    | 'deposit_escrow'
+    | 'settle_calls'
+    | 'withdraw_escrow'
+    | 'close_escrow';
+
+export const escrowEvents = sapExpSchema.table('escrow_events', {
+    id:            serial('id').primaryKey(),
+    escrowPda:     text('escrow_pda').notNull(),
+    txSignature:   text('tx_signature').notNull().references(() => transactions.signature, { onDelete: 'cascade' }),
+    eventType:     text('event_type').$type<EscrowEventType>().notNull(),
+    slot:          bigint('slot', { mode: 'number' }).notNull(),
+    blockTime:     timestamp('block_time', { withTimezone: true }),
+    signer:        text('signer'),
+    balanceBefore: numeric('balance_before'),
+    balanceAfter:  numeric('balance_after'),
+    amountChanged: numeric('amount_changed'),
+    callsSettled:  numeric('calls_settled'),
+    agentPda:      text('agent_pda'),
+    depositor:     text('depositor'),
+    indexedAt:     timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /* ═══════════════════════════════════════════════

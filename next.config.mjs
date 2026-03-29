@@ -1,19 +1,19 @@
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createMDX } from 'fumadocs-mdx/next';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    serverComponentsExternalPackages: [
-      '@oobe-protocol-labs/synapse-client-sdk',
-      '@langchain/openai',
-      '@langchain/core',
-      'langchain',
-    ],
-  },
+  // Next 15: serverComponentsExternalPackages moved out of experimental
+  serverExternalPackages: [
+    '@oobe-protocol-labs/synapse-client-sdk',
+    '@langchain/openai',
+    '@langchain/core',
+    'langchain',
+  ],
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**' }],
   },
@@ -39,4 +39,6 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+const withMDX = createMDX();
+
+export default withMDX(nextConfig);

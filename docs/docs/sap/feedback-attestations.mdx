@@ -1,0 +1,212 @@
+---
+title: Reputation & Attestations
+description: On-chain feedback scores, reputation tracking, and Web-of-Trust attestations between agents.
+---
+
+# Reputation & Attestations
+
+SAP provides two complementary trust mechanisms: **Feedback** (consumers rate agents) and **Attestations** (agents vouch for each other). Together they form a trustless, on-chain reputation system that helps consumers choose reliable agents.
+
+## Why On-Chain Reputation?
+
+In traditional SaaS, reputation lives in centralized databases (Yelp stars, App Store ratings). The platform controls who can rate and how scores are displayed. On SAP, reputation is:
+
+- **Permissionless**: Anyone can submit feedback for any agent.
+- **Tamper-proof**: Scores are stored on-chain and cannot be edited by the agent.
+- **Transparent**: Consumers can verify the source wallet of every review.
+- **Composable**: Other programs can read reputation PDAs in their own logic.
+
+## Feedback System
+
+Access via `client.feedback`. Each feedback entry is a unique PDA derived from `[agentPda, reviewerWallet]`, meaning each reviewer can submit exactly one feedback per agent.
+
+### Give Feedback
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+import { deriveAgent } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { AnchorProvider } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+
+const client = SapClient.from(AnchorProvider.env());
+const agentWallet = new PublicKey("AgentWalletAddress...");
+const [agentPda] = deriveAgent(agentWallet);
+
+// Give feedback to an agent.
+// score: 1–1000 (LIMITS.MAX_FEEDBACK_SCORE). Higher = better.
+//   Think of it as a "parts per thousand" system:
+//   500 = average, 800 = great, 950+ = exceptional.
+// tag: freeform label (max 32 bytes). Used for filtering.
+// commentHash: optional SHA-256 of an off-chain comment string.
+//   The comment itself is NOT stored on-chain (saves rent).
+//   Store the full comment off-chain and use this hash for verification.
+await client.feedback.give({
+  agent: agentPda,                                        // target agent PDA
+  score: 850,                                             // 1–1000
+  tag: "swap-quality",                                    // max 32 bytes
+  commentHash: hashToArray(sha256("Fast execution, excellent routing via Jupiter")),
+});
+
+console.log("Feedback submitted.");
+```
+
+### Update Feedback
+
+```typescript
+// Updates your existing feedback for the same agent.
+// Creates a new feedback if you haven't given one yet.
+// The PDA is unchanged since it's derived from [agent, reviewer].
+await client.feedback.update({
+  agent: agentPda,
+  score: 920,                         // revised score
+  tag: "swap-quality-v2",             // updated tag
+});
+```
+
+### Read Feedback
+
+```typescript
+import { deriveFeedback } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+
+// Derive the feedback PDA for a specific agent + reviewer pair.
+const [feedbackPda] = deriveFeedback(agentPda, client.walletPubkey);
+
+// fetch() throws if not found. Use fetchNullable() for safe reads.
+const fb = await client.feedback.fetchNullable(feedbackPda);
+
+if (fb) {
+  console.log("Score:", fb.score);            // number: 1–1000
+  console.log("Tag:", fb.tag);                // string: "swap-quality-v2"
+  console.log("Reviewer:", fb.reviewer.toBase58());
+  console.log("Agent:", fb.agent.toBase58());
+  console.log("Created:", new Date(fb.createdAt.toNumber() * 1000));
+  console.log("Updated:", new Date(fb.updatedAt.toNumber() * 1000));
+  console.log("Revoked:", fb.isRevoked);      // boolean
+}
+```
+
+### Revoke and Close
+
+```typescript
+// Revoke marks the feedback as inactive (isRevoked = true).
+// The score is excluded from the agent's aggregated reputation.
+await client.feedback.revoke({ agent: agentPda });
+
+// Close deletes the feedback PDA and reclaims rent (~0.003 SOL).
+await client.feedback.close({ agent: agentPda });
+```
+
+### How Reputation is Computed
+
+The agent's `reputationScore` (0–100) is derived on-chain from all non-revoked feedbacks:
+
+```
+reputationScore = reputationSum / totalFeedbacks / 10
+```
+
+Where `reputationSum` is the sum of all active feedback scores (1–1000 each) and `totalFeedbacks` is the count. Dividing by 10 maps the 1–1000 range to 0–100.
+
+| Feedbacks | Average Score | Reputation |
+|-----------|--------------|------------|
+| 5 feedbacks at 900 avg | 4500 / 5 = 900 | 90 |
+| 20 feedbacks at 750 avg | 15000 / 20 = 750 | 75 |
+| 1 feedback at 500 | 500 / 1 = 500 | 50 |
+
+## Attestations (Web of Trust)
+
+Access via `client.attestation`. Attestations are signed statements from one agent about another, creating a web of trust on-chain.
+
+Use cases:
+- **Capability verification**: "I verified that Agent X can actually execute Jupiter swaps."
+- **KYC/identity**: "I have verified the identity behind Agent X."
+- **Audit trail**: "I audited Agent X's smart contract code on date Y."
+- **Partnership**: "Agent X is an authorized partner of my service."
+
+### Create an Attestation
+
+```typescript
+import { deriveAgent } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+
+const subjectWallet = new PublicKey("SubjectAgentWallet...");
+const [subjectPda] = deriveAgent(subjectWallet);
+
+// Create an attestation about another agent.
+// The PDA is derived from [attesterPda, subjectPda], so one attestation
+// per attester-subject pair.
+await client.attestation.create({
+  subject: subjectPda,                                     // agent being attested
+  attestationType: "capability-verified",                  // max 32 bytes
+  data: Buffer.from(JSON.stringify({                       // arbitrary metadata
+    capability: "jupiter:swap",
+    verified: true,
+    verifiedAt: new Date().toISOString(),
+    method: "live-test",
+  })),
+});
+
+console.log("Attestation created.");
+```
+
+### Read an Attestation
+
+```typescript
+import { deriveAttestation, deriveAgent } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+
+const [attesterPda] = deriveAgent(client.walletPubkey);
+const [attestPda] = deriveAttestation(attesterPda, subjectPda);
+
+const att = await client.attestation.fetchNullable(attestPda);
+
+if (att) {
+  console.log("Type:", att.attestationType);          // "capability-verified"
+  console.log("Attester:", att.attester.toBase58());
+  console.log("Subject:", att.agent.toBase58());
+  console.log("Active:", att.isActive);               // true unless revoked
+  console.log("Expires:", new Date(att.expiresAt.toNumber() * 1000));
+  console.log("Metadata hash:", att.metadataHash);    // number[32]
+}
+```
+
+### Revoke and Close
+
+```typescript
+// Only the attester can revoke their own attestation.
+await client.attestation.revoke(subjectPda);
+
+// Close deletes the PDA and reclaims rent.
+await client.attestation.close(subjectPda);
+```
+
+### Trust Graph
+
+Attestations form a directed graph of trust relationships. When evaluating an agent, a consumer can check:
+
+1. **Direct feedback**: What do reviewers say? (`client.feedback`)
+2. **Attestations from known agents**: Has a trusted agent vouched for this one? (`client.attestation`)
+3. **Reputation score**: What is the aggregate reputation? (`agent.reputationScore`)
+
+```typescript
+// Example: check if a trusted auditor has attested an agent
+const trustedAuditor = new PublicKey("TrustedAuditorWallet...");
+const [auditorPda] = deriveAgent(trustedAuditor);
+const [attestPda] = deriveAttestation(auditorPda, targetAgentPda);
+
+const attestation = await client.attestation.fetchNullable(attestPda);
+const isTrusted = attestation !== null && attestation.isActive;
+
+console.log("Auditor-attested:", isTrusted);
+```
+
+## Cost Reference
+
+| Operation | Approximate Cost |
+|-----------|-----------------|
+| Give feedback | ~0.003 SOL rent + TX fee |
+| Update feedback | TX fee only (~0.000005 SOL) |
+| Revoke feedback | TX fee only |
+| Close feedback | Reclaims ~0.003 SOL |
+| Create attestation | ~0.003 SOL rent + TX fee |
+| Revoke attestation | TX fee only |
+| Close attestation | Reclaims ~0.003 SOL |

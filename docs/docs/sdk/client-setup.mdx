@@ -1,0 +1,121 @@
+---
+title: Client Setup
+description: Creating and configuring SapClient and SapConnection for different environments.
+---
+
+# Client Setup
+
+The SDK provides two main entry points: `SapClient` for direct Anchor provider usage and `SapConnection` for environment-based configuration.
+
+## SapClient
+
+`SapClient` is the root object from which all modules and registries are accessed. It requires an `AnchorProvider` or an existing Anchor `Program`.
+
+### From Provider
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+// AnchorProvider.env() reads ANCHOR_PROVIDER_URL and ANCHOR_WALLET
+// from process environment. Common in scripts and tests.
+// Default commitment: "confirmed" (voted by 2/3 of validators).
+const client = SapClient.from(AnchorProvider.env());
+```
+
+### From Program
+
+```typescript
+const client = SapClient.fromProgram(myAnchorProgram);
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `program` | `Program` | Underlying Anchor program |
+| `walletPubkey` | `PublicKey` | Provider wallet (default authority and payer) |
+
+## SapConnection
+
+`SapConnection` wraps Solana `Connection` with cluster-aware configuration and factory methods.
+
+### Factory Methods
+
+| Method | Endpoint | Use Case |
+|--------|----------|----------|
+| `SapConnection.devnet()` | api.devnet.solana.com | Testing |
+| `SapConnection.mainnet(rpcUrl?)` | Custom or Solana default | Production |
+| `SapConnection.localnet()` | localhost:8899 | Local development |
+| `SapConnection.fromKeypair(url, keypair)` | Custom | Scripts, bots, CLIs |
+
+### Devnet
+
+```typescript
+// SapConnection.devnet() creates a connection to api.devnet.solana.com.
+// Call .fromKeypair() to get a SapClient with signing capability.
+const conn = SapConnection.devnet();
+const client = conn.fromKeypair(testKeypair);
+```
+
+### Mainnet with Synapse Gateway
+
+```typescript
+// For production, use a dedicated RPC provider.
+// The Synapse Gateway provides optimal routing for SAP operations.
+// Replace the URL with your own endpoint and API key.
+const conn = SapConnection.mainnet("https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=");
+const client = conn.createClient(wallet);
+```
+
+### Custom Configuration
+
+```typescript
+// Full manual configuration for advanced use cases.
+const conn = new SapConnection({
+  rpcUrl: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=",  // required
+  wsUrl: "wss://us-1-mainnet.oobeprotocol.ai/ws?api_key=",      // optional: auto-derived from rpcUrl
+  commitment: "finalized",                                       // optional: default "confirmed"
+  cluster: "mainnet-beta",                                       // optional: auto-detected from URL
+});
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `rpcUrl` | `string` | Required | Solana JSON-RPC endpoint |
+| `wsUrl` | `string` | Auto-derived | WebSocket endpoint |
+| `commitment` | `Commitment` | `"confirmed"` | Default commitment level |
+| `cluster` | `SapCluster` | Auto-detected | Explicit cluster hint |
+
+## Environment-Based Setup
+
+A common pattern for applications that run across environments:
+
+```typescript
+function createClient(env: "development" | "staging" | "production") {
+  const keypair = Keypair.fromSecretKey(/* load from env or vault */);
+
+  // Map each environment to the appropriate RPC endpoint.
+  // Development uses localnet (free, instant finality).
+  // Staging uses devnet (free, slower, shared rate limit).
+  // Production uses a dedicated RPC provider (paid, fast, no rate limit).
+  const rpcUrls: Record<string, string> = {
+    development: "http://localhost:8899",
+    staging: "https://api.devnet.solana.com",
+    production: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=",
+  };
+
+  const { client } = SapConnection.fromKeypair(rpcUrls[env], keypair);
+  return client;
+}
+```
+
+## Commitment Levels
+
+| Level | Latency | Guarantee | When to Use |
+|-------|---------|-----------|-------------|
+| `processed` | ~400 ms | Optimistic, may be rolled back | Debug only |
+| `confirmed` | ~400 ms | Supermajority voted | Reads, most writes |
+| `finalized` | ~6 to 12 s | Rooted, irreversible | Escrow, attestations, critical writes |
+
+The SDK defaults to `"confirmed"` which is suitable for most operations.

@@ -2,15 +2,16 @@ import type { Metadata } from 'next';
 
 const SITE_URL = 'https://explorer.oobeprotocol.ai';
 
-type Props = { params: { id: string } };
+type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const title = `Capability ${params.id}`;
+  const { id } = await params;
+  const title = `Capability ${id}`;
   const desc = `Protocol binding, description, and agent owners on SAP.`;
   const ogUrl = `${SITE_URL}/api/og?type=page&title=${encodeURIComponent(title)}&desc=${encodeURIComponent(desc)}`;
   return {
     title,
-    description: `Capability ${params.id} — protocol binding, description, and agent owners on the Solana Agent Protocol.`,
+    description: `Capability ${id} — protocol binding, description, and agent owners on the Solana Agent Protocol.`,
     openGraph: {
       title: `${title} | Synapse Explorer`,
       description: desc,

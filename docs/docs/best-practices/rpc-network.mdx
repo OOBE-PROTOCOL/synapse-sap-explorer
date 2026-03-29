@@ -1,0 +1,177 @@
+---
+title: RPC and Network Configuration
+description: Optimal RPC setup, Synapse Gateway, connection factories, and rate limiting strategies.
+---
+
+# RPC and Network Configuration
+
+Reliable RPC connectivity is the foundation of any SAP integration. Every operation the SDK performs, whether reading an agent's identity or sending a transaction, goes through an RPC node. Choosing the right node, configuring retry logic, and understanding commitment levels directly affect the reliability and speed of your application.
+
+This guide covers connection setup, cluster selection, rate limiting strategies, and production-grade configuration.
+
+## What is an RPC Node?
+
+For readers new to Solana: an RPC node is a server that provides access to the blockchain. When you call `client.agent.fetch()`, the SDK sends an HTTP request to an RPC node, which reads the blockchain and returns the data. When you call `client.agent.register()`, the SDK sends a signed transaction to the RPC node, which forwards it to the Solana network for processing.
+
+Public RPC nodes (like `api.devnet.solana.com`) are free but rate-limited. For production applications, dedicated RPC providers (Helius, Triton, QuickNode) offer higher throughput, lower latency, and better reliability.
+
+## Connection Factories
+
+The SDK provides two connection factories, depending on whether you need signing capabilities or just read access.
+
+### Signing Connection
+
+```typescript
+import { SapConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { Keypair } from "@solana/web3.js";
+
+const { client, anchorProvider } = SapConnection.fromKeypair(
+  "https://api.devnet.solana.com",
+  keypair,
+  { commitment: "confirmed" }
+);
+```
+
+### Read-Only from Provider
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+```
+
+## Cluster Selection
+
+| Cluster | RPC URL | Use Case |
+|---------|---------|----------|
+| Devnet | `https://api.devnet.solana.com` | Development, testing |
+| Mainnet | `https://api.mainnet-beta.solana.com` | Production (rate limited) |
+| Custom | Provider URL | Dedicated RPC nodes |
+
+The public Solana RPC endpoints enforce strict rate limits. For production use, configure a dedicated RPC provider (Helius, Triton, QuickNode).
+
+## Environment-Based Configuration
+
+```typescript
+// .env.local
+SYNAPSE_API_KEY=your-api-key
+SYNAPSE_NETWORK=mainnet
+SYNAPSE_REGION=us-east
+
+// src/lib/env.ts
+const config = {
+  rpcUrl: process.env.SYNAPSE_NETWORK === "mainnet"
+    ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_KEY}`
+    : "https://api.devnet.solana.com",
+  commitment: "confirmed" as const,
+};
+```
+
+## Rate Limiting Strategies
+
+### Client-Side Throttling
+
+```typescript
+const DELAY_MS = 100; // 10 requests per second
+
+async function throttledFetch<T>(
+  fetcher: () => Promise<T>,
+): Promise<T> {
+  await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+  return fetcher();
+}
+```
+
+### Batch Requests
+
+Combine related reads to reduce roundtrips:
+
+```typescript
+const [agent, stats, tools] = await Promise.all([
+  client.agent.fetch(),
+  client.agent.fetchStats(),
+  client.tools.fetchAll(),
+]);
+```
+
+### Retry with Backoff
+
+```typescript
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 500,
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      if (attempt === maxRetries) throw error;
+      const isRateLimit =
+        error instanceof Error && error.message.includes("429");
+      const delay = isRateLimit
+        ? baseDelay * Math.pow(2, attempt)
+        : baseDelay;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error("Unreachable");
+}
+```
+
+## Commitment Levels
+
+Commitment levels determine how "confirmed" a transaction needs to be before the RPC node considers it done. This is a concept unique to blockchains that does not exist in traditional databases.
+
+| Level | Finality | Latency | Recommended For |
+|-------|----------|---------|----------------|
+| `processed` | Optimistic | ~400ms | Read-only queries |
+| `confirmed` | Supermajority | ~1s | Default for writes |
+| `finalized` | Max finality | ~12s | Payment settlement |
+
+**What these mean in practice:** `processed` is like checking your bank balance on the app: it shows the latest state, but a recent transaction might still be reversed. `confirmed` is like receiving a receipt: the transaction has been validated by 2/3 of validators. `finalized` is like seeing the transaction on your monthly statement: it is permanent and irreversible.
+
+Use `confirmed` as the default. Only escalate to `finalized` when verifying payment settlement or closing escrows where absolute certainty is required.
+
+## Dual-Connection Strategy (v0.6.0)
+
+Some authenticated RPC providers reject WebSocket connections (returning HTTP 400). This breaks SPL token operations and real-time subscriptions. The SDK's `createDualConnection()` solves this by using your primary authenticated RPC for transactions and a public fallback for WebSocket subscriptions.
+
+```typescript
+import { createDualConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const { primary, fallback } = createDualConnection({
+  // Authenticated RPC for transactions and account reads
+  primaryUrl: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY",
+  // Optional: explicit fallback URL (auto-detected from cluster if omitted)
+  fallbackUrl: "https://api.mainnet-beta.solana.com",
+});
+
+// primary  → use for SapConnection / transaction signing
+// fallback → use for WebSocket subscriptions, token accounts
+```
+
+**When to use:** If you see WebSocket 400 errors, or if your RPC provider requires API keys that are incompatible with WebSocket upgrades. The dual-connection strategy costs nothing extra — it simply routes subscription traffic to a public node.
+
+### `findATA` Utility
+
+The SDK also provides `findATA()` for SPL Associated Token Account lookup, which uses the fallback connection automatically:
+
+```typescript
+import { findATA } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const ata = await findATA(walletPublicKey, tokenMint);
+// Returns the ATA address, using fallback connection if primary fails
+```
+
+## Production Checklist
+
+1. Use a dedicated RPC endpoint (not the public Solana endpoint)
+2. Set `commitment: "confirmed"` as the default
+3. Implement retry logic with exponential backoff
+4. Add 429 (rate limit) detection with longer delays
+5. Monitor RPC latency and switch providers if degraded
+6. Cache `getAccountInfo` responses where appropriate (static PDAs)
+7. Use `getProgramAccounts` with `memcmp` filters to reduce response size
+8. Keep WebSocket connections alive for real-time subscription use cases

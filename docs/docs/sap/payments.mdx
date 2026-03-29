@@ -1,0 +1,257 @@
+---
+title: x402 Payments
+description: Escrow-based micropayments for AI agent calls. Pre-fund, call with HTTP headers, settle on-chain.
+---
+
+# x402 Payments
+
+x402 turns every agent call into a verifiable financial transaction. No invoices, no subscriptions. An on-chain escrow settles per-call (or in batches) with cryptographic proof of service.
+
+## Why x402?
+
+The fundamental problem with paying for AI services today is that the most natural unit of work (a single API call) costs fractions of a cent, but traditional payment systems have minimum fees that make this uneconomical. Stripe charges $0.30 per transaction. For an AI call that costs $0.001, the payment processing fee would be 300 times the service cost.
+
+SAP solves this with an escrow-based approach inspired by the HTTP 402 "Payment Required" status code (hence the name x402):
+
+1. The client deposits funds into a smart contract escrow (one transaction)
+2. The client makes many API calls, each accompanied by a cryptographic header proving escrow ownership
+3. The agent settles the calls on-chain, claiming the exact amount owed
+4. Unused funds are withdrawable by the client at any time
+
+This model means one deposit transaction can fund hundreds or thousands of API calls, spreading the transaction cost across all of them. The effective per-call overhead approaches zero.
+
+## Payment Flow
+
+The flow is designed so that neither party has to trust the other. The smart contract enforces the rules.
+
+```
+Client                                  Agent
+  │                                       │
+  │  1. Discover pricing                  │  (read the agent's PDA)
+  │  2. Create escrow + deposit funds     │  (one Solana TX)
+  │  3. Call agent with x402 headers      │  (standard HTTP request)
+  │  4. Agent serves the request          │  (off-chain computation)
+  │  5. Agent settles on-chain            │  (claims payment from escrow)
+  │  6. Client verifies settlement TX     │  (on-chain, auditable)
+```
+
+**Trust model:** The client's money is locked in a smart contract, not sent to the agent directly. The agent can only claim payment by calling the `settle` instruction, which verifies the escrow exists and has sufficient balance. The client can withdraw unused funds at any time. Neither party can cheat the other.
+
+The client side uses `client.x402` (high-level) or `client.escrow` (low-level). The agent side calls `settle` or `settleBatch` after serving requests.
+
+## X402Registry
+
+Access via `client.x402`. This registry wraps the full payment lifecycle.
+
+### Estimate Cost
+
+Before committing funds, estimate how much N calls will cost, including volume-curve discounts. This helps clients budget accurately and avoid over-depositing (which locks up capital) or under-depositing (which interrupts service):
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// estimateCost reads the agent's pricing from on-chain data
+// and applies volume curve discounts if they exist.
+const estimate = await client.x402.estimateCost(
+  agentWallet,   // PublicKey: the agent you want to call
+  100,           // number:    how many calls to estimate
+);
+
+console.log(estimate.totalCost.toString());            // BN: total lamports needed
+console.log(estimate.effectivePricePerCall.toString()); // BN: weighted avg price
+console.log(estimate.hasVolumeCurve);                  // boolean: applies discounts?
+console.log(estimate.tiers);                           // per-tier breakdown array
+```
+
+### Prepare Payment
+
+Creates an escrow and deposits funds in a single transaction:
+
+```typescript
+const ctx = await client.x402.preparePayment(agentWallet, {
+  pricePerCall: 1_000,       // base price in lamports per API call
+  maxCalls: 500,             // maximum calls allowed (0 = unlimited)
+  deposit: 500_000,          // lamports to deposit upfront into the escrow
+  expiresAt: 0,              // Unix timestamp for escrow expiry (0 = never expires)
+  volumeCurve: [             // optional: tiered pricing (max 5 breakpoints)
+    { afterCalls: 100, pricePerCall: 800 },  // after 100 calls: 800 lamports each
+    { afterCalls: 300, pricePerCall: 600 },  // after 300 calls: 600 lamports each
+  ],
+  // tokenMint: null,        // optional: SPL token mint (null = native SOL)
+  // tokenDecimals: 9,       // optional: token decimals (default: 9 for SOL)
+});
+
+console.log("Escrow PDA:", ctx.escrowPda.toBase58());
+console.log("TX:", ctx.txSignature);
+```
+
+### Build Payment Headers
+
+Generate HTTP headers to include in every request to the agent. These headers prove that the caller has a funded escrow, allowing the agent to serve the request with confidence that payment is guaranteed:
+
+```typescript
+// buildPaymentHeaders turns the PaymentContext into HTTP headers.
+// Pass these with every API request to the agent's x402 endpoint.
+const headers = client.x402.buildPaymentHeaders(
+  ctx,                         // PaymentContext from preparePayment()
+  // { network: "mainnet-beta" }  // optional: defaults to "mainnet-beta"
+);
+
+const response = await fetch(agentEndpoint, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    ...headers,                // merges all X-Payment-* headers
+  },
+  body: JSON.stringify({ prompt: "Analyze SOL/USDC liquidity" }),
+});
+```
+
+**How the agent validates these headers:** The agent reads the `X-Payment-Escrow` header, looks up the escrow account on-chain, and verifies that it has sufficient balance for at least one more call. If the escrow is expired or depleted, the agent can return HTTP 402 (Payment Required) without performing any work.
+
+### X402 Headers
+
+| Header | Description |
+|--------|-------------|
+| `X-Payment-Protocol` | Protocol identifier (`SAP-x402`) |
+| `X-Payment-Escrow` | Escrow PDA address |
+| `X-Payment-Agent` | Agent PDA address |
+| `X-Payment-Depositor` | Client wallet address |
+| `X-Payment-MaxCalls` | Max calls allowed |
+| `X-Payment-PricePerCall` | Price per call |
+| `X-Payment-Program` | SAP Program ID |
+| `X-Payment-Network` | Cluster name |
+
+### Settle Calls (Agent Side)
+
+After serving requests, the agent settles to claim payment:
+
+```typescript
+// settle() is called by the AGENT after serving requests.
+// The agent's wallet must be the escrow's agentWallet.
+const receipt = await client.x402.settle(
+  depositorWallet,             // PublicKey: the client who funded the escrow
+  5,                           // number:    how many calls to settle
+  "service-data-v1",           // string:    service proof (auto-hashed to SHA-256)
+);
+
+console.log(receipt.callsSettled);         // 5
+console.log(receipt.amount.toString());    // lamports transferred to agent
+console.log(receipt.txSignature);          // Solana TX signature
+console.log(receipt.serviceHash);          // number[] (32 bytes)
+```
+
+### Batch Settlement
+
+Settle up to 10 service records in a single transaction:
+
+```typescript
+// settleBatch processes up to 10 settlements in one Solana TX.
+// More gas-efficient than calling settle() 10 times.
+const batch = await client.x402.settleBatch(
+  depositorWallet,             // PublicKey: the client who funded the escrow
+  [
+    { calls: 3, serviceData: "batch-1-data" }, // 3 calls from first batch
+    { calls: 7, serviceData: "batch-2-data" }, // 7 calls from second batch
+  ],  // max 10 entries per batch (LIMITS.MAX_BATCH_SETTLEMENTS)
+);
+
+console.log(batch.totalCalls);       // 10
+console.log(batch.totalAmount.toString()); // total lamports
+console.log(batch.settlementCount);  // 2
+```
+
+### Check Balance
+
+```typescript
+// getBalance returns null if no escrow exists for this agent+depositor pair.
+const balance = await client.x402.getBalance(
+  agentWallet,     // PublicKey: the agent's wallet
+  // depositor,    // optional: defaults to the connected wallet
+);
+
+if (balance) {
+  console.log(balance.balance.toString());     // BN: current lamport balance
+  console.log(balance.callsRemaining);         // number: maxCalls - settled (Infinity if unlimited)
+  console.log(balance.isExpired);              // boolean: has the escrow expired?
+  console.log(balance.affordableCalls);        // number: calls affordable at current price
+  console.log(balance.totalDeposited.toString()); // BN: cumulative deposits
+  console.log(balance.totalSettled.toString());   // BN: cumulative settlements
+}
+```
+
+## Volume Curves
+
+Volume curves implement automatic tiered pricing. As cumulative calls increase, the effective price per call decreases. This is the on-chain equivalent of bulk discounts at a wholesale store: buy more, pay less per unit.
+
+The critical difference from traditional discount structures is that volume curves are **enforced by the smart contract**. The agent cannot decide to revoke the discount after the fact, and the consumer automatically receives the lower price once they cross the threshold. There is no need to negotiate or apply a coupon code.
+
+```typescript
+interface VolumeCurveBreakpoint {
+  afterCalls: number;
+  pricePerCall: BN;
+}
+```
+
+### Example: Three-Tier Pricing
+
+Base price: 100,000 lamports per call. After 100 calls: 80,000. After 500 calls: 60,000.
+
+For 600 calls the breakdown is:
+
+| Tier | Calls | Price | Subtotal |
+|------|-------|-------|----------|
+| 1 | 1 to 100 | 100,000 | 10,000,000 |
+| 2 | 101 to 500 | 80,000 | 32,000,000 |
+| 3 | 501 to 600 | 60,000 | 6,000,000 |
+| **Total** | **600** | | **48,000,000 lamports** |
+
+Up to 5 breakpoints per volume curve are supported.
+
+## SPL Token Escrows
+
+Escrows support any SPL token, not just native SOL. This is important because many DeFi operations are denominated in stablecoins like USDC. An agent that provides financial analysis might naturally charge in USDC to avoid exchange rate volatility for both parties.
+
+Pass the token mint and provide the required Associated Token Accounts:
+
+```typescript
+const tokenMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+
+await client.escrow.create(agentWallet, {
+  pricePerCall: new BN(1_000),
+  maxCalls: new BN(1000),
+  initialDeposit: new BN(1_000_000),
+  tokenMint,
+  tokenDecimals: 6,
+}, splAccounts);
+```
+
+## EscrowAccount Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Agent PDA |
+| `depositor` | `PublicKey` | Client wallet |
+| `balance` | `BN` | Current remaining balance |
+| `totalDeposited` | `BN` | Cumulative deposits |
+| `totalSettled` | `BN` | Cumulative settlements |
+| `totalCallsSettled` | `BN` | Lifetime calls settled |
+| `pricePerCall` | `BN` | Base price per call |
+| `maxCalls` | `BN` | Max calls allowed (0 = unlimited) |
+| `expiresAt` | `BN` | Expiry timestamp (0 = never) |
+| `volumeCurve` | `VolumeCurveBreakpoint[]` | Volume discount breakpoints |
+| `tokenMint` | `PublicKey or null` | SPL token mint (null = SOL) |
+
+## PDA Derivation
+
+```typescript
+import { deriveAgent, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+
+// All PDA derivations are pure math — no network calls.
+// Given any wallet addresses, you can compute the escrow PDA offline.
+const [agentPda] = deriveAgent(agentWallet);        // ["sap_agent", wallet]
+const [escrowPda] = deriveEscrow(agentPda, depositorWallet); // ["sap_escrow", agent, depositor]
+```

@@ -276,6 +276,14 @@ Ogni 60s  → sync entità (agents → tools → escrows → attestations → fe
 Ogni 5min → snapshot metriche di rete
 ```
 
+```bash
+cd /home/oobejmauix/synapse-sap-explorer
+git pull                          # prendi il fix
+pm2 delete sap-indexer 2>/dev/null  # rimuovi la vecchia config
+pm2 start ecosystem.config.cjs     # avvia con la nuova
+pm2 logs sap-indexer --lines 30     # verifica
+```
+
 ---
 
 *Last updated: March 2026*

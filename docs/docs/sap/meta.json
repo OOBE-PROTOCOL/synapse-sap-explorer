@@ -1,0 +1,14 @@
+{
+  "title": "Synapse Agent Protocol",
+  "pages": [
+    "overview",
+    "architecture",
+    "agent-lifecycle",
+    "memory-systems",
+    "payments",
+    "discovery",
+    "tools-schemas",
+    "feedback-attestations",
+    "on-chain-reference"
+  ]
+}

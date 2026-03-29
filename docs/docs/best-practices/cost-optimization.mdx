@@ -1,0 +1,128 @@
+---
+title: Cost Optimization
+description: Strategies for minimizing on-chain costs in SAP integrations, including memory, rent, and transaction planning.
+---
+
+# Cost Optimization
+
+Every Solana transaction incurs a base fee of 5,000 lamports (~$0.001). On-chain account storage costs approximately 0.00696 SOL per KB of rent-exempt allocation. This guide covers strategies to minimize total cost.
+
+## Understanding Solana Costs
+
+There are two types of on-chain costs:
+
+1. **Transaction fees**: A flat fee (~0.000005 SOL) paid every time you send a transaction. This covers the computation the network performs to process your instruction. It is unavoidable but extremely cheap.
+
+2. **Account rent**: A deposit proportional to the size of the data you store on-chain. This deposit is fully refundable when you close the account. Rent exists because Solana validators need to keep your data in memory, and larger accounts consume more of that shared resource.
+
+SAP is designed to minimize both. The Ledger system avoids rent for data storage by using transaction logs. The builder batches multiple operations into single transactions. And every account type supports a `close()` instruction that reclaims the rent deposit.
+
+## Storage Cost Reference
+
+| Account Type | Approximate Size | Rent |
+|-------------|-----------------|------|
+| AgentAccount | ~2 KB | ~0.014 SOL |
+| AgentStats | ~0.5 KB | ~0.004 SOL |
+| MemoryLedger | ~4.5 KB | ~0.032 SOL |
+| MemoryVault | ~0.5 KB | ~0.004 SOL |
+| SessionPage (sealed) | ~4.5 KB | ~0.031 SOL |
+| ToolDescriptor | ~1 KB | ~0.008 SOL |
+| EscrowAccount | ~0.5 KB | ~0.004 SOL |
+
+## Ledger vs. Vault
+
+The choice between Ledger (ring buffer) and Vault (key-value) affects cost significantly.
+
+**Ledger** is a fixed-size ring buffer (~4.5 KB). Old entries are overwritten. Best for conversation logs where only recent context matters.
+
+**Vault** is a key-value store that grows with each unique key. Best for persistent state, configuration, or lookup tables.
+
+| Scenario | Recommended | Reason |
+|----------|-------------|--------|
+| Conversation history | Ledger | Fixed cost, auto-eviction |
+| User preferences | Vault | Persistent, key-addressable |
+| Session context | Ledger + seal | Cheap runtime, archive if needed |
+| Tool configuration | Vault | Rarely changes, needs direct access |
+
+## Seal Strategically
+
+Sealing a ledger creates a permanent SessionPage (~0.031 SOL). Only seal when:
+
+1. The conversation needs to be preserved long-term
+2. You are about to close the session and want an archive
+3. The ring buffer is near capacity and data must not be lost
+
+Do not seal after every write. Batch your writes, then seal once at the end of a logical session.
+
+## Batch Transactions
+
+Combine multiple instructions into a single transaction when possible:
+
+```typescript
+// Instead of 3 separate transactions (15,000 lamports in fees)
+await client.agent.register(params);
+await client.indexing.initCapabilityIndex("cap1");
+await client.indexing.initProtocolIndex("A2A");
+
+// Prefer: builder handles batching internally
+const result = await client.builder
+  .agent("MyAgent")
+  .addCapability("cap1", { ... })
+  .addProtocol("A2A")
+  .register(); // Single TX when possible
+```
+
+## Reclaim Rent
+
+Closing accounts returns the rent deposit to the original payer. Always clean up resources you no longer need:
+
+```typescript
+// Close a completed session (reclaims ~0.032 SOL)
+await client.session.close(ctx);
+
+// Close an expired escrow (reclaims ~0.004 SOL)
+await client.x402.closeEscrow(agentWallet);
+
+// Deactivate + close agent (reclaims all agent account rent)
+await client.agent.deactivate();
+await client.agent.close();
+```
+
+## Schema Inscription vs. On-Chain Storage
+
+Tool schemas can be stored in two ways:
+
+| Approach | Cost | Accessibility |
+|----------|------|---------------|
+| On-chain (account data) | Ongoing rent (~0.008 SOL per tool) | Direct `getAccountInfo` |
+| Inscription (TX logs) | One-time TX fee (~0.000005 SOL) | Requires log parsing |
+
+Use inscription for large schemas (input/output definitions). Store only the hash on-chain for verification. This eliminates ongoing rent for data that changes infrequently.
+
+## Transaction Fee Optimization
+
+1. **Use priority fees only when needed.** During low-congestion periods, the base fee is sufficient.
+2. **Combine reads.** Use `Promise.all` to parallelize `getAccountInfo` calls rather than making them sequentially.
+3. **Use `getProgramAccounts` with filters.** Fetch only the accounts you need using `memcmp` and `dataSize` filters.
+4. **Cache aggressively.** Static data (tool descriptors, agent identity) rarely changes. Cache for 5+ minutes.
+
+## Cost Estimation
+
+Before committing to an architecture, estimate monthly costs:
+
+```
+Monthly cost = (accounts * rent) + (transactions * 0.000005 SOL)
+
+Example: 10 agents, each with 5 tools, 1000 sessions/month
+  Agent accounts:   10 * 0.014  = 0.14 SOL (one-time)
+  Agent stats:      10 * 0.004  = 0.04 SOL (one-time)
+  Tool descriptors: 50 * 0.008  = 0.40 SOL (one-time)
+  Session ledgers:  10 * 0.032  = 0.32 SOL (reused)
+  Sealed pages:   1000 * 0.031  = 31.0 SOL/month
+  TX fees:        5000 * 0.000005 = 0.025 SOL/month
+
+  One-time: ~0.90 SOL
+  Monthly:  ~31.03 SOL (mostly from sealed pages)
+```
+
+If the sealed page cost is too high, consider sealing only critical sessions, or increasing the ring buffer reuse rate.

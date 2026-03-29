@@ -24,7 +24,7 @@ import { BorshInstructionCoder } from '@coral-xyz/anchor';
 import { SAP_IDL } from '@oobe-protocol-labs/synapse-sap-sdk/idl';
 import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
 import { getSynapseConnection, getRpcConfig } from '~/lib/sap/discovery';
-import { swr } from '~/lib/cache';
+import { swr, peek } from '~/lib/cache';
 import { selectTransactions, upsertTransactions } from '~/lib/db/queries';
 import { dbTxToApi, apiTxToDb } from '~/lib/db/mappers';
 
@@ -331,54 +331,55 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Number(searchParams.get('limit') ?? '30'), 100);
     const afterSlot = searchParams.get('after') ? Number(searchParams.get('after')) : null;
-    const forceRefresh = searchParams.get('refresh') === '1';
 
-    // ── Phase 1: Instant DB read ──
+    const cacheKey = `transactions:${limit}`;
+
+    // ── Step 1: Synchronous cache peek (0ms) ──
+    const cached = peek<any[]>(cacheKey);
+    if (cached && cached.length > 0) {
+      // Cache warm — return instantly, trigger background revalidation
+      let result = cached;
+      if (afterSlot !== null) result = result.filter((tx: any) => tx.slot > afterSlot);
+      // Fire-and-forget revalidation (swr handles stale window internally)
+      swr(cacheKey, () => backgroundRpcRefresh(limit), { ttl: 30_000, swr: 300_000 }).catch(() => {});
+      const res = NextResponse.json({ transactions: result, source: 'cache' });
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
+    }
+
+    // ── Step 2: DB read (~10ms) ──
     let dbRows: any[] = [];
-    let dbOk = false;
     try {
-      const rows = await selectTransactions(limit);
-      dbRows = rows.map(dbTxToApi);
-      dbOk = dbRows.length > 0;
+      dbRows = (await selectTransactions(limit)).map(dbTxToApi);
     } catch (e) {
       console.warn('[transactions] DB read failed:', (e as Error).message);
     }
 
-    // ── Phase 2: Check SWR memory cache (instant if warm) ──
-    const cacheKey = `transactions:${limit}`;
-    let cached: any[] | undefined;
+    if (dbRows.length > 0) {
+      // DB has data — return instantly, warm cache in background
+      let result = dbRows;
+      if (afterSlot !== null) result = result.filter((tx: any) => tx.slot > afterSlot);
+      // Fire-and-forget: warm the SWR cache for the next request
+      swr(cacheKey, () => backgroundRpcRefresh(limit), { ttl: 30_000, swr: 300_000 }).catch(() => {});
+      const res = NextResponse.json({ transactions: result, source: 'db' });
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
+    }
+
+    // ── Step 3: True cold start — no cache, no DB. Must await RPC. ──
+    console.log('[transactions] Cold start — fetching from RPC synchronously');
+    let result: any[] = [];
     try {
-      // Non-blocking peek: swr returns stale data instantly if available
-      cached = await swr(cacheKey, () => backgroundRpcRefresh(limit), {
-        ttl: 30_000,
-        swr: 300_000,
-      });
-    } catch (e) {
-      console.warn('[transactions] SWR fetch failed:', (e as Error).message);
-    }
-
-    // ── Merge: prefer RPC-enriched data, fall back to DB ──
-    let result = cached && cached.length > 0 ? cached : dbRows;
-
-    // If neither cache nor DB had data, do a synchronous RPC fetch (cold start)
-    if (result.length === 0) {
       result = await backgroundRpcRefresh(limit);
+      // Also seed the SWR cache so next request is instant
+      swr(cacheKey, () => Promise.resolve(result), { ttl: 30_000, swr: 300_000 }).catch(() => {});
+    } catch (e) {
+      console.error('[transactions] RPC cold start failed:', (e as Error).message);
     }
 
-    // If client is polling with ?after=SLOT, filter to only new txs
-    if (afterSlot !== null) {
-      result = result.filter((tx: any) => tx.slot > afterSlot);
-    }
+    if (afterSlot !== null) result = result.filter((tx: any) => tx.slot > afterSlot);
 
-    // If ?refresh=1, trigger background revalidation
-    if (forceRefresh) {
-      backgroundRpcRefresh(limit).catch(() => {});
-    }
-
-    const res = NextResponse.json({
-      transactions: result,
-      source: cached && cached.length > 0 ? 'cache' : dbOk ? 'db' : 'rpc',
-    });
+    const res = NextResponse.json({ transactions: result, source: 'rpc' });
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return res;
   } catch (err: any) {

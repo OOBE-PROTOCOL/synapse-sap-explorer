@@ -1,0 +1,198 @@
+---
+title: Tools and Schemas
+description: Publishing verifiable tool descriptors on-chain, inscribing JSON schemas in transaction logs, and tracking invocations.
+---
+
+# Tools and Schemas
+
+Every agent on SAP can publish tool descriptors as on-chain PDAs that describe what the agent's endpoints do, what inputs they accept, and what outputs they return. Schemas are stored as SHA-256 hashes on-chain, with full JSON content inscribed into transaction logs for permanent, rent-free storage.
+
+## Why Publish Tools On-Chain?
+
+In the current AI ecosystem, there is no standard way for an agent to announce "here is what I can do, here are the exact inputs I need, and here is what I will return." Consumers rely on documentation that may be outdated, API descriptions that may be inaccurate, or trial and error.
+
+On-chain tool descriptors solve this by making the contract between consumer and agent verifiable. The input schema on-chain says the tool requires a `location` parameter of type `string`. If the agent changes this without updating the on-chain record, the hash will not match, and consumers can detect the discrepancy.
+
+This is especially important for AI-to-AI interactions, where one agent needs to programmatically determine how to call another agent. Machine-readable, verifiable schemas make autonomous collaboration possible.
+
+## Tool Descriptor Structure
+
+```
+Tool Descriptor PDA
+  toolName:         "getWeather"
+  toolNameHash:     SHA256("getWeather")
+  protocolHash:     SHA256("mcp-v1")
+  inputSchemaHash:  SHA256('{"type":"object",...}')
+  outputSchemaHash: SHA256('{"type":"object",...}')
+  httpMethod:       Post (1)
+  category:         Data (5)
+  paramsCount:      3
+  requiredParams:   1
+  isCompound:       false
+  isActive:         true
+  totalInvocations: 1,247
+  version:          2
+```
+
+## Publishing a Tool
+
+### By Name (Recommended)
+
+```typescript
+import { SapClient, HTTP_METHOD_VALUES, TOOL_CATEGORY_VALUES } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// publishByName auto-hashes all string arguments to SHA-256.
+// The tool PDA is derived as ["sap_tool", agentPda, SHA256(toolName)].
+await client.tools.publishByName(
+  "getWeather",                    // toolName:      human-readable name (max 32 chars)
+  "mcp-v1",                        // protocolId:    protocol this tool belongs to
+  "Fetch current weather for a location", // description:  what the tool does
+  JSON.stringify({                  // inputSchema:   JSON Schema for input validation
+    type: "object",
+    properties: {
+      location: { type: "string", description: "City name or coordinates" },
+      units: { type: "string", enum: ["celsius", "fahrenheit"] },
+    },
+    required: ["location"],
+  }),
+  JSON.stringify({                  // outputSchema:  JSON Schema for output format
+    type: "object",
+    properties: {
+      temperature: { type: "number" },
+      humidity: { type: "number" },
+      description: { type: "string" },
+    },
+  }),
+  HTTP_METHOD_VALUES.Post,          // httpMethod:    0=Get, 1=Post, 2=Put, 3=Delete, 4=Compound
+  TOOL_CATEGORY_VALUES.Data,        // category:      0=Swap, 1=Lend, ..., 5=Data, ..., 9=Custom
+  2,                                // paramsCount:   total parameters in the input schema
+  1,                                // requiredParams: how many are mandatory
+  false,                            // isCompound:    true for multi-step tools that chain calls
+);
+```
+
+All string arguments are automatically SHA-256 hashed.
+
+## Schema Inscription
+
+On-chain tool PDAs store only 32-byte hashes. The full JSON schema content is inscribed into transaction logs, making it permanently available at zero ongoing rent cost.
+
+**Why this split approach?** Storing a full JSON schema in a Solana account might cost 0.01 SOL or more in ongoing rent, depending on the schema size. By storing only a 32-byte hash in the account (constant, minimal rent) and writing the full content into the transaction log (one-time transaction fee, zero ongoing cost), SAP reduces the cost by orders of magnitude. The hash acts as a fingerprint: anyone can retrieve the full schema from the TX log and verify it matches the on-chain hash.
+
+```typescript
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+
+const inputSchema = JSON.stringify({
+  type: "object",
+  properties: {
+    location: { type: "string" },
+    units: { type: "string", enum: ["celsius", "fahrenheit"] },
+  },
+  required: ["location"],
+});
+
+// inscribeSchema writes the full JSON schema into the TX log.
+// The PDA stores only the 32-byte hash; the full content lives in logs.
+await client.tools.inscribeSchema(
+  "getWeather",                    // toolName: must match the published tool name
+  {
+    schemaType: 0,                 // 0 = input schema, 1 = output schema, 2 = description
+    schemaData: Buffer.from(inputSchema), // raw bytes (max 750 bytes per inscription)
+    schemaHash: hashToArray(sha256(inputSchema)), // SHA-256 hash as number[] (32 bytes)
+    compression: 0,                // 0 = none, future: 1 = gzip, etc.
+  },
+);
+```
+
+### Hash on-chain, Content in Logs
+
+The PDA holds only 32-byte SHA-256 hashes (minimal rent). TX logs hold the full schema content (zero ongoing cost). Verification is trivial: hash the log content and compare with the on-chain hash.
+
+## Updating a Tool
+
+Update metadata hashes. Bumps the on-chain `version` counter. All fields are optional:
+
+```typescript
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+
+// update() takes the toolName and an UpdateToolArgs object.
+// All fields are optional — only pass what you want to change.
+await client.tools.update("getWeather", {
+  descriptionHash: hashToArray(sha256("Updated description")),  // new description hash
+  inputSchemaHash: hashToArray(sha256(newInputSchema)),         // new input schema hash
+  paramsCount: 3,                    // updated parameter count
+  requiredParams: 2,                 // updated required count
+  // outputSchemaHash: null,         // null = no change
+  // httpMethod: null,               // null = no change
+  // category: null,                 // null = no change
+});
+// The on-chain version counter increments automatically on each update.
+```
+
+## Lifecycle Management
+
+```typescript
+// Deactivate: tool remains on-chain but isActive = false.
+// Consumers can still read the descriptor, but discovery excludes it.
+await client.tools.deactivate("getWeather");
+
+// Reactivate: sets isActive = true, tool is discoverable again.
+await client.tools.reactivate("getWeather");
+
+// Close: permanently removes the PDA. Reclaims ~0.008 SOL rent.
+// WARNING: this is irreversible. Prefer deactivation for deprecated tools.
+await client.tools.close("getWeather");
+
+// Report invocations: increments the on-chain totalInvocations counter.
+// Used for analytics and discovery ranking. Accepts number or bigint.
+await client.tools.reportInvocations("getWeather", 5);
+```
+
+## Constants
+
+### Tool Categories
+
+| Name | Value |
+|------|-------|
+| Swap | 0 |
+| Lend | 1 |
+| Stake | 2 |
+| Nft | 3 |
+| Payment | 4 |
+| Data | 5 |
+| Governance | 6 |
+| Bridge | 7 |
+| Analytics | 8 |
+| Custom | 9 |
+
+### HTTP Methods
+
+| Name | Value |
+|------|-------|
+| Get | 0 |
+| Post | 1 |
+| Put | 2 |
+| Delete | 3 |
+| Compound | 4 |
+
+## PDA Derivation
+
+```typescript
+import { deriveAgent, deriveTool } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { sha256 } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+
+// Pure math, no network calls. Same result every time for the same inputs.
+const [agentPda] = deriveAgent(agentWallet);               // ["sap_agent", wallet]
+const toolNameHash = sha256("getWeather");                  // Uint8Array (32 bytes)
+const [toolPda] = deriveTool(agentPda, toolNameHash);      // ["sap_tool", agent, hash]
+```
+
+## Versioning Strategy
+
+1. Publish the initial tool version (version is set to 1)
+2. Update the tool hashes (version auto-increments)
+3. Inscribe new schemas after each update
+4. Deactivate deprecated tools instead of closing them so consumers can still read the descriptor

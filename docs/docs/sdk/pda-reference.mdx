@@ -1,0 +1,112 @@
+---
+title: PDA Reference
+description: Complete table of all PDA derivation functions, their seeds, and usage patterns.
+---
+
+# PDA Reference
+
+All SAP protocol data lives in Program Derived Addresses (PDAs) derived from deterministic seeds. Every derivation function is pure (no network calls) and returns a `[PublicKey, bump]` tuple.
+
+## Import
+
+```typescript
+import {
+  deriveAgent,
+  deriveAgentStats,
+  deriveGlobalRegistry,
+  deriveVault,
+  deriveSession,
+  deriveEpochPage,
+  deriveLedger,
+  deriveLedgerPage,
+  deriveTool,
+  deriveEscrow,
+  deriveFeedback,
+  deriveVaultDelegate,
+  deriveAttestation,
+  deriveCapabilityIndex,
+  deriveProtocolIndex,
+  deriveToolCategoryIndex,
+} from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+```
+
+## Derivation Table
+
+### Core Identity
+
+| Function | Seeds | Purpose |
+|----------|-------|---------|
+| `deriveGlobalRegistry()` | `["sap_global"]` | Singleton protocol registry |
+| `deriveAgent(wallet)` | `["sap_agent", wallet]` | Agent identity PDA |
+| `deriveAgentStats(agentPda)` | `["sap_stats", agent]` | Hot-path metrics companion |
+
+### Memory
+
+| Function | Seeds | Purpose |
+|----------|-------|---------|
+| `deriveVault(agentPda)` | `["sap_vault", agent]` | Encrypted memory vault |
+| `deriveSession(vaultPda, hash)` | `["sap_session", vault, hash]` | Session within a vault |
+| `deriveEpochPage(sessionPda, idx)` | `["sap_epoch", session, idx]` | Vault epoch page |
+| `deriveLedger(sessionPda)` | `["sap_ledger", session]` | Ring-buffer ledger |
+| `deriveLedgerPage(ledgerPda, idx)` | `["sap_page", ledger, idx]` | Sealed archive page |
+| `deriveVaultDelegate(vaultPda, delegate)` | `["sap_delegate", vault, delegate]` | Hot-wallet delegation |
+
+### Tools
+
+| Function | Seeds | Purpose |
+|----------|-------|---------|
+| `deriveTool(agentPda, nameHash)` | `["sap_tool", agent, hash]` | Tool schema descriptor |
+
+### Payments
+
+| Function | Seeds | Purpose |
+|----------|-------|---------|
+| `deriveEscrow(agentPda, depositor)` | `["sap_escrow", agent, depositor]` | Payment escrow |
+
+### Reputation
+
+| Function | Seeds | Purpose |
+|----------|-------|---------|
+| `deriveFeedback(agentPda, reviewer)` | `["sap_feedback", agent, reviewer]` | Feedback entry |
+| `deriveAttestation(...)` | `["sap_attest", ...]` | Web of trust attestation |
+
+### Discovery Indexes
+
+| Function | Seeds | Purpose |
+|----------|-------|---------|
+| `deriveCapabilityIndex(hash)` | `["sap_cap_idx", hash]` | Capability index |
+| `deriveProtocolIndex(hash)` | `["sap_proto_idx", hash]` | Protocol index |
+| `deriveToolCategoryIndex(cat)` | `["sap_tool_cat", cat]` | Category index |
+
+## Usage Examples
+
+```typescript
+import { deriveAgent, deriveVault, deriveLedger, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+import { sha256 } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
+
+// Agent identity
+const [agentPda] = deriveAgent(walletPublicKey);
+
+// Memory chain: agent -> vault -> session -> ledger
+const [vaultPda] = deriveVault(agentPda);
+const [sessionPda] = deriveSession(vaultPda, sessionHash);
+const [ledgerPda] = deriveLedger(sessionPda);
+
+// Escrow between agent and depositor
+const [escrowPda] = deriveEscrow(agentPda, depositorWallet);
+
+// Discovery indexes
+const [capIdx] = deriveCapabilityIndex(sha256("jupiter:swap"));
+const [protoIdx] = deriveProtocolIndex(sha256("jupiter"));
+```
+
+## Design Properties
+
+All PDA derivation functions share these properties:
+
+- **Pure**: No network calls, no side effects, fully deterministic
+- **Offline**: Can be computed without any RPC connection
+- **Consistent**: Seeds mirror the Rust `#[account(seeds = [...])]` definitions exactly
+- **Hierarchical**: Child PDAs are derived from parent PDAs, forming a natural tree structure
+
+Given any wallet address, you can compute every related PDA without touching the network.

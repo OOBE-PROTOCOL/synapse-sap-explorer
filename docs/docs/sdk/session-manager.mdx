@@ -1,0 +1,149 @@
+---
+title: SessionManager
+description: Unified memory API that orchestrates vault, session, and ledger operations behind a single interface.
+---
+
+# SessionManager
+
+The `SessionManager` is the recommended way to work with agent memory. It wraps the vault and ledger modules into a single cohesive API that handles all setup automatically.
+
+Access via `client.session`.
+
+## How It Works
+
+```
+client.session.start("conversation-123")
+  │
+  ├── 1. Ensure vault exists       (skip if already created)
+  ├── 2. Open session              (skip if already open)
+  └── 3. Initialize ledger         (skip if already initialized)
+  │
+  ▼
+SessionContext { sessionPda, ledgerPda, vaultPda, agentPda, ... }
+```
+
+`start()` is idempotent. It skips any step that has already been completed on-chain. Safe to call multiple times for the same session ID.
+
+## Start a Session
+
+```typescript
+const ctx = await client.session.start("conversation-123");
+
+// ctx contains all derived PDAs:
+// ctx.sessionId     "conversation-123"
+// ctx.sessionHash   SHA-256 of the session ID
+// ctx.agentPda      derived from wallet
+// ctx.vaultPda      derived from agent
+// ctx.sessionPda    derived from vault + session hash
+// ctx.ledgerPda     derived from session
+// ctx.wallet        provider wallet
+```
+
+## Write Data
+
+```typescript
+const result = await client.session.write(ctx, "User requested SOL to USDC swap");
+
+console.log("TX:", result.txSignature);
+console.log("Hash:", result.contentHash);
+console.log("Size:", result.dataSize, "bytes");
+
+// Accepts string, Buffer, or Uint8Array
+await client.session.write(ctx, Buffer.from([0x01, 0x02, 0x03]));
+```
+
+## Read Latest
+
+Reads from the ring buffer using `getAccountInfo()`. This is free on any RPC and does not require an archival node.
+
+```typescript
+const entries = await client.session.readLatest(ctx);
+
+for (const entry of entries) {
+  console.log(`[${entry.size} bytes] ${entry.text}`);
+}
+```
+
+## Seal to Permanent Archive
+
+Sealing creates a permanent `LedgerPage` PDA containing a snapshot of the current ring buffer. The ring buffer is then reset for new writes.
+
+```typescript
+const sealResult = await client.session.seal(ctx);
+
+console.log("Sealed page index:", sealResult.pageIndex);
+console.log("TX:", sealResult.txSignature);
+```
+
+Cost: approximately 0.031 SOL per sealed page.
+
+## Read Sealed Pages
+
+```typescript
+// Read a specific page
+const pageEntries = await client.session.readPage(ctx, 0);
+
+// Read all data: sealed pages (oldest) + ring buffer (latest)
+const allEntries = await client.session.readAll(ctx);
+```
+
+## Get Session Status
+
+```typescript
+const status = await client.session.getStatus(ctx);
+
+console.log("Vault exists:", status.vaultExists);
+console.log("Session exists:", status.sessionExists);
+console.log("Ledger exists:", status.ledgerExists);
+console.log("Closed:", status.isClosed);
+console.log("Total entries:", status.totalEntries);
+console.log("Total data:", status.totalDataSize, "bytes");
+console.log("Sealed pages:", status.numPages);
+console.log("Merkle root:", status.merkleRoot);
+```
+
+## Close Session
+
+Full teardown that closes the ledger and session. Reclaims all rent. Idempotent.
+
+```typescript
+await client.session.close(ctx);
+```
+
+## Derive Context Without Creating
+
+If you need the PDAs without creating anything on-chain:
+
+```typescript
+// Pure computation, no network calls
+const ctx = client.session.deriveContext("conversation-123");
+```
+
+## Complete Example
+
+```typescript
+const client = SapClient.from(AnchorProvider.env());
+
+// Start (creates vault + session + ledger if needed)
+const ctx = await client.session.start("conv-001");
+
+// Write conversation data
+await client.session.write(ctx, "User: What is the price of SOL?");
+await client.session.write(ctx, "Agent: SOL is trading at $142.50");
+await client.session.write(ctx, "User: Swap 10 SOL to USDC");
+await client.session.write(ctx, "Agent: Swap executed. Received 1,425 USDC");
+
+// Read back
+const messages = await client.session.readLatest(ctx);
+messages.forEach((m) => console.log(m.text));
+
+// Archive to permanent storage
+await client.session.seal(ctx);
+
+// Check status
+const status = await client.session.getStatus(ctx);
+console.log(`${status.totalEntries} entries, ${status.numPages} sealed pages`);
+
+// Cleanup when done
+await client.session.close(ctx);
+```

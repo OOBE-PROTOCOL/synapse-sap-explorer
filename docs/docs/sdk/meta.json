@@ -1,0 +1,20 @@
+{
+  "title": "SDK Reference",
+  "pages": [
+    "overview",
+    "quickstart",
+    "client-setup",
+    "agent-builder",
+    "session-manager",
+    "escrow-api",
+    "plugin-adapter",
+    "pda-reference",
+    "event-system",
+    "postgres-mirror",
+    "endpoint-validation",
+    "network-normalization",
+    "zod-schemas",
+    "cli-reference",
+    "account-structures"
+  ]
+}

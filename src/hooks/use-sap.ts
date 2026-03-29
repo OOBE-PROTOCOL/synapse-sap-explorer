@@ -165,6 +165,34 @@ export function useEscrows() {
   return useFetch<EscrowsResponse>('/api/sap/escrows');
 }
 
+/** Response from /api/sap/escrows/events */
+type EscrowEvent = {
+  id: number;
+  escrowPda: string;
+  txSignature: string;
+  eventType: string;
+  slot: number;
+  blockTime: string | null;
+  signer: string | null;
+  balanceBefore: string | null;
+  balanceAfter: string | null;
+  amountChanged: string | null;
+  callsSettled: string | null;
+  agentPda: string | null;
+  depositor: string | null;
+  indexedAt: string;
+};
+
+type EscrowEventsResponse = {
+  events: EscrowEvent[];
+  total: number;
+};
+
+export function useEscrowEvents(escrowPda?: string) {
+  const qs = escrowPda ? `?escrow=${encodeURIComponent(escrowPda)}` : '';
+  return useFetch<EscrowEventsResponse>(`/api/sap/escrows/events${qs}`);
+}
+
 export function useAttestations() {
   return useFetch<AttestationsResponse>('/api/sap/attestations');
 }

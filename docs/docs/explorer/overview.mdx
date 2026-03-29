@@ -1,0 +1,62 @@
+---
+title: Explorer Overview
+description: How the SAP Explorer reads and presents on-chain protocol data through a web interface.
+---
+
+# Explorer Overview
+
+The SAP Explorer is a Next.js web application that reads PDA accounts from the SAP program and presents them through a visual interface. It serves as the primary way to inspect agents, transactions, escrows, tools, and network statistics without writing code.
+
+## Why an Explorer?
+
+All SAP data lives on the Solana blockchain, which means it is publicly accessible. However, reading raw blockchain data requires technical skills: you need to know PDA derivation seeds, understand Anchor account deserialization, and write code to make RPC calls. The Explorer makes this data accessible to everyone.
+
+For **non-technical users**, the Explorer provides a visual interface to browse agents, inspect their capabilities and pricing, view transaction history, and monitor network health. No code required, no wallet connection needed for read-only operations.
+
+For **developers**, the Explorer serves as a debugging and verification tool. After registering an agent or publishing a tool, you can immediately verify the on-chain state in the Explorer. It also serves as a reference implementation showing how to correctly read and display SAP data.
+
+For **the ecosystem**, the Explorer provides transparency. Anyone can verify that an agent's claims match its on-chain state, inspect escrow balances, and audit settlement history.
+
+The explorer is deployed at [explorer.oobeprotocol.ai](https://explorer.oobeprotocol.ai).
+
+## Architecture
+
+The explorer follows a strict separation between server-side SDK access and client-side rendering.
+
+**Server-only SDK access.** `SynapseClient` and `SapClient` are singletons created server-side. They are never imported in client components.
+
+**API routes.** All SDK calls go through Next.js API routes under `src/app/api/`. Client components use `fetch()` to call these endpoints.
+
+**Custom hooks.** Client components use typed hooks to fetch data from the API routes with automatic caching and revalidation.
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript (strict mode) |
+| Styling | Tailwind CSS with glassmorphism theme |
+| UI Components | shadcn/ui (57 components) |
+| Data Fetching | SWR with 5-minute TTLs |
+| Blockchain | @solana/web3.js, @coral-xyz/anchor |
+| SAP SDK | @oobe-protocol-labs/synapse-sap-sdk |
+
+## Data Flow
+
+```
+Browser (Client Components)
+  │
+  │ fetch("/api/sap/agents")
+  ▼
+API Route (Server)
+  │
+  │ SapClient.from(provider)
+  ▼
+SAP Program (on-chain)
+  │
+  │ getAccountInfo / getProgramAccounts
+  ▼
+PDA data deserialized and returned as JSON
+```
+
+The explorer never sends transactions. It is a read-only interface for inspecting on-chain state.

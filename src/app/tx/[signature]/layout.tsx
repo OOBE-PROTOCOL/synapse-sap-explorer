@@ -4,12 +4,12 @@ const SITE_URL = 'https://explorer.oobeprotocol.ai';
 const API_BASE = process.env.NEXT_PUBLIC_BASE_URL || SITE_URL;
 
 type Props = {
-  params: { signature: string };
+  params: Promise<{ signature: string }>;
   children: React.ReactNode;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const sig = params.signature;
+  const { signature: sig } = await params;
   const shortSig = sig.length > 20 ? `${sig.slice(0, 8)}...${sig.slice(-6)}` : sig;
 
   try {

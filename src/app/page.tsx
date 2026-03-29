@@ -394,13 +394,11 @@ export default function OverviewPage() {
                     const pct =
                       totalTools > 0 ? (cat.toolCount / totalTools) * 100 : 0;
                     return (
-                      <div key={cat.category}>
-                        <div className="mb-1 flex flex-wrap items-center justify-between gap-1">
-                          <span className="text-[11px] md:text-[12px] text-white/50 truncate max-w-[60%]">
-                            {cat.category}
-                          </span>
-                          <span className="text-[9px] md:text-[10px] tabular-nums text-white/25 whitespace-nowrap">
-                            {cat.toolCount} tools · {pct.toFixed(1)}%
+                      <div key={label}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] text-muted-foreground">{label}</span>
+                          <span className="text-[11px] font-medium tabular-nums text-foreground">
+                            {sol === 0 ? '0 SOL' : sol < 0.001 ? sol.toFixed(6) + ' SOL' : sol.toFixed(4) + ' SOL'}
                           </span>
                         </div>
                         <div className="h-1 md:h-1.5 w-full rounded-full bg-white/[0.04] overflow-hidden">

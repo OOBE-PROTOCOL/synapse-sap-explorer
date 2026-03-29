@@ -1,0 +1,170 @@
+---
+title: Zod Runtime Schemas
+description: Validate agent manifests, environment variables, and SDK inputs at runtime with Zod (v0.6.0).
+---
+
+# Zod Runtime Schemas
+
+Added in v0.6.0. The SDK provides 9 Zod schema factories for runtime validation of inputs, manifests, and environment variables. Zod is a **peer dependency** — schemas are tree-shaken away if not imported.
+
+## Installation
+
+```bash
+# Zod is optional. Only install if you use schema validation.
+npm install zod
+```
+
+If you import a schema factory without Zod installed, the SDK throws a clear error:
+`[SAP SDK] Zod is required for schema validation. Install it: npm install zod`
+
+## Import
+
+```typescript
+import {
+  createEnvSchema,
+  createEndpointDescriptorSchema,
+  createHealthCheckSchema,
+  createToolManifestEntrySchema,
+  createAgentManifestSchema,
+  createPreparePaymentSchema,
+  createRegisterAgentSchema,
+  createCallArgsSchema,
+  validateOrThrow,
+} from "@oobe-protocol-labs/synapse-sap-sdk";
+```
+
+## `validateOrThrow(schema, value, label)`
+
+The primary validation utility. Validates any value against a Zod schema and throws a formatted error with field-by-field details if validation fails.
+
+```typescript
+// Fail fast at startup if env vars are misconfigured.
+const env = validateOrThrow(createEnvSchema(), process.env, "environment");
+// env is now fully typed: env.SOLANA_CLUSTER, env.SOLANA_RPC_URL, etc.
+
+// On failure, throws a formatted error:
+// [SAP SDK] Invalid environment:
+//   • SOLANA_CLUSTER: Invalid enum value. Expected 'mainnet-beta' | 'devnet' | 'localnet'
+//   • SOLANA_RPC_URL: Invalid url
+```
+
+## Schema Reference
+
+### `createEnvSchema()`
+
+Validates `process.env` for SAP SDK configuration.
+
+```typescript
+const schema = createEnvSchema();
+const env = schema.parse(process.env);
+
+// Typed output:
+// env.SOLANA_CLUSTER       → "mainnet-beta" | "devnet" | "localnet"
+// env.SOLANA_RPC_URL       → string (URL) | undefined
+// env.SOLANA_FALLBACK_RPC_URL → string (URL) | undefined
+// env.WALLET_KEYPAIR_PATH  → string | undefined
+// env.DATABASE_URL         → string | undefined
+// env.LOG_LEVEL            → "debug" | "info" | "warn" | "error"
+// env.X402_ENDPOINT        → string (URL) | undefined
+// env.AGENT_URI            → string (URL) | undefined
+```
+
+### `createRegisterAgentSchema()`
+
+Validates agent registration arguments with on-chain limits enforcement.
+
+```typescript
+const schema = createRegisterAgentSchema();
+const args = schema.parse({
+  name: "SwapBot",                    // 1–64 chars (LIMITS.MAX_NAME_LEN)
+  description: "Jupiter swap agent",  // 1–256 chars (LIMITS.MAX_DESC_LEN)
+  capabilities: [
+    { id: "jupiter:swap" },
+  ],                                  // max 10 (LIMITS.MAX_CAPABILITIES)
+  protocols: ["jupiter"],             // max 5 (LIMITS.MAX_PROTOCOLS)
+  pricing: [{
+    tierId: "standard",
+    pricePerCall: 1_000_000,
+    rateLimit: 60,
+  }],                                 // max 5 (LIMITS.MAX_PRICING_TIERS)
+});
+```
+
+### `createPreparePaymentSchema()`
+
+Validates x402 payment preparation parameters.
+
+```typescript
+const schema = createPreparePaymentSchema();
+const params = schema.parse({
+  pricePerCall: 1_000_000,             // positive number
+  deposit: 100_000_000,               // positive number
+  volumeCurve: [
+    { afterCalls: 100, pricePerCall: 900_000 },
+  ],                                   // max 5 entries
+  networkIdentifier: "solana:mainnet-beta", // optional
+  tokenDecimals: 9,                    // 0–18
+});
+```
+
+### `createAgentManifestSchema()`
+
+Validates a complete agent manifest JSON (see Endpoint Validation docs).
+
+```typescript
+import fs from "fs";
+
+const schema = createAgentManifestSchema();
+const manifest = schema.parse(
+  JSON.parse(fs.readFileSync("manifest.json", "utf-8")),
+);
+
+// manifest.version           → "1.0.0" (literal)
+// manifest.wallet            → string (32–50 chars)
+// manifest.endpoint          → EndpointDescriptor (validated)
+// manifest.tools             → ToolManifestEntry[] (each validated)
+// manifest.supportedNetworks → string[] (min 1)
+```
+
+### `createCallArgsSchema()`
+
+Validates CLI call script arguments.
+
+```typescript
+const schema = createCallArgsSchema();
+const args = schema.parse({
+  agentWallet: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  tool: "jupiter:swap",
+  args: { inputMint: "SOL", outputMint: "USDC", amount: 1.0 },
+  maxRetries: 2,        // 0–10, default: 2
+  timeoutMs: 30_000,    // 1000–120000, default: 30000
+});
+```
+
+### `createEndpointDescriptorSchema()`
+
+Validates an `EndpointDescriptor` object (URL format, method, auth type).
+
+### `createHealthCheckSchema()`
+
+Validates a `HealthCheckDescriptor` (URL, expected status, timeout range).
+
+### `createToolManifestEntrySchema()`
+
+Validates a single `ToolManifestEntry` (name, protocol, schemas, payment mode).
+
+## Best Practice: Validate at Startup
+
+Use environment validation as the first line of defense. If required variables are missing or malformed, the application fails immediately with a clear error instead of crashing later with a cryptic RPC error.
+
+```typescript
+// src/lib/env.ts
+import { createEnvSchema, validateOrThrow } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+// This runs at import time — fails fast if env is misconfigured.
+export const env = validateOrThrow(
+  createEnvSchema(),
+  process.env,
+  "environment",
+);
+```

@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 
 const SITE_URL = 'https://explorer.oobeprotocol.ai';
 
-type Props = { params: { address: string } };
+type Props = { params: Promise<{ address: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const addr = params.address;
+  const { address: addr } = await params;
   const short = addr.length > 12 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
   const title = `Address ${short}`;
   const desc = `Account details, transactions, and token balances on SAP.`;

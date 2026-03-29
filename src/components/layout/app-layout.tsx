@@ -18,28 +18,41 @@ import {
   Wallet,
   ShieldCheck,
   Trophy,
-  Menu,
-  X,
-} from "lucide-react";
-import { cn } from "~/lib/utils";
+  Sun,
+  Moon,
+  ExternalLink,
+  Github,
+  Globe,
+  BookOpen,
+} from 'lucide-react';
+import { cn } from '~/lib/utils';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { Separator } from '~/components/ui/separator';
 
 const NAV_ITEMS = [
-  { href: "/", label: "Overview", icon: Activity },
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/network", label: "Network", icon: Network },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/tools", label: "Tools", icon: Wrench },
-  { href: "/protocols", label: "Protocols", icon: Layers },
-  { href: "/capabilities", label: "Capabilities", icon: Sparkles },
-  { href: "/escrows", label: "Escrows", icon: Wallet },
-  { href: "/attestations", label: "Attestations", icon: ShieldCheck },
-  { href: "/reputation", label: "Reputation", icon: Trophy },
+  { href: '/', label: 'Overview', icon: Activity },
+  { href: '/agents', label: 'Agents', icon: Bot },
+  { href: '/network', label: 'Network', icon: Network },
+  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
+  { href: '/tools', label: 'Tools', icon: Wrench },
+  { href: '/protocols', label: 'Protocols', icon: Layers },
+  { href: '/capabilities', label: 'Capabilities', icon: Sparkles },
+  { href: '/escrows', label: 'Escrows', icon: Wallet },
+  { href: '/attestations', label: 'Attestations', icon: ShieldCheck },
+  { href: '/reputation', label: 'Reputation', icon: Trophy },
+  { href: '/docs', label: 'Documentation', icon: BookOpen },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Docs pages use their own fumadocs layout — skip explorer chrome
+  if (pathname.startsWith('/docs')) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -132,28 +145,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               const isActive =
                 href === "/" ? pathname === "/" : pathname.startsWith(href);
               return (
-                <Link
-                  key={href}
-                  href={href}
-                  title={collapsed ? label : undefined}
-                  className={cn(
-                    "group flex items-center gap-3 rounded-2xl text-[13px] font-medium transition-all duration-300",
-                    collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
-                    isActive
-                      ? "nav-active text-white"
-                      : "text-white/35 hover:bg-white/[0.03] hover:text-white/60",
+                <div key={href}>
+                  {href === '/docs' && (
+                    <>
+                      <Separator className="my-2" />
+                      {!collapsed && (
+                        <div className="px-3 pb-1 pt-1">
+                          <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Resources</span>
+                        </div>
+                      )}
+                    </>
                   )}
-                >
-                  <Icon
+                  <Link
+                    href={href}
+                    title={collapsed ? label : undefined}
                     className={cn(
-                      "h-4 w-4 shrink-0 transition-colors duration-300",
+                      'group flex items-center gap-3 rounded-xl text-[13px] font-medium transition-all duration-200',
+                      collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
                       isActive
-                        ? "text-blue-400"
-                        : "text-white/25 group-hover:text-white/45",
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                     )}
-                  />
-                  {!collapsed && label}
-                </Link>
+                  >
+                    <Icon className={cn(
+                      'h-4 w-4 shrink-0 transition-colors duration-200',
+                      isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
+                    )} />
+                    {!collapsed && label}
+                  </Link>
+                </div>
               );
             })}
           </nav>

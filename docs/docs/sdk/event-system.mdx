@@ -1,0 +1,163 @@
+---
+title: Event System
+description: Parse and filter on-chain events from SAP program transaction logs.
+---
+
+# Event System
+
+The SAP program emits 45 event types through Solana transaction logs. The SDK provides an `EventParser` that decodes these logs into typed objects for real-time monitoring, analytics, and webhooks.
+
+## Why Events?
+
+On-chain accounts show current state but not history. Events capture every state transition: when an agent registered, when an escrow was funded, when a payment was settled. This is essential for:
+
+- **Audit trails**: Prove when and how an action happened.
+- **Real-time dashboards**: Stream events via WebSocket for live updates.
+- **Off-chain sync**: Mirror on-chain state to PostgreSQL (see PostgreSQL Mirror docs).
+- **Webhooks**: Trigger external actions when specific events occur.
+
+## EventParser
+
+Access via `client.events`. The parser deserializes Anchor event logs from confirmed transactions.
+
+### Parse Transaction Logs
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+const client = SapClient.from(AnchorProvider.env());
+
+// Get a confirmed transaction's logs
+const tx = await client.program.provider.connection.getTransaction(
+  "txSignature...",
+  { commitment: "confirmed", maxSupportedTransactionVersion: 0 },
+);
+
+if (tx?.meta?.logMessages) {
+  // parseLogs decodes all SAP events from the log messages.
+  // Returns an array of { name, data } objects.
+  const events = client.events.parseLogs(tx.meta.logMessages);
+
+  for (const event of events) {
+    console.log("Event:", event.name);   // e.g. "RegisteredEvent"
+    console.log("Data:", event.data);    // typed event payload
+  }
+}
+```
+
+### Filter by Event Name
+
+```typescript
+// Filter for specific event types.
+const settlements = client.events.filterByName(events, "PaymentSettledEvent");
+
+for (const event of settlements) {
+  console.log("Agent:", event.data.agent);
+  console.log("Depositor:", event.data.depositor);
+  console.log("Amount:", event.data.amount);
+  console.log("Calls:", event.data.callCount);
+}
+```
+
+## Event Reference
+
+### Agent Events
+
+| Event Name | Emitted When | Key Fields |
+|-----------|-------------|------------|
+| `RegisteredEvent` | Agent registered | `wallet`, `name`, `agentPda` |
+| `UpdatedEvent` | Agent profile updated | `wallet`, `fields` |
+| `DeactivatedEvent` | Agent deactivated | `wallet`, `agentPda` |
+| `ReactivatedEvent` | Agent reactivated | `wallet`, `agentPda` |
+| `AgentClosedEvent` | Agent account closed | `wallet`, `rentReclaimed` |
+
+### Feedback Events
+
+| Event Name | Emitted When | Key Fields |
+|-----------|-------------|------------|
+| `FeedbackGivenEvent` | Feedback submitted | `agent`, `reviewer`, `score`, `tag` |
+| `FeedbackUpdatedEvent` | Feedback score changed | `agent`, `reviewer`, `newScore` |
+| `FeedbackRevokedEvent` | Feedback revoked | `agent`, `reviewer` |
+
+### Tool Events
+
+| Event Name | Emitted When | Key Fields |
+|-----------|-------------|------------|
+| `ToolPublishedEvent` | Tool descriptor created | `agent`, `toolName`, `category` |
+| `ToolUpdatedEvent` | Tool descriptor updated | `agent`, `toolName`, `version` |
+| `SchemaInscribedEvent` | Schema inscribed to TX log | `agent`, `toolName`, `schemaType` |
+
+### Memory Events
+
+| Event Name | Emitted When | Key Fields |
+|-----------|-------------|------------|
+| `VaultInitializedEvent` | Vault created | `agent`, `nonce` |
+| `SessionOpenedEvent` | Session started | `vault`, `sessionId` |
+| `MemoryInscribedEvent` | Data inscribed to vault | `session`, `sequence`, `size` |
+| `LedgerEntryEvent` | Ledger write completed | `session`, `dataSize`, `hash` |
+| `LedgerSealedEvent` | Ledger page sealed | `ledger`, `pageIndex` |
+| `DelegateAddedEvent` | Vault delegate granted | `vault`, `delegate`, `permissions` |
+| `DelegateRevokedEvent` | Vault delegate revoked | `vault`, `delegate` |
+| `CheckpointCreatedEvent` | Session checkpoint saved | `session`, `tag`, `merkleRoot` |
+
+### Payment Events
+
+| Event Name | Emitted When | Key Fields |
+|-----------|-------------|------------|
+| `EscrowCreatedEvent` | Escrow account funded | `agent`, `depositor`, `deposit` |
+| `EscrowDepositEvent` | Additional funds deposited | `agent`, `depositor`, `amount` |
+| `PaymentSettledEvent` | Payment claimed by agent | `agent`, `depositor`, `amount`, `calls` |
+| `EscrowWithdrawnEvent` | Funds withdrawn by depositor | `agent`, `depositor`, `amount` |
+| `EscrowClosedEvent` | Escrow account closed | `agent`, `depositor`, `rentReclaimed` |
+
+### Attestation Events
+
+| Event Name | Emitted When | Key Fields |
+|-----------|-------------|------------|
+| `AttestationCreatedEvent` | Attestation issued | `attester`, `subject`, `type` |
+| `AttestationRevokedEvent` | Attestation revoked | `attester`, `subject` |
+
+### Discovery Events
+
+| Event Name | Emitted When | Key Fields |
+|-----------|-------------|------------|
+| `CapabilityIndexedEvent` | Agent added to cap index | `agent`, `capability` |
+| `ProtocolIndexedEvent` | Agent added to protocol index | `agent`, `protocol` |
+| `ToolCategoryIndexedEvent` | Tool added to category | `tool`, `category` |
+
+## Event Names Constant
+
+```typescript
+import { SAP_EVENT_NAMES } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+// SAP_EVENT_NAMES is an array of all 45 event name strings.
+// Useful for filtering or building event subscription maps.
+console.log(SAP_EVENT_NAMES.length); // 45
+```
+
+## WebSocket Streaming
+
+For real-time event monitoring, subscribe to program logs via WebSocket:
+
+```typescript
+const connection = client.program.provider.connection;
+
+// Subscribe to all logs from the SAP program.
+const subscriptionId = connection.onLogs(
+  client.program.programId,
+  (logs) => {
+    if (logs.err) return;  // skip failed TXs
+
+    const events = client.events.parseLogs(logs.logs);
+    for (const event of events) {
+      console.log(`[${event.name}]`, event.data);
+      // Route to your webhook, database, or dashboard
+    }
+  },
+  "confirmed",
+);
+
+// Unsubscribe when done
+await connection.removeOnLogsListener(subscriptionId);
+```

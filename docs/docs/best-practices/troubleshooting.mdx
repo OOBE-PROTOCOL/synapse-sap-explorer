@@ -1,0 +1,231 @@
+---
+title: Troubleshooting & FAQ
+description: Common errors, debugging strategies, and frequently asked questions for SAP SDK.
+---
+
+# Troubleshooting & FAQ
+
+## Common Errors
+
+### `AgentNotActive` (error 6001)
+
+**Symptom:** Agent operations fail with "Agent not found".
+
+**Cause:** The wallet has never registered an agent, or the agent was closed.
+
+**Fix:**
+```typescript
+const agent = await client.agent.fetchNullable(agentPda);
+if (!agent) {
+  // Agent doesn't exist — register it
+  await client.builder
+    .agent("MyAgent")
+    .description("Service agent")
+    .register();
+}
+```
+
+---
+
+### `EscrowInsufficientBalance` (error 6010)
+
+**Symptom:** Settlement fails with insufficient balance.
+
+**Cause:** The escrow does not have enough tokens for the settlement amount.
+
+**Fix:**
+```typescript
+import { BN } from "@coral-xyz/anchor";
+
+const balance = await client.x402.getBalance(agentPda, depositorWallet);
+if (balance.lt(new BN(requiredAmount))) {
+  // Top up the escrow before settling
+  await client.escrow.deposit(
+    agentPda,
+    depositorWallet,
+    new BN(topUpAmount),
+  );
+}
+```
+
+---
+
+### `VaultAlreadyInitialized` (error 6015)
+
+**Symptom:** `initVault` fails on second call.
+
+**Cause:** A vault with this nonce already exists for the agent.
+
+**Fix:** Check existence before initializing, or use a different nonce:
+```typescript
+import { deriveVault } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const [vaultPda] = deriveVault(agentPda, 0);
+const vault = await client.vault.fetchNullable?.(vaultPda);
+if (!vault) {
+  await client.vault.initVault(0); // nonce = 0
+}
+```
+
+---
+
+### `SessionClosed` (error 6017)
+
+**Symptom:** Inscriptions fail with "session closed".
+
+**Cause:** The session was already closed (either manually or by a delegate).
+
+**Fix:** Open a new session with a different session ID:
+```typescript
+await client.vault.openSession(vaultPda, "session-v2");
+```
+
+---
+
+### `DataExceedsMaxWriteSize` (error 6018)
+
+**Symptom:** Inscribe or ledger write fails.
+
+**Cause:** Data exceeds the 750-byte maximum per write.
+
+**Fix:** Split the data into multiple writes:
+```typescript
+import { sha256, hashToArray, LIMITS } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const MAX = LIMITS.MAX_INSCRIPTION_SIZE; // 750 bytes
+const chunks: Buffer[] = [];
+
+for (let i = 0; i < data.length; i += MAX) {
+  chunks.push(data.slice(i, i + MAX));
+}
+
+for (const chunk of chunks) {
+  await client.vault.inscribe(
+    sessionPda,
+    chunk,
+    hashToArray(sha256(chunk)),
+  );
+}
+```
+
+---
+
+### `RingBufferOverflow` (error 6019)
+
+**Symptom:** Ledger write fails with "seal before writing more".
+
+**Cause:** The ring buffer is full (4096 entries). Must seal the current page first.
+
+**Fix:**
+```typescript
+import { deriveLedger, LIMITS } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const [ledgerPda] = deriveLedger(sessionPda);
+const ledger = await client.ledger.fetch(ledgerPda);
+
+if (ledger.numEntries >= LIMITS.RING_CAPACITY) {
+  // Seal the current page before writing more
+  await client.ledger.seal(ledgerPda, ledger.numPages);
+}
+
+// Now safe to write
+await client.ledger.write(sessionPda, data, contentHash);
+```
+
+---
+
+### SAP Network Mismatch (x402 error)
+
+**Symptom:** x402 payment call rejected by the agent.
+
+**Cause:** Your `X-Payment-Network` header does not match the agent's expected network format.
+
+**Fix:** Use the network normalizer:
+```typescript
+import {
+  isNetworkEquivalent,
+  getNetworkGenesisHash,
+} from "@oobe-protocol-labs/synapse-sap-sdk";
+
+// If the agent requires genesis-hash form:
+const network = getNetworkGenesisHash("mainnet");
+// → "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+```
+
+---
+
+### WebSocket 400 Errors
+
+**Symptom:** SPL token operations fail with HTTP 400 on WebSocket.
+
+**Cause:** Authenticated RPC rejects WebSocket connections for token subscriptions.
+
+**Fix:** Use the dual-connection strategy:
+```typescript
+import { createDualConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const { primary, fallback } = createDualConnection({
+  primaryUrl: "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY",
+  // fallback auto-detected from cluster
+});
+```
+
+See the [RPC & Network Configuration](../best-practices/rpc-network) guide for details.
+
+---
+
+### "Zod is required" Error
+
+**Symptom:** `[SAP SDK] Zod is required for schema validation. Install it: npm install zod`
+
+**Cause:** You imported a Zod schema factory without installing the `zod` peer dependency.
+
+**Fix:**
+```bash
+npm install zod
+```
+
+Zod is optional. It is only required if you import schema validation utilities from the SDK.
+
+---
+
+## Quick Error Code Reference
+
+| Code | Name | Meaning |
+|------|------|---------|
+| 6000 | `AgentAlreadyRegistered` | This wallet already has a registered agent |
+| 6001 | `AgentNotFound` | No agent PDA exists for this wallet |
+| 6009 | `EscrowExpired` | Escrow past its `expiresAt` timestamp |
+| 6010 | `EscrowInsufficientBalance` | Balance too low for settlement |
+| 6015 | `VaultAlreadyInitialized` | Vault with this nonce already exists |
+| 6017 | `SessionClosed` | Session is closed, no further writes |
+| 6018 | `DataExceedsMaxWriteSize` | Data exceeds 750-byte limit |
+| 6019 | `RingBufferOverflow` | Ring buffer full, seal before writing |
+
+---
+
+## FAQ
+
+**Q: Can I use the SDK without Anchor?**
+
+No. The SDK requires `@coral-xyz/anchor` as a peer dependency. It uses Anchor providers and program interfaces under the hood. You can create a minimal provider with `SapConnection.fromKeypair()`.
+
+**Q: What Solana clusters are supported?**
+
+Mainnet-beta, devnet, and localnet. Custom clusters work if you provide the RPC URL.
+
+**Q: Do I need PostgreSQL?**
+
+No. PostgreSQL is optional. The `pg` package is a peer dependency — only install it if you want off-chain mirroring and analytics. See the [PostgreSQL Mirror](../sdk/postgres-mirror) guide.
+
+**Q: How much SOL does registration cost?**
+
+Agent registration costs ~0.003–0.005 SOL in rent (reclaimable on close). Tools cost ~0.001–0.002 SOL each. Escrows cost ~0.002 SOL for the account plus whatever deposit amount. See the [Cost Optimization](../best-practices/cost-optimization) guide for details.
+
+**Q: Can multiple wallets control one agent?**
+
+No. Each agent PDA is derived from a single wallet. Use the Vault Delegation system to grant hot-wallet access to specific operations. See the [Security](../best-practices/security) guide.
+
+**Q: How do I migrate from v0.5.x to v0.6.0?**
+
+No breaking changes. v0.6.0 is fully backward compatible. New features (endpoint types, network normalizer, RPC strategy, Zod schemas, CLI) are all additive. New optional peer dependency: `zod` (only if using schema validation).
