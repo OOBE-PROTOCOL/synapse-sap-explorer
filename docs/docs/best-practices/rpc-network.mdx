@@ -5,7 +5,15 @@ description: Optimal RPC setup, Synapse Gateway, connection factories, and rate 
 
 # RPC and Network Configuration
 
-Reliable RPC connectivity is the foundation of any SAP integration. This guide covers connection setup, the Synapse Gateway, rate limiting strategies, and production-grade configuration.
+Reliable RPC connectivity is the foundation of any SAP integration. Every operation the SDK performs, whether reading an agent's identity or sending a transaction, goes through an RPC node. Choosing the right node, configuring retry logic, and understanding commitment levels directly affect the reliability and speed of your application.
+
+This guide covers connection setup, cluster selection, rate limiting strategies, and production-grade configuration.
+
+## What is an RPC Node?
+
+For readers new to Solana: an RPC node is a server that provides access to the blockchain. When you call `client.agent.fetch()`, the SDK sends an HTTP request to an RPC node, which reads the blockchain and returns the data. When you call `client.agent.register()`, the SDK sends a signed transaction to the RPC node, which forwards it to the Solana network for processing.
+
+Public RPC nodes (like `api.devnet.solana.com`) are free but rate-limited. For production applications, dedicated RPC providers (Helius, Triton, QuickNode) offer higher throughput, lower latency, and better reliability.
 
 ## Connection Factories
 
@@ -114,13 +122,17 @@ async function retryWithBackoff<T>(
 
 ## Commitment Levels
 
+Commitment levels determine how "confirmed" a transaction needs to be before the RPC node considers it done. This is a concept unique to blockchains that does not exist in traditional databases.
+
 | Level | Finality | Latency | Recommended For |
-|-------|----------|---------|-----------------|
+|-------|----------|---------|----------------|
 | `processed` | Optimistic | ~400ms | Read-only queries |
 | `confirmed` | Supermajority | ~1s | Default for writes |
 | `finalized` | Max finality | ~12s | Payment settlement |
 
-Use `confirmed` as the default. Only escalate to `finalized` when verifying payment settlement or closing escrows.
+**What these mean in practice:** `processed` is like checking your bank balance on the app: it shows the latest state, but a recent transaction might still be reversed. `confirmed` is like receiving a receipt: the transaction has been validated by 2/3 of validators. `finalized` is like seeing the transaction on your monthly statement: it is permanent and irreversible.
+
+Use `confirmed` as the default. Only escalate to `finalized` when verifying payment settlement or closing escrows where absolute certainty is required.
 
 ## Production Checklist
 

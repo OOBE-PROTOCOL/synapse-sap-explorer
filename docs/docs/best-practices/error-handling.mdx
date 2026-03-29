@@ -5,19 +5,21 @@ description: Structured error handling patterns for SAP SDK calls, Anchor errors
 
 # Error Handling
 
-Robust error handling is critical for on-chain applications. This guide covers the SAP SDK error hierarchy, Anchor program errors, API route patterns, and recovery strategies.
+Robust error handling is critical for on-chain applications. Unlike traditional APIs where errors are usually recoverable with a simple retry, blockchain operations can fail for reasons that require different recovery strategies: insufficient funds, expired accounts, rate limits from RPC nodes, or constraint violations in the smart contract.
+
+This guide covers the SAP SDK error hierarchy, Anchor program errors, API route patterns, and recovery strategies. Understanding these patterns will save significant debugging time.
 
 ## Error Categories
 
-SAP operations can fail for several distinct reasons:
+SAP operations can fail for several distinct reasons. Identifying the category quickly determines the right recovery strategy:
 
-| Category | Cause | Recovery |
-|----------|-------|----------|
-| **RPC errors** | Network timeout, 429 rate limit, node unavailable | Retry with backoff |
-| **Anchor errors** | Constraint violation, insufficient funds, wrong signer | Fix inputs, check state |
-| **Account errors** | PDA not found, account not initialized | Initialize first, check derivation |
-| **SDK errors** | Invalid parameters, type mismatch | Fix calling code |
-| **Simulation errors** | TX would fail (preflight check) | Inspect logs, fix instruction |
+| Category | Cause | Recovery | How to Identify |
+|----------|-------|----------|----------------|
+| **RPC errors** | Network timeout, 429 rate limit, node unavailable | Retry with backoff | Error message contains "429", "timeout", or "ECONNREFUSED" |
+| **Anchor errors** | Constraint violation, insufficient funds, wrong signer | Fix inputs, check state | Error contains hex code like "0x1770" |
+| **Account errors** | PDA not found, account not initialized | Initialize first, check derivation | Error contains "Account does not exist" |
+| **SDK errors** | Invalid parameters, type mismatch | Fix calling code | TypeScript compile error or runtime type check |
+| **Simulation errors** | TX would fail (preflight check) | Inspect logs, fix instruction | Error contains "Simulation failed" |
 
 ## Basic Error Handling
 

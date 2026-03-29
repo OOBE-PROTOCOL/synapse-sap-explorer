@@ -7,18 +7,35 @@ description: Escrow-based micropayments for AI agent calls. Pre-fund, call with 
 
 x402 turns every agent call into a verifiable financial transaction. No invoices, no subscriptions. An on-chain escrow settles per-call (or in batches) with cryptographic proof of service.
 
+## Why x402?
+
+The fundamental problem with paying for AI services today is that the most natural unit of work (a single API call) costs fractions of a cent, but traditional payment systems have minimum fees that make this uneconomical. Stripe charges $0.30 per transaction. For an AI call that costs $0.001, the payment processing fee would be 300 times the service cost.
+
+SAP solves this with an escrow-based approach inspired by the HTTP 402 "Payment Required" status code (hence the name x402):
+
+1. The client deposits funds into a smart contract escrow (one transaction)
+2. The client makes many API calls, each accompanied by a cryptographic header proving escrow ownership
+3. The agent settles the calls on-chain, claiming the exact amount owed
+4. Unused funds are withdrawable by the client at any time
+
+This model means one deposit transaction can fund hundreds or thousands of API calls, spreading the transaction cost across all of them. The effective per-call overhead approaches zero.
+
 ## Payment Flow
+
+The flow is designed so that neither party has to trust the other. The smart contract enforces the rules.
 
 ```
 Client                                  Agent
   │                                       │
-  │  1. Discover pricing                  │
-  │  2. Create escrow + deposit funds     │
-  │  3. Call agent with x402 headers      │
-  │  4. Agent serves the request          │
-  │  5. Agent settles on-chain            │
-  │  6. Client verifies settlement TX     │
+  │  1. Discover pricing                  │  (read the agent's PDA)
+  │  2. Create escrow + deposit funds     │  (one Solana TX)
+  │  3. Call agent with x402 headers      │  (standard HTTP request)
+  │  4. Agent serves the request          │  (off-chain computation)
+  │  5. Agent settles on-chain            │  (claims payment from escrow)
+  │  6. Client verifies settlement TX     │  (on-chain, auditable)
 ```
+
+**Trust model:** The client's money is locked in a smart contract, not sent to the agent directly. The agent can only claim payment by calling the `settle` instruction, which verifies the escrow exists and has sufficient balance. The client can withdraw unused funds at any time. Neither party can cheat the other.
 
 The client side uses `client.x402` (high-level) or `client.escrow` (low-level). The agent side calls `settle` or `settleBatch` after serving requests.
 
@@ -28,7 +45,7 @@ Access via `client.x402`. This registry wraps the full payment lifecycle.
 
 ### Estimate Cost
 
-Before committing funds, estimate how much N calls will cost, including volume-curve discounts:
+Before committing funds, estimate how much N calls will cost, including volume-curve discounts. This helps clients budget accurately and avoid over-depositing (which locks up capital) or under-depositing (which interrupts service):
 
 ```typescript
 const estimate = await client.x402.estimateCost(agentWallet, 100);
@@ -58,7 +75,7 @@ const ctx = await client.x402.preparePayment(agentWallet, {
 
 ### Build Payment Headers
 
-Generate HTTP headers to include in every request to the agent:
+Generate HTTP headers to include in every request to the agent. These headers prove that the caller has a funded escrow, allowing the agent to serve the request with confidence that payment is guaranteed:
 
 ```typescript
 const headers = client.x402.buildPaymentHeaders(ctx);
@@ -69,6 +86,8 @@ const response = await fetch(agentEndpoint, {
   body: JSON.stringify({ prompt: "Analyze SOL/USDC liquidity" }),
 });
 ```
+
+**How the agent validates these headers:** The agent reads the `X-Payment-Escrow` header, looks up the escrow account on-chain, and verifies that it has sufficient balance for at least one more call. If the escrow is expired or depleted, the agent can return HTTP 402 (Payment Required) without performing any work.
 
 ### X402 Headers
 
@@ -124,7 +143,9 @@ if (balance) {
 
 ## Volume Curves
 
-Volume curves implement automatic tiered pricing. As cumulative calls increase, the effective price per call decreases.
+Volume curves implement automatic tiered pricing. As cumulative calls increase, the effective price per call decreases. This is the on-chain equivalent of bulk discounts at a wholesale store: buy more, pay less per unit.
+
+The critical difference from traditional discount structures is that volume curves are **enforced by the smart contract**. The agent cannot decide to revoke the discount after the fact, and the consumer automatically receives the lower price once they cross the threshold. There is no need to negotiate or apply a coupon code.
 
 ```typescript
 interface VolumeCurveBreakpoint {
@@ -150,7 +171,9 @@ Up to 5 breakpoints per volume curve are supported.
 
 ## SPL Token Escrows
 
-Escrows support any SPL token, not just native SOL. Pass the token mint and provide the required Associated Token Accounts.
+Escrows support any SPL token, not just native SOL. This is important because many DeFi operations are denominated in stablecoins like USDC. An agent that provides financial analysis might naturally charge in USDC to avoid exchange rate volatility for both parties.
+
+Pass the token mint and provide the required Associated Token Accounts:
 
 ```typescript
 const tokenMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC

@@ -5,21 +5,43 @@ description: On-chain infrastructure for AI agents on Solana. Verifiable identit
 
 # Synapse Agent Protocol
 
-The Synapse Agent Protocol (SAP) is a fully on-chain infrastructure layer for AI agents on Solana. Every agent receives a verifiable, permissionless identity stored as a Program Derived Address (PDA) that encodes its capabilities, pricing, reputation, tool schemas, and memory state.
+The Synapse Agent Protocol (SAP) is the infrastructure layer that gives AI agents a real, verifiable identity on the Solana blockchain.
 
-There are no centralized registries, no off-chain dependencies for identity, and no custodial intermediaries for payments. The protocol is deployed at program address `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` on mainnet-beta.
+Think of it this way: today, when you interact with an AI service, you are trusting that service to be who it says it is, to charge what it promised, and to handle your data responsibly. There is no way to independently verify any of those claims. SAP changes that. Every agent gets an on-chain identity that anyone can inspect, with pricing that is enforced by smart contracts, memory that is cryptographically verifiable, and reputation that cannot be faked.
+
+## Why Does This Matter?
+
+The AI industry is moving toward a world where thousands of specialized agents work together. One agent handles your DeFi portfolio, another monitors on-chain activity, a third generates reports. But for this to work, agents need to **trust each other** and **be trusted by users**.
+
+Traditional approaches rely on centralized registries (a company decides which agents are "approved"), custodial payment processors (a middleman holds funds between parties), and opaque reputation systems (ratings that can be manipulated). SAP eliminates all three by moving everything to verifiable on-chain state.
+
+| Problem | Traditional Approach | SAP Approach |
+|---------|---------------------|--------------|
+| **Identity** | A company maintains a database of approved agents | Every wallet can register an agent. Identity lives on Solana, readable by anyone. |
+| **Trust** | Platform reviews and star ratings | On-chain feedback, attestations, and transparent call metrics |
+| **Payments** | Credit cards, subscriptions, invoices | Pre-funded escrows that settle per-call with cryptographic proof |
+| **Memory** | Proprietary cloud storage | On-chain ring buffers and encrypted vaults, owned by the agent |
+| **Discovery** | Centralized app stores | On-chain capability and protocol indexes, queryable by anyone |
 
 ## What SAP Provides
 
-| Domain | Description |
-|--------|-------------|
-| **Agent Identity** | On-chain PDA per wallet with name, description, capabilities, pricing, and metadata |
-| **Reputation** | Trustless feedback system with scores, tags, and revocation |
-| **Micropayments** | x402 escrow-based per-call settlement with volume curves |
-| **Memory** | Two systems: a cost-efficient ring-buffer Ledger and an encrypted Vault |
-| **Tool Registry** | On-chain tool descriptors with JSON schema hashing and invocation tracking |
-| **Discovery** | Capability, protocol, and category indexes for network-wide agent search |
-| **Attestations** | Web of trust with cross-agent verification and expiry |
+SAP is organized into seven interconnected domains:
+
+| Domain | What It Does | Why It Exists |
+|--------|-------------|---------------|
+| **Agent Identity** | On-chain PDA per wallet with name, capabilities, pricing, and metadata | So anyone can verify who an agent is and what it offers, without trusting a third party |
+| **Reputation** | Trustless feedback system with scores, tags, and revocation | So agents earn trust through verifiable history, not marketing claims |
+| **Micropayments** | x402 escrow-based per-call settlement with volume curves | So agents can charge fractions of a cent per call, without payment processors taking 30% |
+| **Memory** | Two systems: a cost-efficient ring-buffer Ledger and an encrypted Vault | So agents can store conversation context on-chain, verifiably and at near-zero cost |
+| **Tool Registry** | On-chain tool descriptors with JSON schema hashing and invocation tracking | So consumers know exactly what inputs a tool expects and can verify its schema has not changed |
+| **Discovery** | Capability, protocol, and category indexes for network-wide search | So an agent looking for "a Jupiter swap tool" can find one in a single query, without scanning the entire network |
+| **Attestations** | Web of trust with cross-agent verification and expiry | So agents can vouch for each other, building a decentralized reputation graph |
+
+## A Real-World Analogy
+
+Imagine a marketplace where every vendor has a publicly visible license plate showing their name, what they sell, their prices, and every review they have ever received. Customers can deposit money into a shared escrow that automatically pays the vendor for each item delivered. The vendor cannot overcharge, the customer cannot avoid paying, and every transaction is recorded in a public ledger.
+
+That is what SAP does for AI agents.
 
 ## Protocol Constants
 
@@ -34,13 +56,17 @@ There are no centralized registries, no off-chain dependencies for identity, and
 
 ## Quick Start
 
+In just a few lines of code, you can register an agent and start using on-chain memory:
+
 ```typescript
 import { SapClient } from "@synapse-sap/sdk";
 import { AnchorProvider } from "@coral-xyz/anchor";
 
+// Connect to the protocol
 const client = SapClient.from(AnchorProvider.env());
 
-// Register an agent
+// Register an agent: this creates an on-chain identity
+// that anyone on Solana can verify
 await client.agent.register({
   name: "TradeBot",
   description: "AI-powered Jupiter swap agent",
@@ -50,17 +76,20 @@ await client.agent.register({
 });
 
 // Start a memory session and write data
+// This is stored on-chain in a cost-efficient ring buffer
 const session = await client.session.start("conv-001");
 await client.session.write(session, "User requested SOL to USDC swap");
 ```
 
+After running this code, your agent exists on Solana with a verifiable identity. Anyone can look up its capabilities, read its pricing, and verify its history.
+
 ## Documentation Structure
 
-This documentation is organized into six sections:
+This documentation is organized to take you from understanding the concepts to building production agents:
 
-- **Synapse Agent Protocol**: Core protocol concepts, architecture, and on-chain account types
-- **SDK Reference**: TypeScript SDK usage, client setup, module APIs, and PDA derivation
-- **Explorer**: How the SAP Explorer reads and presents on-chain data
-- **Agent Skills**: Consumer and merchant role guides for building on SAP
-- **Working Examples**: Complete, runnable code for common workflows
-- **Best Practices**: Production patterns for RPC, error handling, cost, and security
+- **Synapse Agent Protocol**: Start here. Core concepts, architecture, and how the on-chain infrastructure works. You do not need to be a developer to read this section.
+- **SDK Reference**: The TypeScript SDK that connects your code to the protocol. Installation, client setup, module APIs, and PDA derivation.
+- **Agent Skills**: Practical guides for the two main roles: consuming services from other agents, and offering services as a merchant.
+- **Working Examples**: Complete, runnable code for the five most common workflows. Copy, paste, adapt.
+- **Explorer**: How the SAP Explorer web application reads and presents on-chain data.
+- **Best Practices**: Production patterns for RPC configuration, error handling, cost optimization, and security.

@@ -7,6 +7,16 @@ description: Strategies for minimizing on-chain costs in SAP integrations, inclu
 
 Every Solana transaction incurs a base fee of 5,000 lamports (~$0.001). On-chain account storage costs approximately 0.00696 SOL per KB of rent-exempt allocation. This guide covers strategies to minimize total cost.
 
+## Understanding Solana Costs
+
+There are two types of on-chain costs:
+
+1. **Transaction fees**: A flat fee (~0.000005 SOL) paid every time you send a transaction. This covers the computation the network performs to process your instruction. It is unavoidable but extremely cheap.
+
+2. **Account rent**: A deposit proportional to the size of the data you store on-chain. This deposit is fully refundable when you close the account. Rent exists because Solana validators need to keep your data in memory, and larger accounts consume more of that shared resource.
+
+SAP is designed to minimize both. The Ledger system avoids rent for data storage by using transaction logs. The builder batches multiple operations into single transactions. And every account type supports a `close()` instruction that reclaims the rent deposit.
+
 ## Storage Cost Reference
 
 | Account Type | Approximate Size | Rent |

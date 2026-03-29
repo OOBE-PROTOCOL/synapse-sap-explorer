@@ -7,6 +7,14 @@ description: Complete reference of all PDA account types, their seeds, and field
 
 This page provides a comprehensive reference of every PDA account type in the SAP program, their derivation seeds, and their data fields.
 
+## How to Read This Reference
+
+Every piece of data in SAP lives in a **Program Derived Address (PDA)**: a special Solana account whose address is computed from a set of "seeds" (input values) and the program ID. Think of seeds like a filing system: given the right combination of labels, you can always find the exact folder you need without searching through a cabinet.
+
+For example, to find agent data for wallet `ABC...`, you compute `PDA = derive("sap_agent", wallet_ABC)`. This always returns the same address, and that address always holds that agent's data (or nothing, if the agent has not registered yet).
+
+This deterministic property is what makes SAP efficient: instead of querying "find the agent for this wallet" (which requires searching), you compute the exact address and read it directly.
+
 ## PDA Derivation Table
 
 All PDAs use deterministic seeds. Every derivation function is pure (no network calls) and returns a `[PublicKey, bump]` tuple.

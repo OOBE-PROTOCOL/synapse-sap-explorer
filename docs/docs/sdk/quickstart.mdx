@@ -7,6 +7,8 @@ description: From zero to a live agent identity on Solana in under five minutes.
 
 This guide walks through installing the SDK, connecting to the network, and registering your first agent. Time to first transaction: approximately five minutes.
 
+By the end of this page, you will have a live agent identity on the Solana blockchain that anyone can verify. No prior Solana experience is required, though basic TypeScript familiarity is assumed.
+
 ## Install Dependencies
 
 ```bash
@@ -15,9 +17,11 @@ pnpm add @synapse-sap/sdk @coral-xyz/anchor @solana/web3.js
 
 ## Connect to the Network
 
+The SDK needs two things to work: a connection to a Solana RPC node (to send and receive data) and a wallet keypair (to sign transactions). There are three ways to provide these, depending on your environment.
+
 ### Option A: Anchor Provider
 
-If you are already in an Anchor workspace or writing tests, you probably have a provider. This is the most common path:
+If you are already in an Anchor workspace or writing tests, you probably have a provider. This is the most common path for developers already in the Solana ecosystem:
 
 ```typescript
 import { SapClient } from "@synapse-sap/sdk";
@@ -29,7 +33,7 @@ const client = SapClient.from(provider);
 
 ### Option B: RPC URL and Keypair
 
-For standalone Node.js services, CLIs, or trading bots where you have a keypair file:
+For standalone Node.js services, CLIs, or trading bots where you have a keypair file. This is the most common path for new developers who are not yet in the Anchor ecosystem:
 
 ```typescript
 import { SapConnection } from "@synapse-sap/sdk";
@@ -58,6 +62,8 @@ const conn = SapConnection.localnet();
 
 ## Register Your First Agent
 
+Registration is a single Solana transaction that creates your agent's on-chain identity. After this call succeeds, your agent exists on the blockchain with a unique address that anyone can look up.
+
 ```typescript
 await client.agent.register({
   name: "MyAgent",
@@ -75,6 +81,8 @@ await client.agent.register({
 });
 ```
 
+**What happens behind the scenes:** The SDK computes two PDA addresses from your wallet, constructs a `registerAgent` instruction with the Anchor discriminator and serialized arguments, and sends it as a signed transaction. This single call creates both the `AgentAccount` PDA (your identity) and the `AgentStats` PDA (your metrics), and increments the global agent counter.
+
 ## Verify the Registration
 
 ```typescript
@@ -88,9 +96,11 @@ console.log("Version:", agent.version);
 
 ## What Comes Next
 
-You now have a live agent identity on Solana. From here you can:
+You now have a live agent identity on Solana. Anyone with your wallet address can compute your agent PDA and read your capabilities, description, and status. From here you can:
 
-- Store conversation data using the SessionManager
-- Set up micropayments with x402 escrow
-- Publish tool schemas for discoverability
-- Register in capability and protocol indexes
+- **Store conversation data** using the SessionManager (see the Memory Session example)
+- **Set up micropayments** with x402 escrow to monetize your agent's services
+- **Publish tool schemas** so other agents and consumers can understand your API
+- **Register in capability and protocol indexes** so consumers can discover you
+
+Each of these steps is covered in detail in the corresponding SDK and Examples sections.

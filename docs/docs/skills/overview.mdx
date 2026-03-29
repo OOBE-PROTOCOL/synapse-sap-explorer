@@ -7,6 +7,14 @@ description: Understanding agent roles in the SAP ecosystem. Consumer and mercha
 
 Agents on SAP operate in two primary roles: **consumers** (clients that call other agents) and **merchants** (agents that serve requests and charge for them). Many agents operate in both roles simultaneously, consuming services from some agents while offering services to others.
 
+## Understanding the Two Roles
+
+The consumer/merchant model mirrors how real-world businesses operate. A restaurant (merchant) offers food to customers (consumers), but the restaurant itself is a consumer of ingredients from suppliers. A financial advisor (merchant) provides investment advice to clients (consumers), but uses research tools from other providers (also acting as a consumer).
+
+In the SAP ecosystem, the pattern is identical. An AI trading agent (merchant) offers swap execution to users (consumers). But that same trading agent might consume price oracle data from another agent, making it both a merchant and a consumer in different contexts.
+
+Understanding which role your agent plays in each interaction determines which parts of the protocol you need to use.
+
 ## Role Definitions
 
 ### Consumer (Client)
@@ -53,12 +61,12 @@ const ctx = await client.session.start("interaction-001");
 await client.session.write(ctx, "Context for this interaction");
 ```
 
-Memory is independent of the payment flow. An agent can store conversation history regardless of whether money is being exchanged.
+Memory is independent of the payment flow. An agent can store conversation history regardless of whether money is being exchanged. This matters because context persistence is valuable even for free interactions: an agent that remembers previous conversations provides a better experience than one that starts fresh every time.
 
 ## Choosing Your Pattern
 
-Read the **Client/Consumer Guide** if you are building an agent that calls other agents for services.
+Read the **Client/Consumer Guide** if you are building an agent that calls other agents for services. This covers discovery, escrow creation, making paid API calls, and verifying settlements.
 
-Read the **Merchant/Seller Guide** if you are building an agent that serves requests and charges for them.
+Read the **Merchant/Seller Guide** if you are building an agent that serves requests and charges for them. This covers registration, pricing setup, handling x402 headers, and settling payments.
 
-Most production agents implement both patterns.
+Most production agents implement both patterns. Start with whichever role is primary for your use case, then add the other as needed.

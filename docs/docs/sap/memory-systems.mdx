@@ -7,6 +7,17 @@ description: Two on-chain memory architectures for agent conversation data. Ledg
 
 SAP provides two memory systems for persisting agent conversation data on-chain. They solve the same fundamental problem (durable, verifiable session memory) but with different tradeoffs.
 
+## Why On-Chain Memory?
+
+Traditional AI agents store conversation history in databases owned by the service provider. If the provider shuts down, changes their terms, or gets hacked, that data is lost or compromised. On-chain memory solves this by storing data directly on Solana, where it is:
+
+- **Owned by the agent**, not by a cloud provider
+- **Publicly verifiable**, so a consumer can prove what was discussed
+- **Durable**, lasting as long as the Solana blockchain itself
+- **Cost-efficient**, with writes as cheap as $0.001 per 200 operations
+
+The key challenge is that blockchain storage is expensive. Storing 1 KB on Solana costs approximately 0.007 SOL in rent. For an agent processing thousands of conversations, naively storing everything would be prohibitively expensive. SAP's two memory systems solve this through clever engineering.
+
 ## Comparison
 
 | | Ledger (recommended) | Vault (legacy) |
@@ -27,7 +38,13 @@ Use the Ledger via SessionManager for most workloads. Use Vault only when you ne
 
 The Ledger is a fixed-cost ring buffer optimized for high-frequency writes. After the one-time PDA creation (~0.032 SOL), every write costs only the Solana transaction fee (~0.000005 SOL) with zero additional rent. Data is written simultaneously to the ring buffer (for latest-read access) and the transaction log (for permanent storage).
 
+**The key insight:** Solana charges rent for account storage, but transaction logs are free to store permanently. The Ledger exploits this by keeping only a small rotating buffer in the account (for fast reads) while writing the permanent record into the transaction log (for archival). You get the best of both worlds: fast reads from the ring buffer, permanent storage from the TX logs, and near-zero cost per write.
+
 ### How It Works
+
+Imagine a whiteboard with space for 10 messages. When you fill it up, you erase the oldest message and write the new one in its place. That is a ring buffer. The whiteboard itself costs money to rent (the PDA), but writing on it is essentially free (just the transaction fee).
+
+Meanwhile, a camera takes a photo of every message before it can be erased (the transaction log). So even though the whiteboard only shows the latest 10 messages, the complete history is preserved in the photos.
 
 ```
 MemoryLedger PDA
@@ -76,6 +93,8 @@ await client.ledger.seal(sessionPda);
 
 Sealing creates a new `LedgerPage` PDA containing a snapshot of the current ring buffer, resets the ring buffer for new writes, and increments `numPages` on the ledger. Pages are immutable after creation.
 
+**When to seal:** Think of sealing as "saving a chapter." You would not save after every sentence (too expensive). Instead, you write an entire conversation, and seal when the conversation is complete. In practice, most agents seal once per user session, or once per day for high-volume services.
+
 ### Read and Decode
 
 ```typescript
@@ -96,6 +115,8 @@ await client.ledger.close(sessionPda);
 ## Vault
 
 The Vault provides encrypted, session-scoped memory with epoch-based pagination. Data is encrypted client-side with AES-256-GCM before being inscribed on-chain. The vault also supports hot-wallet delegation, allowing authorized delegates to inscribe data without the owner's signature.
+
+**When you need a Vault instead of a Ledger:** If your agent handles sensitive data (personal information, financial details, medical records), the data should not be readable by anyone scanning the blockchain. The Vault encrypts everything client-side before writing, so on-chain observers see only encrypted bytes. Only the holder of the encryption key can read the actual content.
 
 ### Initialize Vault
 
@@ -126,7 +147,9 @@ await client.vault.compactInscribe(sessionPda, vaultPda, {
 
 ### Delegation (Hot Wallets)
 
-Vaults support delegated access for scenarios where a hot wallet needs to write on behalf of the vault owner:
+Vaults support delegated access for scenarios where a hot wallet needs to write on behalf of the vault owner. This is essential for production services where you do not want your main keypair sitting on a server.
+
+**Real-world analogy:** A delegate is like giving a trusted employee access to a specific safe in your office. They can deposit items (write data) but only during business hours (expiry time), and you can revoke their access at any moment.
 
 ```typescript
 await client.vault.addDelegate(
@@ -154,6 +177,8 @@ For high-frequency writes, the ledger is orders of magnitude cheaper than the va
 
 ## Choosing Between Ledger and Vault
 
-**Use Ledger when** you need high-frequency writes, cost per write matters, data does not need to be encrypted on-chain, or you want the simplest API via SessionManager.
+**Use Ledger when** you need high-frequency writes, cost per write matters, data does not need to be encrypted on-chain, or you want the simplest API via SessionManager. This covers the vast majority of use cases: conversation logs, activity tracking, context storage for AI interactions.
 
 **Use Vault when** data must be encrypted on-chain (AES-256-GCM), you need hot-wallet delegation for backend services, you need epoch-based pagination with custom sequencing, or you are working with an existing Vault-based codebase.
+
+**If you are unsure, use the Ledger.** It is simpler, cheaper, and sufficient for most agent workloads. You can always add a Vault later for sensitive data without affecting your existing Ledger setup.

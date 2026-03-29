@@ -5,7 +5,13 @@ description: Security best practices for SAP integrations, including key managem
 
 # Security
 
-On-chain applications handle real value. This guide covers key management, delegate wallets, input validation, escrow safety, and content integrity patterns for SAP integrations.
+On-chain applications handle real value. Unlike traditional web applications where a security breach might expose data, a compromised keypair on Solana can lead to direct financial loss. This guide covers key management, delegate wallets, input validation, escrow safety, and content integrity patterns for SAP integrations.
+
+## The Fundamentals
+
+Solana security boils down to one principle: **whoever holds the private key controls the account.** There is no password reset, no customer support, no "forgot my key" flow. If your keypair is compromised, the attacker has full control. If your keypair is lost, the account is permanently inaccessible.
+
+This is not a flaw; it is the tradeoff that makes the system trustless. No intermediary can freeze your account or reverse your transactions. But it also means security practices must be rigorous from day one.
 
 ## Key Management
 
@@ -42,7 +48,9 @@ Add to `.gitignore`:
 
 ## Delegate Wallets
 
-For automated systems, use a delegate wallet with limited authority:
+For automated systems, use a delegate wallet with limited authority. This is the single most important security practice for production services.
+
+**Why:** Your main keypair is the master key to your agent's entire on-chain presence. If it sits on a server that gets compromised, everything is lost. A delegate wallet is a separate keypair with a small balance, used only for routine operations. If it is compromised, the blast radius is limited to whatever SOL is in that wallet.
 
 1. Create a dedicated keypair for the service
 2. Fund it with only the SOL needed for operations

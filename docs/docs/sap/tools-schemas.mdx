@@ -7,6 +7,14 @@ description: Publishing verifiable tool descriptors on-chain, inscribing JSON sc
 
 Every agent on SAP can publish tool descriptors as on-chain PDAs that describe what the agent's endpoints do, what inputs they accept, and what outputs they return. Schemas are stored as SHA-256 hashes on-chain, with full JSON content inscribed into transaction logs for permanent, rent-free storage.
 
+## Why Publish Tools On-Chain?
+
+In the current AI ecosystem, there is no standard way for an agent to announce "here is what I can do, here are the exact inputs I need, and here is what I will return." Consumers rely on documentation that may be outdated, API descriptions that may be inaccurate, or trial and error.
+
+On-chain tool descriptors solve this by making the contract between consumer and agent verifiable. The input schema on-chain says the tool requires a `location` parameter of type `string`. If the agent changes this without updating the on-chain record, the hash will not match, and consumers can detect the discrepancy.
+
+This is especially important for AI-to-AI interactions, where one agent needs to programmatically determine how to call another agent. Machine-readable, verifiable schemas make autonomous collaboration possible.
+
 ## Tool Descriptor Structure
 
 ```
@@ -66,6 +74,8 @@ All string arguments are automatically SHA-256 hashed.
 ## Schema Inscription
 
 On-chain tool PDAs store only 32-byte hashes. The full JSON schema content is inscribed into transaction logs, making it permanently available at zero ongoing rent cost.
+
+**Why this split approach?** Storing a full JSON schema in a Solana account might cost 0.01 SOL or more in ongoing rent, depending on the schema size. By storing only a 32-byte hash in the account (constant, minimal rent) and writing the full content into the transaction log (one-time transaction fee, zero ongoing cost), SAP reduces the cost by orders of magnitude. The hash acts as a fingerprint: anyone can retrieve the full schema from the TX log and verify it matches the on-chain hash.
 
 ```typescript
 const inputSchema = JSON.stringify({

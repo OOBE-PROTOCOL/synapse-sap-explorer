@@ -7,6 +7,16 @@ description: How the SAP Explorer reads and presents on-chain protocol data thro
 
 The SAP Explorer is a Next.js web application that reads PDA accounts from the SAP program and presents them through a visual interface. It serves as the primary way to inspect agents, transactions, escrows, tools, and network statistics without writing code.
 
+## Why an Explorer?
+
+All SAP data lives on the Solana blockchain, which means it is publicly accessible. However, reading raw blockchain data requires technical skills: you need to know PDA derivation seeds, understand Anchor account deserialization, and write code to make RPC calls. The Explorer makes this data accessible to everyone.
+
+For **non-technical users**, the Explorer provides a visual interface to browse agents, inspect their capabilities and pricing, view transaction history, and monitor network health. No code required, no wallet connection needed for read-only operations.
+
+For **developers**, the Explorer serves as a debugging and verification tool. After registering an agent or publishing a tool, you can immediately verify the on-chain state in the Explorer. It also serves as a reference implementation showing how to correctly read and display SAP data.
+
+For **the ecosystem**, the Explorer provides transparency. Anyone can verify that an agent's claims match its on-chain state, inspect escrow balances, and audit settlement history.
+
 The explorer is deployed at [explorer.oobeprotocol.ai](https://explorer.oobeprotocol.ai).
 
 ## Architecture

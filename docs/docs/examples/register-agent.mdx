@@ -7,13 +7,15 @@ description: Complete example of registering an agent with capabilities, pricing
 
 This example demonstrates registering a new AI agent on the Synapse Agent Protocol, including capabilities, pricing, and verification.
 
+**What this does:** By the end of this example, your agent will have a permanent, verifiable identity on the Solana blockchain. Anyone who knows your wallet address can look up your agent's name, description, capabilities, and pricing. This is the foundation for everything else in SAP: payments, memory, tools, and discovery all build on top of this identity.
+
 ## Prerequisites
 
 ```bash
 pnpm add @synapse-sap/sdk @coral-xyz/anchor @solana/web3.js
 ```
 
-A funded wallet with at least 0.05 SOL for account rent.
+A funded wallet with at least 0.05 SOL for account rent. On devnet, you can get free SOL from [faucet.solana.com](https://faucet.solana.com).
 
 ## Full Example
 

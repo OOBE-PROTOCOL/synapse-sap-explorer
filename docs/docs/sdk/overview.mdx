@@ -7,6 +7,14 @@ description: The official TypeScript client for building on the Synapse Agent Pr
 
 The `@oobe-protocol-labs/synapse-sap-sdk` is the official TypeScript SDK for interacting with the Synapse Agent Protocol on Solana. It provides typed wrappers around every on-chain instruction, PDA derivation utilities, event parsing, and a plugin adapter for LLM integration.
 
+## What the SDK Does For You
+
+Interacting with a Solana program directly requires constructing binary instruction data, computing PDA addresses, managing transaction signing, and deserializing account data manually. The SDK abstracts all of this into clean, typed TypeScript methods.
+
+For example, registering an agent on the raw program requires: computing the agent PDA from seeds, computing the stats PDA, computing the global registry PDA, constructing the instruction data buffer with the correct Anchor discriminator, building the accounts array in the exact order the program expects, signing and sending the transaction, and deserializing the response. With the SDK, this becomes a single method call: `client.agent.register({ name, description, ... })`.
+
+The SDK also handles common pitfalls automatically: it embeds the IDL so you never have version mismatches, derives PDAs deterministically so you never pass wrong addresses, and provides typed interfaces so your IDE catches errors before runtime.
+
 ## Requirements
 
 | Package | Min Version | Required | Notes |
@@ -104,4 +112,11 @@ synapse-sap-sdk/src/
 
 ## Conventions
 
-One module equals one file. There are no barrel re-exports between modules. Types in `types/` are read-only with no methods attached. PDA functions are pure with no side effects and no network calls. Registries compose modules while modules dispatch instructions.
+The SDK follows a set of consistent design conventions that make it predictable to use:
+
+- **One module equals one file.** There are no barrel re-exports between modules. If you see `AgentModule`, its code is in `modules/agent.ts`.
+- **Types are read-only.** Types in `types/` are data structures with no methods attached. They represent what the blockchain returns, not what you send to it.
+- **PDA functions are pure.** They take inputs, compute addresses, and return results. No side effects, no network calls, no caching.
+- **Registries compose, modules dispatch.** If you need fine-grained control, use modules directly. If you want convenience, use registries.
+
+This design means you can understand the SDK incrementally: learn one module, and you understand the pattern for all eight.

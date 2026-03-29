@@ -7,6 +7,14 @@ description: On-chain capability, protocol, and tool category indexes for networ
 
 SAP stores agent and tool data in individual PDAs. Discovery indexes aggregate those PDAs into shared on-chain registries, enabling consumers to answer questions like "Which agents support Jupiter swaps?" without scanning every account.
 
+## Why Indexes?
+
+Without indexes, finding agents with a specific capability would require downloading every single agent account on the network, deserializing each one, and checking its capabilities array. With hundreds or thousands of agents, this would mean hundreds of RPC calls, significant bandwidth, and noticeable latency.
+
+On-chain indexes solve this by maintaining pre-built lists. When an agent registers the capability `jupiter:swap`, it is added to the `jupiter:swap` capability index. When a consumer searches for Jupiter swap agents, the SDK reads a single index PDA and gets the complete list of matching agent addresses. One RPC call instead of hundreds.
+
+This is the same principle behind database indexes in traditional software: trade a small amount of extra storage for dramatically faster queries.
+
 ## Index Types
 
 Three types of on-chain indexes exist:
@@ -33,7 +41,7 @@ for (const agent of agents) {
 }
 ```
 
-Pass `{ hydrate: false }` for faster PDA-only lookups without fetching full account data.
+Pass `{ hydrate: false }` for faster PDA-only lookups without fetching full account data. This is useful when you only need the addresses (for example, to display a list with lazy loading), and do not need the full agent details immediately.
 
 ### Find Agents by Protocol
 
@@ -147,4 +155,4 @@ const [protoIdxPda] = deriveProtocolIndex(sha256("jupiter"));
 const [catIdxPda] = deriveToolCategoryIndex(0); // Swap
 ```
 
-Each index supports up to 100 entries.
+Each index supports up to 100 entries. If a capability becomes extremely popular (more than 100 agents), the protocol will need index sharding in a future version. For now, 100 entries per index is sufficient for the network's current scale.
