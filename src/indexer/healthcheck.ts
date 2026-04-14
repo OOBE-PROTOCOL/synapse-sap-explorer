@@ -19,6 +19,18 @@ const TX_MAX_AGE_MS     = Number(process.env.HEALTH_TX_MAX_AGE_MS     ?? 10 * 60
 const ENTITY_KEYS = ['agents', 'tools', 'escrows', 'attestations', 'feedbacks', 'vaults'];
 const TX_KEYS     = ['transactions'];
 
+// Monitored cursor keys — only these affect exit code
+const MONITORED_KEYS = new Set([...ENTITY_KEYS, ...TX_KEYS]);
+
+// One-time / legacy cursors that should never cause a failure.
+// Add entries here for backfill jobs or other one-shot operations.
+const IGNORED_CURSORS = new Set(
+  (process.env.HEALTH_IGNORED_CURSORS ?? 'transactions_backfill')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+
 async function main() {
   const rows = await db.select().from(syncCursors);
 
@@ -35,13 +47,26 @@ async function main() {
     const maxAge = TX_KEYS.includes(row.entity) ? TX_MAX_AGE_MS : ENTITY_MAX_AGE_MS;
     const stale = ageMs > maxAge;
 
-    const status = stale ? '❌ STALE' : '✅ OK';
     const ageSec = (ageMs / 1000).toFixed(0);
     const maxSec = (maxAge / 1000).toFixed(0);
+    const slotInfo = row.lastSlot ? `  slot=${row.lastSlot}` : '';
 
+    // Skip ignored cursors (one-time backfills, legacy entries, etc.)
+    if (IGNORED_CURSORS.has(row.entity)) {
+      console.log(`⏭️  SKIP   ${row.entity.padEnd(20)} last_sync=${ageSec}s ago  (ignored)${slotInfo}`);
+      continue;
+    }
+
+    // Unknown cursors that aren't monitored: warn but don't fail
+    if (!MONITORED_KEYS.has(row.entity)) {
+      const status = stale ? '⚠️  STALE' : '✅ OK';
+      console.log(`${status}  ${row.entity.padEnd(20)} last_sync=${ageSec}s ago  (max=${maxSec}s, unmonitored)${slotInfo}`);
+      continue;
+    }
+
+    const status = stale ? '❌ STALE' : '✅ OK';
     console.log(
-      `${status}  ${row.entity.padEnd(16)} last_sync=${ageSec}s ago  (max=${maxSec}s)` +
-      (row.lastSlot ? `  slot=${row.lastSlot}` : ''),
+      `${status}  ${row.entity.padEnd(20)} last_sync=${ageSec}s ago  (max=${maxSec}s)${slotInfo}`,
     );
 
     if (stale) healthy = false;
@@ -51,7 +76,7 @@ async function main() {
   const existing = new Set(rows.map((r) => r.entity));
   for (const key of [...ENTITY_KEYS, ...TX_KEYS]) {
     if (!existing.has(key)) {
-      console.log(`⚠️  MISSING  ${key.padEnd(16)} (never synced)`);
+      console.log(`⚠️  MISSING  ${key.padEnd(20)} (never synced)`);
       // Don't fail on missing — first deploy won't have all cursors yet
     }
   }
