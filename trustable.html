@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trustable</title>
+    <script src="tailwind.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+<!-- Splash Screen -->
+<div id="splashContent" class="flex flex-col items-center">
+    <img src="trustable-logo.svg" alt="Trustable Logo" class="w-32 h-32">
+    <h1 id="versionText" class="text-3xl font-bold text-gray-800 mt-6">Trustable</h1>
+    <p id="expireText" class="text-sm text-gray-500 mt-2"></p>
+</div>
+
+<!-- Configuring Modal -->
+<div id="configModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 text-center">
+        <div id="configSpinner" class="mb-4">
+            <svg class="animate-spin h-12 w-12 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </div>
+        <h3 class="text-lg font-semibold mb-2">Configuring</h3>
+        <p class="text-sm text-gray-500 mb-3">Pulling models and generating configuration...</p>
+        <div id="configMessages" class="text-left text-sm font-mono bg-gray-50 rounded p-3 max-h-48 overflow-y-auto mb-4"></div>
+        <div id="configDone" class="hidden flex gap-3 justify-center">
+            <button id="configRetryBtn" onclick="runConfiguration()" class="hidden px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                Retry
+            </button>
+            <button onclick="hideConfigModal()"
+                    class="px-6 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors">
+                Continue
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Sign-in Required Modal -->
+<div id="signinModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 text-center">
+        <h3 class="text-lg font-semibold mb-4 text-red-600">Sign-in Required</h3>
+        <div id="signinWithLink" class="hidden mb-6">
+            <a id="ollamaConnectLink" href="#" target="_blank"
+               class="text-lg text-blue-600 hover:underline font-semibold">Click here to login to Ollama Cloud</a>
+        </div>
+        <div id="signinWithoutLink" class="mb-6">
+            <p class="text-gray-700 mb-2">You are not logged in to ollama cloud.</p>
+            <p class="text-gray-700">Please execute <code class="bg-gray-100 px-2 py-1 rounded text-sm">ops trustable signin</code></p>
+        </div>
+        <button onclick="retryOpenAITest()"
+                class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+            Retry
+        </button>
+    </div>
+</div>
+
+<script>
+    function showConfigModal() {
+        document.getElementById('configMessages').innerHTML = '';
+        document.getElementById('configSpinner').classList.remove('hidden');
+        document.getElementById('configDone').classList.add('hidden');
+        document.getElementById('configModal').classList.remove('hidden');
+        document.getElementById('configModal').classList.add('flex');
+    }
+
+    function hideConfigModal() {
+        document.getElementById('configModal').classList.add('hidden');
+        document.getElementById('configModal').classList.remove('flex');
+        // After config is done, navigate to app list
+        window.location.href = 'applist.html';
+    }
+
+    function showSigninModal() {
+        const qs = window.location.search;
+        if (qs && qs.length > 1) {
+            document.getElementById('ollamaConnectLink').href = 'https://ollama.com/connect' + qs;
+            document.getElementById('signinWithLink').classList.remove('hidden');
+            document.getElementById('signinWithoutLink').classList.add('hidden');
+        } else {
+            document.getElementById('signinWithLink').classList.add('hidden');
+            document.getElementById('signinWithoutLink').classList.remove('hidden');
+        }
+        document.getElementById('signinModal').classList.remove('hidden');
+        document.getElementById('signinModal').classList.add('flex');
+    }
+
+    function hideSigninModal() {
+        document.getElementById('signinModal').classList.add('hidden');
+        document.getElementById('signinModal').classList.remove('flex');
+    }
+
+    let _openaiTestResolve = null;
+
+    function retryOpenAITest() {
+        hideSigninModal();
+        if (_openaiTestResolve) _openaiTestResolve();
+    }
+
+    async function testOpenAIConnection() {
+        while (true) {
+            try {
+                const resp = await fetch('/api/testmodel');
+                const data = await resp.json();
+                if (data.error) {
+                    await new Promise(resolve => {
+                        _openaiTestResolve = resolve;
+                        showSigninModal();
+                    });
+                    continue;
+                }
+                return true;
+            } catch (e) {
+                await new Promise(resolve => {
+                    _openaiTestResolve = resolve;
+                    showSigninModal();
+                });
+            }
+        }
+    }
+
+    async function runConfiguration() {
+        showConfigModal();
+        const msgEl = document.getElementById('configMessages');
+        let configError = false;
+        try {
+            const resp = await fetch('/api/configure');
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (line.trim()) {
+                        const div = document.createElement('div');
+                        if (line.startsWith('ERROR:')) {
+                            div.className = 'text-red-600';
+                            div.textContent = line;
+                            configError = true;
+                        } else if (line.startsWith('OK:')) {
+                            div.className = 'text-green-600';
+                            div.textContent = line;
+                        } else {
+                            div.className = 'text-gray-700';
+                            div.textContent = line;
+                        }
+                        msgEl.appendChild(div);
+                        msgEl.scrollTop = msgEl.scrollHeight;
+                    }
+                }
+            }
+            // Process remaining buffer
+            if (buffer.trim()) {
+                const div = document.createElement('div');
+                div.textContent = buffer;
+                msgEl.appendChild(div);
+            }
+        } catch (e) {
+            const div = document.createElement('div');
+            div.className = 'text-red-600';
+            div.textContent = 'Error: ' + e.message;
+            msgEl.appendChild(div);
+            configError = true;
+        }
+        document.getElementById('configSpinner').classList.add('hidden');
+
+        if (configError) {
+            document.getElementById('configRetryBtn').classList.remove('hidden');
+        } else {
+            document.getElementById('configRetryBtn').classList.add('hidden');
+        }
+
+        if (!configError) {
+            // Test OpenAI API connection
+            const testDiv = document.createElement('div');
+            testDiv.className = 'text-gray-700';
+            testDiv.textContent = 'Testing AI model connection...';
+            msgEl.appendChild(testDiv);
+            msgEl.scrollTop = msgEl.scrollHeight;
+
+            await testOpenAIConnection();
+
+            const okDiv = document.createElement('div');
+            okDiv.className = 'text-green-600';
+            okDiv.textContent = 'OK: AI model connection successful';
+            msgEl.appendChild(okDiv);
+            msgEl.scrollTop = msgEl.scrollHeight;
+
+        }
+
+        document.getElementById('configDone').classList.remove('hidden');
+    }
+
+    // Check version and expiry, then run configuration
+    (async function() {
+        try {
+            const resp = await fetch('/api/version');
+            const data = await resp.json();
+            if (data.expired) {
+                document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;"><p style="font-size:1.5rem;text-align:center;">This version expired. Please get an updated version. For info email: info@nuvolaris.io</p></div>';
+                return;
+            }
+            if (data.version) {
+                document.getElementById('versionText').textContent = data.version;
+            }
+            if (data.expire) {
+                document.getElementById('expireText').textContent = 'Expiration date: ' + data.expire;
+            }
+
+            // Always run configuration on page load
+            await runConfiguration();
+        } catch (e) {
+            console.error('Failed to check version:', e);
+        }
+    })();
+</script>
+</body>
+</html>

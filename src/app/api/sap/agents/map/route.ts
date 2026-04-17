@@ -57,7 +57,7 @@ export async function GET() {
         return NextResponse.json(map);
       }
     } catch (e) {
-      console.warn('[agents/map] DB read failed:', (e as Error).message);
+      console.warn('[agents/map] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
     }
 
     // Step 3: cold start

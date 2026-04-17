@@ -51,7 +51,7 @@ export const GET = withSynapseError(async () => {
       return synapseResponse(result);
     }
   } catch (e) {
-    console.warn('[feedbacks] DB read failed:', (e as Error).message);
+    console.warn('[feedbacks] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
   }
 
   const data = await rpcFetchFeedbacks();

@@ -117,14 +117,14 @@ export const GET = withSynapseError(async (req: NextRequest) => {
       return synapseResponse(result);
     }
   } catch (e) {
-    console.warn('[escrow-events] DB read failed:', (e as Error).message);
+    console.warn('[escrow-events] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
   }
 
   // Step 3: Cold start — extract events then read
   try {
     await extractAndStoreEvents();
   } catch (e) {
-    console.warn('[escrow-events] Event extraction failed:', (e as Error).message);
+    console.warn('[escrow-events] Event extraction failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
   }
 
   const rows = await selectEscrowEvents(escrowPda, limit);

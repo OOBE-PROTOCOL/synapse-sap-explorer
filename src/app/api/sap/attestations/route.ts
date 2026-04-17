@@ -50,7 +50,7 @@ export const GET = withSynapseError(async () => {
       return synapseResponse(result);
     }
   } catch (e) {
-    console.warn('[attestations] DB read failed:', (e as Error).message);
+    console.warn('[attestations] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
   }
 
   const data = await rpcFetchAttestations();

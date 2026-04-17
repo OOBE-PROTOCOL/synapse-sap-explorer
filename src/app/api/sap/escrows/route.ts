@@ -98,7 +98,7 @@ export const GET = withSynapseError(async () => {
       return synapseResponse(result);
     }
   } catch (e) {
-    console.warn('[escrows] DB read failed:', (e as Error).message);
+    console.warn('[escrows] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
   }
 
   const data = await rpcFetchEscrows();

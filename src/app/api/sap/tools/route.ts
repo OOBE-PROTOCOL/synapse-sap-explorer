@@ -65,7 +65,7 @@ export const GET = withSynapseError(async (req: Request) => {
       return synapseResponse(result);
     }
   } catch (e) {
-    console.warn('[tools] DB read failed:', (e as Error).message);
+    console.warn('[tools] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
   }
 
   // Step 3: cold start

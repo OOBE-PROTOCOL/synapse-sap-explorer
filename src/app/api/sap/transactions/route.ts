@@ -352,7 +352,7 @@ export async function GET(req: Request) {
     try {
       dbRows = (await selectTransactions(limit)).map(dbTxToApi);
     } catch (e) {
-      console.warn('[transactions] DB read failed:', (e as Error).message);
+      console.warn('[transactions] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
     }
 
     if (dbRows.length > 0) {

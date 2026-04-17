@@ -102,7 +102,7 @@ export const GET = withSynapseError(async (req: Request) => {
       return synapseResponse(result);
     }
   } catch (e) {
-    console.warn('[agents] DB read failed:', (e as Error).message);
+    console.warn('[agents] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
   }
 
   // ── Step 3: Cold start — no cache, no DB. Must await RPC. ──
