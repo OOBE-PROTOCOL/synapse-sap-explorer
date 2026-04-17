@@ -18,8 +18,23 @@ export function logErr(label: string, msg: string) {
 
 /* ── Retry with exponential backoff ───────────────────── */
 
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 500;
+const MAX_RETRIES     = Number(process.env.INDEXER_MAX_RETRIES ?? 6);
+const BASE_DELAY_MS   = 1_000;
+const MAX_DELAY_MS    = 30_000;   // cap so we don't wait forever on a single attempt
+
+const TRANSIENT_PATTERNS = [
+  'EOF', 'ECONNRESET', 'ECONNREFUSED', 'socket hang up',
+  'getaddrinfo', 'ETIMEDOUT', 'EPIPE',
+  '502', '503', '504', '429',
+  'cooldown', 'timeout', 'upstream',
+  'shared memory',            // PG 58P01
+  'connection terminated',    // PG pool eviction
+];
+
+function isTransientError(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return TRANSIENT_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
+}
 
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -31,24 +46,14 @@ export async function withRetry<T>(
       return await fn();
     } catch (err: any) {
       lastErr = err;
-      const msg: string = err?.message ?? '';
-      const isTransient =
-        msg.includes('EOF') ||
-        msg.includes('ECONNRESET') ||
-        msg.includes('socket hang up') ||
-        msg.includes('getaddrinfo') ||
-        msg.includes('ETIMEDOUT') ||
-        msg.includes('502') ||
-        msg.includes('503') ||
-        msg.includes('504') ||
-        msg.includes('429') ||
-        msg.includes('cooldown') ||
-        msg.includes('timeout');
+      const msg: string = err?.message ?? String(err);
+      const cause: string = err?.cause?.message ?? '';
 
-      if (!isTransient || attempt === MAX_RETRIES) throw err;
+      if (!isTransientError(msg) && !isTransientError(cause)) throw err;
+      if (attempt === MAX_RETRIES) throw err;
 
-      const delay = BASE_DELAY_MS * 2 ** attempt + Math.random() * 200;
-      logErr(label, `attempt ${attempt + 1}/${MAX_RETRIES} — ${msg.slice(0, 80)} — retry in ${Math.round(delay)}ms`);
+      const delay = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS) + Math.random() * 500;
+      logErr(label, `attempt ${attempt + 1}/${MAX_RETRIES} — ${msg.slice(0, 120)} — retry in ${Math.round(delay)}ms`);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
