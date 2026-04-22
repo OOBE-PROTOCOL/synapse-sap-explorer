@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ogUrl = `${SITE_URL}/synapse-metadata-logo.png`;
   return {
     title,
-    description: `Capability ${id} — protocol binding, description, and agent owners on the Solana Agent Protocol.`,
+    description: `Capability ${id} — protocol binding, description, and agent owners on the Synapse Agent Protocol.`,
     openGraph: {
       title: `${title} | Synapse Explorer`,
       description: desc,

@@ -147,7 +147,7 @@ function renderAgentOG(p: URLSearchParams) {
 /* ── Page OG (for static section pages) ── */
 function renderPageOG(p: URLSearchParams) {
   const title = p.get('title') ?? 'Synapse Explorer';
-  const desc = p.get('desc') ?? 'Solana Agent Protocol — Real-time On-chain State';
+  const desc = p.get('desc') ?? 'Synapse Agent Protocol — Real-time On-chain State';
 
   return new ImageResponse(
     (
@@ -195,7 +195,7 @@ function renderDefaultOG() {
           Synapse Explorer
         </span>
         <span style={{ color: '#a1a1aa', fontSize: '24px' }}>
-          Solana Agent Protocol — Real-time On-chain State
+          Synapse Agent Protocol — Real-time On-chain State
         </span>
         <span style={{ color: '#52525b', fontSize: '16px', marginTop: '28px' }}>
           explorer.oobeprotocol.ai

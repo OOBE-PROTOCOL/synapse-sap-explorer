@@ -242,7 +242,7 @@ function AgentsInner() {
   return (
     <ExplorerPageShell
       title="Agent Directory"
-      subtitle={`${data?.total ?? '...'} agents registered on the Solana Agent Protocol`}
+      subtitle={`${data?.total ?? '...'} agents registered on the Synapse Agent Protocol`}
       icon={<Bot className="h-5 w-5" />}
       badge={<Badge variant="secondary" className="tabular-nums hidden sm:flex">SAP v0.7.0</Badge>}
       stats={

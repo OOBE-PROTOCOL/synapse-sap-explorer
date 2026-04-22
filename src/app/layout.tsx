@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     template: '%s | Synapse SAP Explorer',
   },
   description:
-    'Explore the Solana Agent Protocol network: discover agents, visualize PDA connections, browse on-chain tools, and monitor SAP transactions in real-time.',
+    'Explore the Synapse Agent Protocol network: discover agents, visualize PDA connections, browse on-chain tools, and monitor SAP transactions in real-time.',
   keywords: [
     'Solana', 'SAP', 'Agent Protocol', 'Explorer',
     'PDA', 'On-chain agents', 'Synapse', 'OOBE Protocol',
@@ -36,14 +36,14 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'Synapse Explorer',
     title: 'Synapse Explorer — SAP Agent Protocol',
-    description: 'Real-time on-chain explorer for the Solana Agent Protocol. Discover agents, tools, escrows, and transactions.',
+    description: 'Real-time on-chain explorer for the Synapse Agent Protocol. Discover agents, tools, escrows, and transactions.',
     url: SITE_URL,
     images: [{ url: `${SITE_URL}/synapse-metadata-logo.png`, width: 1200, height: 630, alt: 'Synapse Explorer' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Synapse Explorer — SAP Agent Protocol',
-    description: 'Real-time on-chain explorer for the Solana Agent Protocol.',
+    description: 'Real-time on-chain explorer for the Synapse Agent Protocol.',
     images: [`${SITE_URL}/synapse-metadata-logo.png`],
     creator: '@oobeprotocol',
   },

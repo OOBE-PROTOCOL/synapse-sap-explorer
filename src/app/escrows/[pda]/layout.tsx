@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ogUrl = `${SITE_URL}/synapse-metadata-logo.png`;
   return {
     title,
-    description: `Escrow account ${short} — balance, settlement history, and lifecycle on the Solana Agent Protocol.`,
+    description: `Escrow account ${short} — balance, settlement history, and lifecycle on the Synapse Agent Protocol.`,
     openGraph: {
       title: `${title} | Synapse Explorer`,
       description: desc,

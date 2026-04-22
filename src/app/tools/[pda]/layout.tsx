@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ogUrl = `${SITE_URL}/synapse-metadata-logo.png`;
   return {
     title,
-    description: `Tool ${short} — descriptor, invocation stats, and agent binding on the Solana Agent Protocol.`,
+    description: `Tool ${short} — descriptor, invocation stats, and agent binding on the Synapse Agent Protocol.`,
     openGraph: {
       title: `${title} | Synapse Explorer`,
       description: desc,

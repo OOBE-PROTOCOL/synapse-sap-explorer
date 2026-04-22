@@ -281,7 +281,7 @@ export default function OverviewPage() {
   return (
     <ExplorerPageShell
       title="Dashboard"
-      subtitle="Real-time on-chain intelligence for the Solana Agent Protocol"
+      subtitle="Real-time on-chain intelligence for the Synapse Agent Protocol"
       icon={<Activity className="h-5 w-5" />}
       badge={
         <div className="flex items-center gap-2">

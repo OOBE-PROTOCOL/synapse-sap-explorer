@@ -4,7 +4,7 @@ const SITE_URL = 'https://explorer.oobeprotocol.ai';
 
 export const metadata: Metadata = {
   title: 'Agents',
-  description: 'Browse all registered SAP agents on the Solana Agent Protocol — reputation scores, capabilities, protocols, and real-time status.',
+  description: 'Browse all registered SAP agents on the Synapse Agent Protocol — reputation scores, capabilities, protocols, and real-time status.',
   openGraph: {
     title: 'Agents | Synapse Explorer',
     description: 'Browse all registered SAP agents — reputation scores, capabilities, and real-time status.',

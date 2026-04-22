@@ -2,7 +2,7 @@
   "name": "synapse-sap-explorer",
   "version": "1.0.0",
   "private": true,
-  "description": "Solscan-style on-chain explorer for the Solana Agent Protocol (SAP) network",
+  "description": "Solscan-style on-chain explorer for the Synapse Agent Protocol (SAP) network",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -1,7 +1,7 @@
 /* ──────────────────────────────────────────────────────────
  * .well-known/agent.json fetcher
  *
- * Fetches the Solana Agent Protocol well-known metadata from
+ * Fetches the Synapse Agent Protocol well-known metadata from
  * an agent's x402 endpoint. Cached in memory for 5 minutes.
  * ────────────────────────────────────────────────────────── */
 

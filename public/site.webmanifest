@@ -1,7 +1,7 @@
 {
   "name": "Synapse Explorer",
   "short_name": "Synapse",
-  "description": "Real-time on-chain explorer for the Solana Agent Protocol",
+  "description": "Real-time on-chain explorer for the Synapse Agent Protocol",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
