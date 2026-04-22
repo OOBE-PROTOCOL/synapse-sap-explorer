@@ -69,7 +69,7 @@ export function ExplorerPageShell({
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white truncate">{title}</h1>
+                <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-foreground truncate">{title}</h1>
                 {badge}
               </div>
               {subtitle && (
@@ -117,7 +117,7 @@ export function ExplorerSection({
   dataSource?: 'onchain' | 'offchain' | 'hybrid';
 }) {
   return (
-    <Card className={cn('overflow-hidden bg-neutral-900 border-neutral-700', className)}>
+    <Card className={cn('overflow-hidden bg-card border-border', className)}>
       <CardHeader className={cn('pb-0', compact ? 'py-3 px-4' : 'px-5 pt-4')}>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
@@ -169,14 +169,14 @@ export function ExplorerMetric({
   const a = accentMap[accent];
 
   return (
-    <Card className={cn('group overflow-hidden bg-neutral-900 border-neutral-700 hover:border-neutral-600 transition-all duration-300', className)}>
+    <Card className={cn('group overflow-hidden bg-card border-border hover:border-border/80 transition-all duration-300', className)}>
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="space-y-1 min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-400">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               {label}
             </p>
-            <p className="text-lg sm:text-2xl font-bold tracking-tight text-white tabular-nums font-mono truncate">
+            <p className="text-lg sm:text-2xl font-bold tracking-tight text-foreground tabular-nums font-mono truncate">
               {typeof value === 'number' ? value.toLocaleString() : value}
             </p>
             {sub && (
