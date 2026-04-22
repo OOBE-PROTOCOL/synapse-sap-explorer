@@ -21,7 +21,6 @@ import {
 
 import {
   SAP_PROGRAM_ADDRESS,
-  GLOBAL_REGISTRY_ADDRESS,
 } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
 
 import { serializeAccount } from '@oobe-protocol-labs/synapse-sap-sdk/utils';
@@ -29,6 +28,7 @@ import { serializeAccount } from '@oobe-protocol-labs/synapse-sap-sdk/utils';
 import type {
   AgentAccountData,
   AgentStatsData,
+  ToolDescriptorData,
 } from '@oobe-protocol-labs/synapse-sap-sdk/types';
 
 import type {
@@ -36,6 +36,7 @@ import type {
   AgentProfile,
   NetworkOverview,
   DiscoveredTool,
+  ToolCategoryName,
 } from '@oobe-protocol-labs/synapse-sap-sdk/registries/discovery';
 
 import type { Capability, PricingTier } from '@oobe-protocol-labs/synapse-sap-sdk/types';
@@ -127,6 +128,13 @@ function getSap(): SapClient {
 }
 
 /**
+ * The SapClient singleton (server-only, read-only wallet).
+ */
+export function getSapClient(): SapClient {
+  return getSap();
+}
+
+/**
  * The Synapse-routed Connection (with API key, for account reads).
  */
 export function getSynapseConnection(): Connection {
@@ -201,7 +209,7 @@ export async function findToolsByCategory(
   category: string,
   opts?: { hydrate?: boolean },
 ): Promise<DiscoveredTool[]> {
-  return getSap().discovery.findToolsByCategory(category as any, opts);
+  return getSap().discovery.findToolsByCategory(category as ToolCategoryName, opts);
 }
 
 /** Get tool category summary (counts per category) */
@@ -213,6 +221,16 @@ export async function getToolCategorySummary(): Promise<
 
 /* ── Fetch-all queries (via Anchor program.account.X.all()) ── */
 
+// Typed account accessor — avoids `as any` casts everywhere.
+// Anchor's code-gen doesn't expose typed `.all()` from the SDK Program,
+// but the account discriminators are correct, so this is safe.
+function accounts(sap: SapClient) {
+  return sap.program.account as Record<
+    string,
+    { all: () => Promise<Array<{ publicKey: PublicKey; account: Record<string, unknown> }>> }
+  >;
+}
+
 /**
  * Fetch ALL agent accounts registered on-chain.
  * Uses the underlying Anchor `program.account.agentAccount.all()`
@@ -220,9 +238,7 @@ export async function getToolCategorySummary(): Promise<
  */
 export async function findAllAgents(): Promise<DiscoveredAgent[]> {
   const sap = getSap();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accounts = (sap.program.account as any).agentAccount;
-  const raw: Array<{ publicKey: PublicKey; account: any }> = await accounts.all();
+  const raw = await accounts(sap).agentAccount.all();
   return raw.map((a) => ({
     pda: a.publicKey,
     identity: a.account as unknown as DiscoveredAgent['identity'],
@@ -236,9 +252,7 @@ export async function findAllAgents(): Promise<DiscoveredAgent[]> {
  */
 export async function findAllTools(): Promise<DiscoveredTool[]> {
   const sap = getSap();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accounts = (sap.program.account as any).toolDescriptor;
-  const raw: Array<{ publicKey: PublicKey; account: any }> = await accounts.all();
+  const raw = await accounts(sap).toolDescriptor.all();
   return raw.map((t) => ({
     pda: t.publicKey,
     descriptor: t.account as unknown as DiscoveredTool['descriptor'],
@@ -249,75 +263,72 @@ export async function findAllTools(): Promise<DiscoveredTool[]> {
  * Fetch ALL agent stats accounts.
  * Uses `program.account.agentStats.all()` for full enumeration.
  */
-export async function findAllAgentStats() {
+export async function findAllAgentStats(): Promise<Array<{ pda: PublicKey; stats: AgentStatsData }>> {
   const sap = getSap();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accounts = (sap.program.account as any).agentStats;
-  const raw: Array<{ publicKey: PublicKey; account: any }> = await accounts.all();
+  const raw = await accounts(sap).agentStats.all();
   return raw.map((s) => ({
     pda: s.publicKey,
-    stats: s.account,
+    stats: s.account as unknown as AgentStatsData,
   }));
 }
+
+/** Typed shape for raw on-chain account + PDA */
+export type RawAccount<T = Record<string, unknown>> = { pda: PublicKey; account: T };
 
 /**
  * Fetch ALL escrow accounts on-chain.
  * Uses `program.account.escrowAccount.all()`.
  */
-export async function findAllEscrows(): Promise<Array<{ pda: PublicKey; account: any }>> {
+export async function findAllEscrows(): Promise<RawAccount[]> {
   const sap = getSap();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accounts = (sap.program.account as any).escrowAccount;
-  if (!accounts) return [];
+  const acct = accounts(sap).escrowAccount;
+  if (!acct) return [];
   try {
-    const raw: Array<{ publicKey: PublicKey; account: any }> = await accounts.all();
+    const raw = await acct.all();
     return raw.map((e) => ({ pda: e.publicKey, account: e.account }));
-  } catch { return []; }
+  } catch (e) { console.warn('[discovery] findAllEscrows failed:', (e as Error).message); return []; }
 }
 
 /**
  * Fetch ALL attestation accounts on-chain.
  * Uses `program.account.agentAttestation.all()`.
  */
-export async function findAllAttestations(): Promise<Array<{ pda: PublicKey; account: any }>> {
+export async function findAllAttestations(): Promise<RawAccount[]> {
   const sap = getSap();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accounts = (sap.program.account as any).agentAttestation;
-  if (!accounts) return [];
+  const acct = accounts(sap).agentAttestation;
+  if (!acct) return [];
   try {
-    const raw: Array<{ publicKey: PublicKey; account: any }> = await accounts.all();
+    const raw = await acct.all();
     return raw.map((a) => ({ pda: a.publicKey, account: a.account }));
-  } catch { return []; }
+  } catch (e) { console.warn('[discovery] findAllAttestations failed:', (e as Error).message); return []; }
 }
 
 /**
  * Fetch ALL feedback accounts on-chain.
  * Uses `program.account.feedbackAccount.all()`.
  */
-export async function findAllFeedbacks(): Promise<Array<{ pda: PublicKey; account: any }>> {
+export async function findAllFeedbacks(): Promise<RawAccount[]> {
   const sap = getSap();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accounts = (sap.program.account as any).feedbackAccount;
-  if (!accounts) return [];
+  const acct = accounts(sap).feedbackAccount;
+  if (!acct) return [];
   try {
-    const raw: Array<{ publicKey: PublicKey; account: any }> = await accounts.all();
+    const raw = await acct.all();
     return raw.map((f) => ({ pda: f.publicKey, account: f.account }));
-  } catch { return []; }
+  } catch (e) { console.warn('[discovery] findAllFeedbacks failed:', (e as Error).message); return []; }
 }
 
 /**
  * Fetch ALL memory vault accounts on-chain.
  * Uses `program.account.memoryVault.all()`.
  */
-export async function findAllVaults(): Promise<Array<{ pda: PublicKey; account: any }>> {
+export async function findAllVaults(): Promise<RawAccount[]> {
   const sap = getSap();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const accounts = (sap.program.account as any).memoryVault;
-  if (!accounts) return [];
+  const acct = accounts(sap).memoryVault;
+  if (!acct) return [];
   try {
-    const raw: Array<{ publicKey: PublicKey; account: any }> = await accounts.all();
+    const raw = await acct.all();
     return raw.map((v) => ({ pda: v.publicKey, account: v.account }));
-  } catch { return []; }
+  } catch (e) { console.warn('[discovery] findAllVaults failed:', (e as Error).message); return []; }
 }
 
 /* ── Agent module (direct) ────────────────────────────── */
@@ -333,7 +344,7 @@ export async function fetchAgentRaw() {
  * Convert any on-chain account (AgentAccountData, etc.) to JSON-safe shape.
  * PublicKey → base58, BN → string, Uint8Array → hex.
  */
-export function serialize<T extends Record<string, any>>(obj: T): Record<string, any> {
+export function serialize<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   return serializeAccount(obj);
 }
 
@@ -341,8 +352,8 @@ export function serialize<T extends Record<string, any>>(obj: T): Record<string,
 export function serializeDiscoveredAgent(agent: DiscoveredAgent): SerializedDiscoveredAgent {
   return {
     pda: agent.pda.toBase58(),
-    identity: agent.identity ? (serializeAccount(agent.identity as any) as SerializedAgentIdentity) : null,
-    stats: agent.stats ? (serializeAccount(agent.stats as any) as SerializedAgentStats) : null,
+    identity: agent.identity ? (serializeAccount(agent.identity as unknown as Record<string, unknown>) as unknown as SerializedAgentIdentity) : null,
+    stats: agent.stats ? (serializeAccount(agent.stats as unknown as Record<string, unknown>) as unknown as SerializedAgentStats) : null,
   };
 }
 
@@ -350,8 +361,8 @@ export function serializeDiscoveredAgent(agent: DiscoveredAgent): SerializedDisc
 export function serializeAgentProfile(profile: AgentProfile): SerializedAgentProfile {
   return {
     pda: profile.pda.toBase58(),
-    identity: serializeAccount(profile.identity as any) as SerializedAgentIdentity,
-    stats: profile.stats ? (serializeAccount(profile.stats as any) as SerializedAgentStats) : null,
+    identity: serializeAccount(profile.identity as unknown as Record<string, unknown>) as unknown as SerializedAgentIdentity,
+    stats: profile.stats ? (serializeAccount(profile.stats as unknown as Record<string, unknown>) as unknown as SerializedAgentStats) : null,
     computed: {
       isActive: profile.computed.isActive,
       totalCalls: profile.computed.totalCalls,
@@ -383,35 +394,9 @@ export function serializeOverview(overview: NetworkOverview): SerializedNetworkO
 export function serializeDiscoveredTool(tool: DiscoveredTool): SerializedDiscoveredTool {
   return {
     pda: tool.pda.toBase58(),
-    descriptor: tool.descriptor ? (serializeAccount(tool.descriptor as any) as any) : null,
+    descriptor: tool.descriptor ? (serializeAccount(tool.descriptor as unknown as Record<string, unknown>) as unknown as SerializedToolDescriptor) : null,
   };
 }
-
-/* ── Graph data (for bubblemap/network visualization) ─── */
-
-export type GraphNode = {
-  id: string;
-  name: string;
-  type: 'agent' | 'protocol' | 'capability' | 'tool';
-  isActive: boolean;
-  score: number;
-  calls: string;
-  radius: number;
-  /** Extra metadata for tooltips / detail panels */
-  meta?: Record<string, string | number | boolean | null>;
-};
-
-export type GraphLink = {
-  source: string;
-  target: string;
-  type?: 'protocol' | 'capability' | 'tool' | 'shared-protocol';
-  label?: string;
-};
-
-export type GraphData = {
-  nodes: GraphNode[];
-  links: GraphLink[];
-};
 
 /** Build rich graph data from agents + tools for BubbleMaps v2 visualization */
 export function buildGraphData(agents: DiscoveredAgent[], tools?: DiscoveredTool[]): GraphData {
@@ -431,7 +416,7 @@ export function buildGraphData(agents: DiscoveredAgent[], tools?: DiscoveredTool
 
     // Collect protocol list for display
     const protoList = (identity.protocols ?? []).join(', ');
-    const capList = (identity.capabilities ?? []).map((c: any) => c.id).join(', ');
+    const capList = (identity.capabilities ?? []).map((c: Capability) => c.id).join(', ');
 
     nodes.push({
       id: pda,
@@ -552,7 +537,7 @@ export function buildGraphData(agents: DiscoveredAgent[], tools?: DiscoveredTool
   if (tools) {
     for (const t of tools) {
       if (!t.descriptor) continue;
-      const desc = t.descriptor as any;
+      const desc = t.descriptor as ToolDescriptorData;
       const toolPda = t.pda.toBase58();
       const agentPda = desc.agent?.toBase58?.() ?? String(desc.agent ?? '');
       const category = typeof desc.category === 'object' ? Object.keys(desc.category)[0] ?? 'custom' : String(desc.category);
@@ -592,173 +577,35 @@ export function buildGraphData(agents: DiscoveredAgent[], tools?: DiscoveredTool
   return { nodes, links };
 }
 
-/* ── Serialized types (JSON-safe for API responses) ───── */
+/* ── Serialized types — re-exported from ~/types/sap ──── */
 
-export type SerializedAgentIdentity = {
-  bump: number;
-  version: number;
-  wallet: string;
-  name: string;
-  description: string;
-  agentId: string | null;
-  agentUri: string | null;
-  x402Endpoint: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  reputationScore: number;
-  totalFeedbacks: number;
-  reputationSum: string;
-  totalCallsServed: string;
-  avgLatencyMs: number;
-  uptimePercent: number;
-  capabilities: Array<{
-    id: string;
-    description: string | null;
-    protocolId: string | null;
-    version: string | null;
-  }>;
-  pricing: Array<{
-    tierId: string;
-    pricePerCall: string;
-    minPricePerCall: string | null;
-    maxPricePerCall: string | null;
-    rateLimit: number;
-    maxCallsPerSession: number;
-    burstLimit: number | null;
-    tokenType: any;
-    tokenMint: string | null;
-    tokenDecimals: number | null;
-    settlementMode: any;
-    minEscrowDeposit: string | null;
-    batchIntervalSec: number | null;
-    volumeCurve: any;
-  }>;
-  protocols: string[];
-  activePlugins: Array<{ pluginType: any; pda: string }>;
-};
+export type {
+  SerializedAgentIdentity,
+  SerializedAgentStats,
+  SerializedDiscoveredAgent,
+  SerializedAgentProfile,
+  SerializedNetworkOverview,
+  SerializedToolDescriptor,
+  SerializedDiscoveredTool,
+  SerializedEscrow,
+  SerializedAttestation,
+  SerializedFeedback,
+  SerializedVault,
+  GraphNode,
+  GraphLink,
+  GraphData,
+  AnchorEnum,
+} from '~/types/sap';
 
-export type SerializedAgentStats = {
-  bump: number;
-  agent: string;
-  wallet: string;
-  totalCallsServed: string;
-  isActive: boolean;
-  updatedAt: string;
-};
-
-export type SerializedDiscoveredAgent = {
-  pda: string;
-  identity: SerializedAgentIdentity | null;
-  stats: SerializedAgentStats | null;
-};
-
-export type SerializedAgentProfile = {
-  pda: string;
-  identity: SerializedAgentIdentity;
-  stats: SerializedAgentStats | null;
-  computed: {
-    isActive: boolean;
-    totalCalls: string;
-    reputationScore: number;
-    hasX402: boolean;
-    capabilityCount: number;
-    pricingTierCount: number;
-    protocols: string[];
-  };
-};
-
-export type SerializedNetworkOverview = {
-  totalAgents: string;
-  activeAgents: string;
-  totalFeedbacks: string;
-  totalTools: number;
-  totalVaults: number;
-  totalAttestations: number;
-  totalCapabilities: number;
-  totalProtocols: number;
-  authority: string;
-};
-
-export type SerializedToolDescriptor = {
-  bump: number;
-  agent: string;
-  toolNameHash: number[];
-  toolName: string;
-  protocolHash: number[];
-  version: number;
-  descriptionHash: number[];
-  inputSchemaHash: number[];
-  outputSchemaHash: number[];
-  httpMethod: any;
-  category: any;
-  paramsCount: number;
-  requiredParams: number;
-  isCompound: boolean;
-  isActive: boolean;
-  totalInvocations: string;
-  createdAt: string;
-  updatedAt: string;
-  previousVersion: string;
-};
-
-export type SerializedDiscoveredTool = {
-  pda: string;
-  descriptor: SerializedToolDescriptor | null;
-};
-
-/* ── Additional entity types (Escrow, Attestation, Feedback, Vault) ── */
-
-export type SerializedEscrow = {
-  pda: string;
-  agent: string;
-  depositor: string;
-  agentWallet: string;
-  balance: string;
-  totalDeposited: string;
-  totalSettled: string;
-  totalCallsSettled: string;
-  pricePerCall: string;
-  maxCalls: string;
-  createdAt: string;
-  lastSettledAt: string;
-  expiresAt: string;
-  tokenMint: string | null;
-  tokenDecimals: number;
-  volumeCurve: Array<{ afterCalls: number; pricePerCall: string }>;
-};
-
-export type SerializedAttestation = {
-  pda: string;
-  agent: string;
-  attester: string;
-  attestationType: string;
-  isActive: boolean;
-  createdAt: string;
-  expiresAt: string;
-  metadataHash: string;
-};
-
-export type SerializedFeedback = {
-  pda: string;
-  agent: string;
-  reviewer: string;
-  score: number;
-  tag: string;
-  isRevoked: boolean;
-  createdAt: string;
-  updatedAt: string;
-  commentHash: string | null;
-};
-
-export type SerializedVault = {
-  pda: string;
-  agent: string;
-  wallet: string;
-  totalSessions: number;
-  totalInscriptions: string;
-  totalBytesInscribed: string;
-  createdAt: string;
-  nonceVersion: number;
-  protocolVersion: number;
-};
+import type {
+  SerializedAgentIdentity,
+  SerializedAgentStats,
+  SerializedDiscoveredAgent,
+  SerializedAgentProfile,
+  SerializedNetworkOverview,
+  SerializedToolDescriptor,
+  SerializedDiscoveredTool,
+  GraphNode,
+  GraphLink,
+  GraphData,
+} from '~/types/sap';

@@ -1,11 +1,15 @@
 ---
 title: x402 Payments
-description: Escrow-based micropayments for AI agent calls. Pre-fund, call with HTTP headers, settle on-chain.
+description: V2 escrow-based micropayments with dispute resolution, staking collateral, and recurring subscriptions.
 ---
 
 # x402 Payments
 
-x402 turns every agent call into a verifiable financial transaction. No invoices, no subscriptions. An on-chain escrow settles per-call (or in batches) with cryptographic proof of service.
+<Callout type="info">
+**v0.7.0:** The payment system now includes V2 escrows with settlement security modes, dispute resolution, agent staking, and recurring subscriptions. V1 escrows are deprecated but still functional. Use `client.escrowV2` for new integrations.
+</Callout>
+
+x402 turns every agent call into a verifiable financial transaction. No invoices, no subscriptions (unless you want them). An on-chain escrow settles per-call (or in batches) with cryptographic proof of service.
 
 ## Why x402?
 
@@ -255,3 +259,114 @@ import { deriveAgent, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/p
 const [agentPda] = deriveAgent(agentWallet);        // ["sap_agent", wallet]
 const [escrowPda] = deriveEscrow(agentPda, depositorWallet); // ["sap_escrow", agent, depositor]
 ```
+
+## V2 Escrow System (v0.7.0)
+
+V2 escrows introduce three critical upgrades over V1:
+
+### Settlement Security Modes
+
+V1 escrows used a trust-the-agent model — the agent could settle any number of calls unilaterally. V2 escrows enforce settlement validation at the protocol level:
+
+| Mode | How It Works | Best For |
+|------|-------------|----------|
+| **SelfReport** | Agent settles freely (like V1) | Trusted agents with high reputation |
+| **CoSigned** | Both parties sign every settlement | High-value operations |
+| **DisputeWindow** | Agent proposes, depositor can dispute within a window | Most use cases |
+
+### Dispute Resolution
+
+When using `DisputeWindow` mode, settlements follow this flow:
+
+```
+Agent proposes settlement → Pending state created
+  ↓
+Depositor reviews within window
+  ├── No dispute → Agent calls finalize() → Funds released
+  └── Dispute filed → Arbiter resolves
+       ├── DepositorWins → Funds returned
+       ├── AgentWins → Funds released to agent
+       └── AutoReleased → Window expired, funds auto-released
+```
+
+### V2 Escrow Account Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Agent PDA |
+| `depositor` | `PublicKey` | Client wallet |
+| `balance` | `BN` | Current remaining balance |
+| `totalDeposited` | `BN` | Cumulative deposits |
+| `totalSettled` | `BN` | Cumulative settlements |
+| `callsSettled` | `BN` | Lifetime calls settled |
+| `pricePerCall` | `BN` | Base price per call |
+| `maxCalls` | `BN` | Max calls allowed (0 = unlimited) |
+| `expiresAt` | `BN` | Expiry timestamp (0 = never) |
+| `securityMode` | `SettlementSecurity` | Settlement validation mode |
+| `nonce` | `u16` | Escrow sequence number (allows multiple escrows per pair) |
+
+### V2 PDA Derivation
+
+```typescript
+import { deriveEscrowV2, derivePendingSettlement, deriveDispute } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+
+const [escrowV2Pda] = deriveEscrowV2(agentPda, depositorWallet, nonce);
+const [pendingPda] = derivePendingSettlement(escrowV2Pda, settlementNonce);
+const [disputePda] = deriveDispute(pendingPda);
+```
+
+### Migration from V1
+
+Existing V1 escrows can be migrated to V2 in a single transaction:
+
+```typescript
+await client.escrowV2.migrateFromV1(agentWallet);
+```
+
+## Staking (v0.7.0)
+
+Agent staking is a collateral mechanism — not yield farming. Staked SOL acts as a trust signal and can be slashed if the agent loses disputes.
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| Minimum Stake | 0.1 SOL | Minimum collateral required |
+| Cooldown | ~7 days (1,512,000 slots) | Wait period before unstake withdrawal |
+| Slash Rate | 50% (5,000 BPS) | Penalty for lost disputes |
+
+```typescript
+await client.staking.initStake(agentWallet, new BN(1_000_000_000));
+await client.staking.deposit(agentWallet, new BN(500_000_000));
+await client.staking.requestUnstake(agentWallet, new BN(500_000_000));
+// ... wait ~7 days ...
+await client.staking.completeUnstake(agentWallet);
+```
+
+## Subscriptions (v0.7.0)
+
+Recurring payment subscriptions with configurable billing intervals. An alternative to per-call escrow for agents that offer ongoing services.
+
+| Interval | Value | Use Case |
+|----------|-------|----------|
+| Daily | `0` | High-frequency monitoring |
+| Weekly | `1` | Periodic analysis |
+| Monthly | `2` | Standard SaaS-style access |
+
+```typescript
+import { BillingInterval } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+await client.subscription.create(agentWallet, {
+  subId: 1,
+  amount: new BN(100_000),
+  interval: BillingInterval.Monthly,
+});
+```
+
+## Deprecation Notice
+
+<Callout type="error">
+**V1 Escrow (`client.escrow`) — Deprecated in v0.7.0**
+
+V1 escrows lack settlement security, dispute resolution, and staking. They remain functional for backward compatibility but should not be used for new integrations.
+
+**Migration path:** Call `client.escrowV2.migrateFromV1(agentWallet)` to upgrade existing V1 escrows to V2 format.
+</Callout>

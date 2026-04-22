@@ -1,16 +1,10 @@
 export const dynamic = 'force-dynamic';
 
-/* ──────────────────────────────────────────────
- * GET /api/sap/escrows/map — Lightweight escrowPDA→info map
- *
- * SWR cached (5min fresh, 50min stale window).
- * Tries DB first, then falls back to RPC.
- * ────────────────────────────────────────────── */
-
 import { NextResponse } from 'next/server';
-import { findAllEscrows } from '~/lib/sap/discovery';
+import { findAllEscrows, serialize } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
 import { selectAllEscrows } from '~/lib/db/queries';
+import { isDbDown, markDbDown } from '~/db';
 import { dbEscrowToApi } from '~/lib/db/mappers';
 
 export type EscrowMapEntry = {
@@ -26,13 +20,13 @@ async function rpcFetchEscrowMap(): Promise<EscrowMap> {
   const escrows = await findAllEscrows();
   const map: EscrowMap = {};
   for (const e of escrows) {
-    const a = e.account;
+    const s = serialize(e.account) as { agent?: string; depositor?: string; agentWallet?: string; balance?: string };
     const pda = e.pda.toBase58();
     map[pda] = {
-      agent: a.agent?.toBase58?.() ?? String(a.agent ?? ''),
-      depositor: a.depositor?.toBase58?.() ?? String(a.depositor ?? ''),
-      agentWallet: a.agentWallet?.toBase58?.() ?? String(a.agentWallet ?? ''),
-      balance: a.balance?.toString?.() ?? '0',
+      agent: s.agent ?? '',
+      depositor: s.depositor ?? '',
+      agentWallet: s.agentWallet ?? '',
+      balance: s.balance ?? '0',
     };
   }
   return map;
@@ -40,15 +34,13 @@ async function rpcFetchEscrowMap(): Promise<EscrowMap> {
 
 export async function GET() {
   try {
-    // Step 1: cache peek
     const cached = peek<EscrowMap>('escrows:map');
     if (cached && Object.keys(cached).length > 0) {
       swr('escrows:map', rpcFetchEscrowMap, { ttl: 60_000, swr: 300_000 }).catch(() => {});
       return NextResponse.json(cached);
     }
 
-    // Step 2: DB read
-    try {
+    if (!isDbDown()) try {
       const dbRows = await selectAllEscrows();
       if (dbRows.length > 0) {
         const map: EscrowMap = {};
@@ -66,9 +58,9 @@ export async function GET() {
       }
     } catch (e) {
       console.warn('[escrows/map] DB read failed:', (e as Error).message);
+      markDbDown();
     }
 
-    // Step 3: cold start
     const data = await rpcFetchEscrowMap();
     swr('escrows:map', () => Promise.resolve(data), { ttl: 60_000, swr: 300_000 }).catch(() => {});
     return NextResponse.json(data);

@@ -5,16 +5,20 @@
     "quickstart",
     "client-setup",
     "agent-builder",
+    "---Memory & Sessions---",
     "session-manager",
+    "---Commerce---",
     "escrow-api",
+    "---Tools & Plugins---",
     "plugin-adapter",
+    "---Infrastructure---",
     "pda-reference",
     "event-system",
-    "postgres-mirror",
+    "account-structures",
     "endpoint-validation",
     "network-normalization",
     "zod-schemas",
-    "cli-reference",
-    "account-structures"
+    "postgres-mirror",
+    "cli-reference"
   ]
 }

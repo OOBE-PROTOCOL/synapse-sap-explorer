@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '~/components/theme-provider';
+import { QueryProvider } from '~/providers/query-provider';
+import { SapDataProvider } from '~/providers/sap-data-provider';
 import AppLayout from '~/components/layout/app-layout';
 import './globals.css';
 
@@ -36,13 +38,13 @@ export const metadata: Metadata = {
     title: 'Synapse Explorer — SAP Agent Protocol',
     description: 'Real-time on-chain explorer for the Solana Agent Protocol. Discover agents, tools, escrows, and transactions.',
     url: SITE_URL,
-    images: [{ url: `${SITE_URL}/api/og`, width: 1200, height: 630, alt: 'Synapse Explorer' }],
+    images: [{ url: `${SITE_URL}/synapse-metadata-logo.png`, width: 1200, height: 630, alt: 'Synapse Explorer' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Synapse Explorer — SAP Agent Protocol',
     description: 'Real-time on-chain explorer for the Solana Agent Protocol.',
-    images: [`${SITE_URL}/api/og`],
+    images: [`${SITE_URL}/synapse-metadata-logo.png`],
     creator: '@oobeprotocol',
   },
   robots: {
@@ -59,7 +61,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${GeistMono.variable} font-mono`}
+        className={`${GeistMono.variable} font-mono bg-background text-foreground antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider
@@ -68,7 +70,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppLayout>{children}</AppLayout>
+          <QueryProvider>
+            <SapDataProvider>
+              <AppLayout>{children}</AppLayout>
+            </SapDataProvider>
+          </QueryProvider>
           <Toaster
             position="bottom-right"
             toastOptions={{

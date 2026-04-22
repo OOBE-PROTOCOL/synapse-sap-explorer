@@ -9,6 +9,49 @@ The `SessionManager` is the recommended way to work with agent memory. It wraps 
 
 Access via `client.session`.
 
+## Type Reference
+
+```typescript
+interface SessionContext {
+  sessionId: string;           // Human-readable session name
+  sessionHash: string;         // SHA-256 of sessionId
+  sessionHashArray: number[];  // 32-byte array for PDA derivation
+  agentPda: PublicKey;         // Derived from wallet
+  vaultPda: PublicKey;         // Derived from agentPda
+  sessionPda: PublicKey;       // Derived from vaultPda + sessionHash
+  ledgerPda: PublicKey;        // Derived from sessionPda
+  wallet: PublicKey;           // Agent owner wallet
+}
+
+interface WriteResult {
+  txSignature: string;
+  contentHash: number[];       // SHA-256 of written data
+  dataSize: number;            // Bytes written
+}
+
+interface SealResult {
+  txSignature: string;
+  pageIndex: number;           // Zero-based sealed page index
+}
+
+interface RingBufferEntry {
+  data: Uint8Array;            // Raw bytes
+  text: string;                // UTF-8 decoded
+  size: number;                // Byte length
+}
+
+interface SessionStatus {
+  vaultExists: boolean;
+  sessionExists: boolean;
+  ledgerExists: boolean;
+  isClosed: boolean;
+  totalEntries: number;
+  totalDataSize: string;       // BN as string
+  numPages: number;
+  merkleRoot: string;          // Hex-encoded 32 bytes
+}
+```
+
 ## How It Works
 
 ```

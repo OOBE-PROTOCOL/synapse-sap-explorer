@@ -1,13 +1,138 @@
 ---
 title: Escrow API
-description: Low-level and high-level APIs for x402 escrow management, settlement, and balance tracking.
+description: V2 escrow system with dispute resolution, settlement security, staking, and subscriptions. Includes deprecated V1 reference.
 ---
 
 # Escrow API
 
-The SDK provides two layers for managing x402 escrow payments: the high-level `X402Registry` and the low-level `EscrowModule`.
+<Callout type="warn">
+**v0.7.0 Breaking Change:** The V1 `EscrowModule` (`client.escrow`) is deprecated. Use `client.escrowV2` for all new integrations. V1 escrows lack settlement security, dispute resolution, and staking support.
+</Callout>
+
+The SDK provides three escrow-related modules:
+
+| Module | Access | Status | Description |
+|--------|--------|--------|-------------|
+| `EscrowV2Module` | `client.escrowV2` | **Current** | Full escrow with dispute resolution & settlement security |
+| `X402Registry` | `client.x402` | **Current** | High-level payment flow (cost estimation, headers, settlement) |
+| `EscrowModule` | `client.escrow` | **Deprecated** | V1 escrow without disputes — use V2 instead |
+
+## EscrowV2Module (v0.7.0)
+
+Access via `client.escrowV2`. Supports settlement security modes, dispute resolution, and pending settlements.
+
+### Settlement Security Modes
+
+V2 escrows require a security mode that determines how settlements are validated:
+
+| Mode | Enum Value | Description |
+|------|-----------|-------------|
+| `SettlementSecurity.SelfReport` | `0` | Agent settles unilaterally — no co-sign needed |
+| `SettlementSecurity.CoSigned` | `1` | Both depositor and agent must co-sign every settlement |
+| `SettlementSecurity.DisputeWindow` | `2` | Agent proposes settlement, depositor has time window to dispute |
+
+### Create V2 Escrow
+
+```typescript
+import { SettlementSecurity } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+await client.escrowV2.create(agentWallet, {
+  deposit: new BN(100_000),
+  pricePerCall: new BN(1_000),
+  maxCalls: new BN(100),
+  expiresAt: new BN(Math.floor(Date.now() / 1000) + 86400),
+  securityMode: SettlementSecurity.CoSigned,
+});
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deposit` | `BN` | Initial deposit in lamports |
+| `pricePerCall` | `BN` | Lamports per call |
+| `maxCalls` | `BN` | Maximum calls (0 = unlimited) |
+| `expiresAt` | `BN` | Unix timestamp (0 = never) |
+| `securityMode` | `SettlementSecurity` | Settlement validation mode |
+
+### Deposit / Withdraw / Close
+
+```typescript
+// Top up escrow
+await client.escrowV2.deposit(agentWallet, nonce, new BN(50_000));
+
+// Withdraw unused funds (depositor only)
+await client.escrowV2.withdraw(agentWallet, nonce, new BN(30_000));
+
+// Close empty escrow (reclaims rent)
+await client.escrowV2.close(agentWallet, nonce);
+```
+
+### Settlement (SelfReport Mode)
+
+```typescript
+import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const serviceHash = hashToArray(sha256("service-proof-001"));
+await client.escrowV2.settle(depositorWallet, nonce, new BN(5), serviceHash);
+```
+
+### Dispute Flow (DisputeWindow Mode)
+
+When using `DisputeWindow` security, settlements go through a pending state:
+
+```typescript
+// 1. Agent creates pending settlement
+await client.escrowV2.createPendingSettlement(
+  agentWallet, depositorWallet, nonce,
+  settlementIdx, new BN(5), new BN(5000), serviceHash,
+);
+
+// 2. Depositor can dispute within the window
+await client.escrowV2.fileDispute(agentWallet, nonce, settlementIdx, evidenceHash);
+
+// 3. Arbiter resolves dispute
+await client.escrowV2.resolveDispute(
+  depositorWallet, agentWallet, nonce, settlementIdx,
+  DisputeOutcome.DepositorWins,
+);
+
+// 4. Or if no dispute, finalize after window expires
+await client.escrowV2.finalizeSettlement(agentWallet, depositorWallet, nonce, settlementIdx);
+
+// 5. Cleanup
+await client.escrowV2.closeDispute(pendingSettlementPda);
+await client.escrowV2.closePendingSettlement(pendingSettlementPda);
+```
+
+### Dispute Outcomes
+
+| Outcome | Value | Description |
+|---------|-------|-------------|
+| `DisputeOutcome.Pending` | `0` | Dispute filed, awaiting resolution |
+| `DisputeOutcome.DepositorWins` | `1` | Funds returned to depositor |
+| `DisputeOutcome.AgentWins` | `2` | Agent receives the disputed amount |
+| `DisputeOutcome.AutoReleased` | `3` | Window expired — auto-released to agent |
+
+### V1 to V2 Migration
+
+```typescript
+// Migrate an existing V1 escrow to V2 format
+await client.escrowV2.migrateFromV1(agentWallet);
+```
+
+### Fetch V2 Escrow Data
+
+```typescript
+const escrow = await client.escrowV2.fetch(agentPda, depositor, nonce);
+const escrowOrNull = await client.escrowV2.fetchNullable(escrowPda);
+const pending = await client.escrowV2.fetchPendingSettlement(pendingPda);
+const dispute = await client.escrowV2.fetchDispute(disputePda);
+```
 
 ## X402Registry (High-Level)
+
+<Callout type="info">
+`X402Registry` still works with both V1 and V2 escrows. In v0.7.0, `getBalance()` auto-detects V2 escrows first via `deriveEscrowV2`, falling back to V1.
+</Callout>
 
 Access via `client.x402`. Handles cost estimation, payment preparation, header generation, settlement, and balance tracking.
 
@@ -123,9 +248,13 @@ const escrow = await client.x402.fetchEscrow(agentWallet);
 const events = await client.x402.verifySettlement(txSignature);
 ```
 
-## EscrowModule (Low-Level)
+## EscrowModule (Low-Level) — Deprecated
 
-Access via `client.escrow`. Direct Anchor instruction wrappers.
+<Callout type="error">
+**Deprecated in v0.7.0.** Use `client.escrowV2` for all new integrations. The V1 `EscrowModule` lacks settlement security modes, dispute resolution, and staking support. Existing V1 escrows can be migrated using `client.escrowV2.migrateFromV1()`.
+</Callout>
+
+Access via `client.escrow`. Direct Anchor instruction wrappers for V1 escrows.
 
 ### Create
 
@@ -184,4 +313,81 @@ await client.escrow.withdraw(agentWallet, new BN(25_000_000));
 
 // Close escrow PDA. Balance must be 0. Reclaims rent to payer.
 await client.escrow.close(agentWallet);
+```
+
+## StakingModule (v0.7.0)
+
+Access via `client.staking`. Agent collateral staking — not yield, but a trust signal and slashing mechanism.
+
+### Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `MIN_STAKE` | 100,000,000 lamports (0.1 SOL) | Minimum stake amount |
+| `UNSTAKE_COOLDOWN_SLOTS` | 1,512,000 (~7 days) | Cooldown before withdrawal |
+| `SLASH_BPS` | 5,000 (50%) | Slash penalty for lost disputes |
+
+### Lifecycle
+
+```typescript
+// Initialize stake (minimum 0.1 SOL)
+await client.staking.initStake(agentWallet, new BN(1_000_000_000));
+
+// Add more stake
+await client.staking.deposit(agentWallet, new BN(500_000_000));
+
+// Request unstake (starts 7-day cooldown)
+await client.staking.requestUnstake(agentWallet, new BN(500_000_000));
+
+// Complete unstake after cooldown expires
+await client.staking.completeUnstake(agentWallet);
+```
+
+### Fetch Stake Data
+
+```typescript
+const stake = await client.staking.fetch(agentPda);
+const stakeOrNull = await client.staking.fetchNullable(agentPda);
+const stakeByPda = await client.staking.fetchByPda(stakePda);
+```
+
+## SubscriptionModule (v0.7.0)
+
+Access via `client.subscription`. Recurring payment subscriptions with configurable billing intervals.
+
+### Billing Intervals
+
+| Interval | Value | Description |
+|----------|-------|-------------|
+| `BillingInterval.Daily` | `0` | Daily billing cycle |
+| `BillingInterval.Weekly` | `1` | Weekly billing cycle |
+| `BillingInterval.Monthly` | `2` | Monthly billing cycle |
+
+### Lifecycle
+
+```typescript
+import { BillingInterval } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+// Create a subscription
+await client.subscription.create(agentWallet, {
+  subId: 1,
+  amount: new BN(100_000),
+  interval: BillingInterval.Monthly,
+});
+
+// Fund subscription
+await client.subscription.fund(agentWallet, 1, new BN(100_000));
+
+// Cancel subscription (stops future billing)
+await client.subscription.cancel(agentWallet, 1);
+
+// Close subscription PDA (reclaim rent)
+await client.subscription.close(agentWallet, 1);
+```
+
+### Fetch Subscription Data
+
+```typescript
+const sub = await client.subscription.fetch(agentPda, subscriber, subId);
+const subOrNull = await client.subscription.fetchNullable(subscriptionPda);
 ```

@@ -1,7 +1,7 @@
 // src/indexer/sync-agents.ts — Fetch all agents + stats → upsert DB
 import { db } from '~/db';
 import { agents, agentStats } from '~/db/schema';
-import { findAllAgents, findAllAgentStats } from '~/lib/sap/discovery';
+import { AgentAccountData, AgentStatsData, findAllAgents, findAllAgentStats } from '~/lib/sap/discovery';
 import { serializeAccount } from '@oobe-protocol-labs/synapse-sap-sdk/utils';
 import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, sleep } from './utils';
 import { setCursor } from './cursor';
@@ -18,16 +18,16 @@ export async function syncAgents(): Promise<number> {
   }
 
   // Also fetch stats for enrichment
-  let statsMap = new Map<string, any>();
+  const statsMap = new Map<string, AgentStatsData>();
   try {
     const rawStats = await withRetry(() => findAllAgentStats(), 'agents:stats');
     for (const s of rawStats) {
       const agentPda = pk(s.stats?.agent ?? s.pda);
-      if (agentPda) statsMap.set(agentPda, s.stats);
+      if (agentPda && s.stats) statsMap.set(agentPda, s.stats);
     }
     log('agents', `Fetched ${rawStats.length} agent stats`);
-  } catch (e: any) {
-    logErr('agents', `Stats fetch failed (continuing without): ${e.message}`);
+  } catch (e: unknown) {
+    logErr('agents', `Stats fetch failed (continuing without): ${(e as Error).message}`);
   }
 
   await sleep(1000); // pacing between RPC calls
@@ -43,7 +43,7 @@ export async function syncAgents(): Promise<number> {
       .filter((a) => a.identity)
       .map((a) => {
         const pda = pk(a.pda);
-        const id = a.identity as any;
+        const id = a.identity as AgentAccountData;
         // Deep-serialize complex objects for JSONB storage
         const serialized = serializeAccount(id);
 
@@ -85,8 +85,8 @@ export async function syncAgents(): Promise<number> {
           set: conflictUpdateSet(agents, ['pda']),
         });
       upserted += rows.length;
-    } catch (e: any) {
-      logErr('agents', `Batch upsert failed (i=${i}): ${e.message}`);
+    } catch (e: unknown) {
+      logErr('agents', `Batch upsert failed (i=${i}): ${(e as Error).message}`);
       // Fallback: insert one by one
       for (const row of rows) {
         try {
@@ -95,8 +95,8 @@ export async function syncAgents(): Promise<number> {
             set: conflictUpdateSet(agents, ['pda']),
           });
           upserted++;
-        } catch (e2: any) {
-          logErr('agents', `Single upsert failed pda=${row.pda.slice(0, 8)}: ${e2.message}`);
+        } catch (e2: unknown) {
+          logErr('agents', `Single upsert failed pda=${row.pda.slice(0, 8)}: ${(e2 as Error).message}`);
         }
       }
     }
@@ -122,7 +122,7 @@ export async function syncAgents(): Promise<number> {
           set: conflictUpdateSet(agentStats, ['agentPda']),
         });
       statsUpserted++;
-    } catch (e: any) {
+    } catch {
       // FK violation: agent not in DB yet — skip
     }
   }

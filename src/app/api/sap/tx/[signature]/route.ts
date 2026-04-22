@@ -11,12 +11,15 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { BorshInstructionCoder } from '@coral-xyz/anchor';
 import { SAP_IDL } from '@oobe-protocol-labs/synapse-sap-sdk/idl';
-import { getSynapseConnection } from '~/lib/sap/discovery';
+import { getSynapseConnection, getSapClient } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
 import { selectTxDetails, upsertTxDetail, upsertTransaction } from '~/lib/db/queries';
+import type { ParsedAnchorEvent, ApiTxInstruction } from '~/types';
+import type { RpcTransactionMessage, RpcTransactionMeta } from '~/types/indexer';
+import type { AccountKey, ParsedInstruction, BalanceChange, TokenBalanceChange } from '~/db/schema';
 
 /* ── SAP instruction decoder (v0.4.2 IDL-based) ── */
-const sapCoder = new BorshInstructionCoder(SAP_IDL as any);
+const sapCoder = new BorshInstructionCoder(SAP_IDL as unknown as ConstructorParameters<typeof BorshInstructionCoder>[0]);
 const SAP_PROGRAM_ID = 'SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ';
 
 function snakeToPascal(s: string): string {
@@ -42,17 +45,17 @@ function decodeBase58(str: string): Buffer {
 }
 
 /** Decode SAP instruction data → name + typed args */
-function decodeSapInstruction(data: string | null): { name: string; args: Record<string, any> } | null {
+function decodeSapInstruction(data: string | null): { name: string; args: Record<string, unknown> } | null {
   if (!data) return null;
   try {
     const buf = decodeBase58(data);
     const decoded = sapCoder.decode(buf);
     if (decoded) {
       // Serialise BN / PublicKey values for JSON
-      const args: Record<string, any> = {};
+      const args: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(decoded.data)) {
-        if (v && typeof v === 'object' && 'toNumber' in v) args[k] = (v as any).toNumber();
-        else if (v && typeof v === 'object' && 'toBase58' in v) args[k] = (v as any).toBase58();
+        if (v && typeof v === 'object' && 'toNumber' in v) args[k] = (v as { toNumber: () => number }).toNumber();
+        else if (v && typeof v === 'object' && 'toBase58' in v) args[k] = (v as { toBase58: () => string }).toBase58();
         else args[k] = v;
       }
       return { name: snakeToPascal(decoded.name), args };
@@ -61,58 +64,115 @@ function decodeSapInstruction(data: string | null): { name: string; args: Record
   return null;
 }
 
-/** Extract SAP events from transaction logs */
-function extractSapEvents(logs: string[]): Array<{ name: string; data: Record<string, any> }> {
-  const events: Array<{ name: string; data: Record<string, any> }> = [];
-  try {
-    const EVENT_PREFIX = 'Program data: ';
-    for (const log of logs) {
-      if (!log.includes(EVENT_PREFIX)) continue;
-      const b64 = log.split(EVENT_PREFIX)[1];
-      if (!b64) continue;
-      try {
-        const buf = Buffer.from(b64, 'base64');
-        // Anchor events: 8-byte discriminator + borsh-encoded data
-        // We extract the discriminator and try to match against known event names
-        if (buf.length >= 8) {
-          const disc = buf.subarray(0, 8).toString('hex');
-          events.push({ name: `Event(${disc.slice(0, 8)}…)`, data: {} });
+/** Serialize Anchor event data for JSON (PublicKey→base58, BN→string, Buffer→hex) */
+function serializeEventData(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== 'object') return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+    if (v === null || v === undefined) {
+      out[k] = null;
+    } else if (typeof v === 'object' && 'toBase58' in v) {
+      out[k] = (v as { toBase58: () => string }).toBase58();
+    } else if (typeof v === 'object' && 'toNumber' in v) {
+      try { out[k] = (v as { toNumber: () => number }).toNumber(); } catch { out[k] = (v as { toString: () => string }).toString(); }
+    } else if (Buffer.isBuffer(v)) {
+      out[k] = (v as Buffer).toString('hex');
+    } else if (v instanceof Uint8Array) {
+      out[k] = Buffer.from(v).toString('hex');
+    } else if (Array.isArray(v)) {
+      out[k] = v.map((item) =>
+        typeof item === 'object' && item !== null ? serializeEventData(item) : item,
+      );
+    } else if (typeof v === 'object') {
+      const keys = Object.keys(v);
+      if (keys.length === 1 && typeof (v as Record<string, unknown>)[keys[0]] === 'object') {
+        const inner = (v as Record<string, unknown>)[keys[0]];
+        if (inner && Object.keys(inner as object).length === 0) {
+          out[k] = keys[0]; // Anchor enum variant
+        } else {
+          out[k] = serializeEventData(v);
         }
-      } catch { /* skip */ }
+      } else {
+        out[k] = serializeEventData(v);
+      }
+    } else {
+      out[k] = v;
     }
-  } catch { /* ignore */ }
+  }
+  return out;
+}
+
+/** Extract SAP events from transaction logs using SDK EventParser */
+function extractSapEvents(logs: string[]): ParsedAnchorEvent[] {
+  try {
+    const sap = getSapClient();
+    const parsed: ParsedAnchorEvent[] = sap.events.parseLogs(logs);
+    if (parsed && parsed.length > 0) {
+      return parsed.map((evt) => ({
+        name: evt.name,
+        data: serializeEventData(evt.data),
+      }));
+    }
+  } catch (e) {
+    console.warn('[tx] SDK EventParser failed:', (e as Error).message);
+    // Fall through to manual extraction
+  }
+
+  // Fallback: extract raw event data from "Program data:" log lines under SAP program
+  const events: ParsedAnchorEvent[] = [];
+  let inSap = false;
+  for (const line of logs) {
+    if (line.includes(`Program ${SAP_PROGRAM_ID} invoke`)) inSap = true;
+    else if (line.includes(`Program ${SAP_PROGRAM_ID} success`) || line.includes(`Program ${SAP_PROGRAM_ID} failed`)) inSap = false;
+    else if (inSap && line.includes('Program data:')) {
+      const b64 = line.split('Program data:')[1]?.trim();
+      if (b64) {
+        try {
+          const buf = Buffer.from(b64, 'base64');
+          // First 8 bytes are the event discriminator
+          const disc = buf.subarray(0, 8).toString('hex');
+          events.push({
+            name: `SapEvent_${disc.slice(0, 8)}`,
+            data: { raw: b64, discriminator: disc },
+          });
+        } catch {
+          events.push({ name: 'SapEvent', data: { raw: b64 } });
+        }
+      }
+    }
+  }
   return events;
 }
 
 /** Extract account key strings from any message version */
-function extractAccountKeys(message: any): string[] {
+function extractAccountKeys(message: RpcTransactionMessage): string[] {
   if (message.accountKeys) {
-    return message.accountKeys.map((k: any) =>
-      typeof k === 'string' ? k : k.toBase58?.() ?? k.toString?.() ?? String(k),
+    return message.accountKeys.map((k) =>
+      typeof k === 'string' ? k : k.pubkey,
     );
   }
   if (message.staticAccountKeys) {
-    return message.staticAccountKeys.map((k: any) =>
-      typeof k === 'string' ? k : k.toBase58?.() ?? k.toString?.() ?? String(k),
+    return message.staticAccountKeys.map((k) =>
+      typeof k === 'string' ? k : k.toBase58?.() ?? String(k),
     );
   }
-  if (typeof message.getAccountKeys === 'function') {
+  if (typeof (message as Record<string, unknown>).getAccountKeys === 'function') {
     try {
-      const keys = message.getAccountKeys();
-      return keys.keySegments().flat().map((k: any) => k.toBase58?.() ?? String(k));
+      const keys = (message as unknown as { getAccountKeys: () => { keySegments: () => Array<Array<{ toBase58?(): string }>> } }).getAccountKeys();
+      return keys.keySegments().flat().map((k) => k.toBase58?.() ?? String(k));
     } catch { /* fall through */ }
   }
   return [];
 }
 
 /** Extract instructions from any message version */
-function extractInstructions(message: any): any[] {
-  if (message.instructions) return message.instructions;
+function extractInstructions(message: RpcTransactionMessage): Array<Record<string, unknown>> {
+  if (message.instructions) return message.instructions as unknown as Array<Record<string, unknown>>;
   if (message.compiledInstructions) {
-    return message.compiledInstructions.map((cix: any) => ({
+    return message.compiledInstructions.map((cix) => ({
       programIdIndex: cix.programIdIndex,
       accounts: cix.accountKeyIndexes ?? [],
-      data: cix.data ? Buffer.from(cix.data).toString('base64') : null,
+      data: cix.data ? Buffer.from(cix.data as Uint8Array).toString('base64') : null,
     }));
   }
   return [];
@@ -135,20 +195,20 @@ export async function GET(
             : null;
           return {
             signature: row.signature,
-            slot: (row as any).slot ?? null as number | null,
+            slot: (row as unknown as { slot?: number | null }).slot ?? null,
             blockTime: dbBlockTime,
-            fee: (row as any).fee ?? 0,
+            fee: (row as unknown as { fee?: number }).fee ?? 0,
             status: row.status,
             error: row.errorData ?? null,
             confirmations: null,
-            version: (row as any).version ?? 'legacy',
+            version: (row as unknown as { version?: string }).version ?? 'legacy',
             recentBlockhash: null as string | null,
             accountKeys: row.accountKeys ?? [],
-            instructions: ((row.instructions ?? []) as any[]).map((ix: any) => ({
+            instructions: ((row.instructions ?? []) as Array<Record<string, unknown>>).map((ix) => ({
               ...ix,
-              innerInstructions: (ix.innerInstructions ?? []).map((inner: any) => ({
+              innerInstructions: ((ix.innerInstructions as Array<Record<string, unknown>> | undefined) ?? []).map((inner) => ({
                 ...inner,
-                innerInstructions: inner.innerInstructions ?? [],
+                innerInstructions: (inner.innerInstructions as unknown[] | undefined) ?? [],
               })),
             })),
             logs: row.logs ?? [],
@@ -159,7 +219,7 @@ export async function GET(
             _fromDb: true,
           };
         }
-      } catch { /* DB unavailable */ }
+      } catch (e) { console.warn(`[tx/${sig}] DB read failed:`, (e as Error).message); }
 
       // --- RPC fallback ---
       const conn = getSynapseConnection();
@@ -169,8 +229,8 @@ export async function GET(
 
       if (!tx) return null;
 
-      const meta = tx.meta;
-      const message: any = tx.transaction.message;
+      const meta: RpcTransactionMeta | undefined = tx.meta as RpcTransactionMeta | undefined;
+      const message = tx.transaction.message as unknown as RpcTransactionMessage;
       const header = message.header;
 
       const allKeys = extractAccountKeys(message);
@@ -178,8 +238,7 @@ export async function GET(
         const w = meta.loadedAddresses.writable ?? [];
         const r = meta.loadedAddresses.readonly ?? [];
         for (const k of [...w, ...r]) {
-          const s = typeof k === 'string' ? k : k.toBase58?.() ?? String(k);
-          if (!allKeys.includes(s)) allKeys.push(s);
+          if (!allKeys.includes(k)) allKeys.push(k);
         }
       }
 
@@ -194,49 +253,49 @@ export async function GET(
       const signer = accountKeys.find(k => k.signer)?.pubkey ?? allKeys[0] ?? '';
 
       const rawIxs = extractInstructions(message);
-      const instructions: any[] = rawIxs.map((ix: any) => {
-        const programId = allKeys[ix.programIdIndex] ?? String(ix.programIdIndex);
-        const accounts = (ix.accounts ?? ix.accountKeyIndexes ?? []).map(
+      const instructions: ApiTxInstruction[] = rawIxs.map((ix) => {
+        const programId = allKeys[(ix as Record<string, unknown>).programIdIndex as number] ?? String((ix as Record<string, unknown>).programIdIndex);
+        const accounts = ((ix as Record<string, unknown>).accounts as number[] ?? (ix as Record<string, unknown>).accountKeyIndexes as number[] ?? []).map(
           (accIdx: number) => allKeys[accIdx] ?? String(accIdx),
         );
         // Decode SAP instruction type + args from IDL discriminator
-        let type = ix.parsed?.type ?? null;
-        let decodedArgs: Record<string, any> | null = null;
-        if (programId === SAP_PROGRAM_ID && ix.data) {
-          const decoded = decodeSapInstruction(ix.data);
+        let type = ((ix as Record<string, unknown>).parsed as Record<string, unknown> | undefined)?.type as string | null ?? null;
+        let decodedArgs: Record<string, unknown> | null = null;
+        if (programId === SAP_PROGRAM_ID && (ix as Record<string, unknown>).data) {
+          const decoded = decodeSapInstruction((ix as Record<string, unknown>).data as string);
           if (decoded) { type = decoded.name; decodedArgs = decoded.args; }
         }
         return {
           programId,
           program: identifyProgram(programId),
-          data: ix.data ?? null,
+          data: (ix as Record<string, unknown>).data as string ?? null,
           accounts,
-          parsed: ix.parsed ?? null,
+          parsed: (ix as Record<string, unknown>).parsed ?? null,
           type,
           decodedArgs,
-          innerInstructions: [] as any[],
+          innerInstructions: [] as ApiTxInstruction[],
         };
       });
 
-      const innerInstructions = meta?.innerInstructions?.map((inner: any) => ({
+      const innerInstructions = meta?.innerInstructions?.map((inner) => ({
         index: inner.index,
-        instructions: inner.instructions?.map((ix: any) => {
-          const programId = allKeys[ix.programIdIndex] ?? String(ix.programIdIndex ?? '');
-          let type = ix.parsed?.type ?? null;
-          let decodedArgs: Record<string, any> | null = null;
+        instructions: inner.instructions?.map((ix) => {
+          const programId = ix.programId ?? (ix.programIdIndex != null ? allKeys[ix.programIdIndex] : undefined) ?? String(ix.programIdIndex ?? '');
+          let type = (ix as unknown as Record<string, unknown>).parsed != null ? ((ix as unknown as Record<string, unknown>).parsed as Record<string, unknown>).type as string | null : null;
+          let decodedArgs: Record<string, unknown> | null = null;
           if (programId === SAP_PROGRAM_ID && ix.data) {
-            const decoded = decodeSapInstruction(ix.data);
+            const decoded = decodeSapInstruction(ix.data as string);
             if (decoded) { type = decoded.name; decodedArgs = decoded.args; }
           }
           return {
             programId,
             program: identifyProgram(programId),
             data: ix.data ?? null,
-            accounts: (ix.accounts ?? ix.accountKeyIndexes ?? []).map((accIdx: number) => allKeys[accIdx] ?? String(accIdx)),
-            parsed: ix.parsed ?? null,
+            accounts: (ix.accounts ?? []).map((accIdx) => typeof accIdx === 'number' ? allKeys[accIdx] ?? String(accIdx) : accIdx),
+            parsed: (ix as unknown as Record<string, unknown>).parsed ?? null,
             type,
             decodedArgs,
-            innerInstructions: [] as any[],
+            innerInstructions: [] as ApiTxInstruction[],
           };
         }) ?? [],
       })) ?? [];
@@ -258,11 +317,11 @@ export async function GET(
         pre: preBalances[i] ?? 0,
         post: postBalances[i] ?? 0,
         change: (postBalances[i] ?? 0) - (preBalances[i] ?? 0),
-      })).filter((b: any) => b.change !== 0);
+      })).filter((b) => b.change !== 0);
 
-      const tokenBalanceChanges = postTokenBalances.map((post: any) => {
+      const tokenBalanceChanges = postTokenBalances.map((post) => {
         const pre = preTokenBalances.find(
-          (p: any) => p.accountIndex === post.accountIndex && p.mint === post.mint,
+          (p) => p.accountIndex === post.accountIndex && p.mint === post.mint,
         );
         return {
           account: allKeys[post.accountIndex] ?? '',
@@ -306,16 +365,16 @@ export async function GET(
           signer: signer,
           fee: meta?.fee ?? 0,
           feeSol: (meta?.fee ?? 0) / 1e9,
-          programs: result.instructions.map((ix: any) => ({
+          programs: result.instructions.map((ix) => ({
             id: ix.programId,
             name: ix.program ?? null,
           })),
           sapInstructions: result.instructions
-            .filter((ix: any) => ix.programId === SAP_PROGRAM_ID && ix.type)
-            .map((ix: any) => ix.type),
+            .filter((ix) => ix.programId === SAP_PROGRAM_ID && ix.type)
+            .map((ix) => ix.type as string),
           instructionCount: result.instructions.length,
           innerInstructionCount: result.instructions.reduce(
-            (sum: number, ix: any) => sum + (ix.innerInstructions?.length ?? 0), 0,
+            (sum: number, ix) => sum + (ix.innerInstructions?.length ?? 0), 0,
           ),
           computeUnits: meta?.computeUnitsConsumed ?? null,
           signerBalanceChange: 0,
@@ -325,15 +384,15 @@ export async function GET(
         upsertTxDetail({
           signature: sig,
           status: result.status,
-          errorData: result.error as any,
-          accountKeys: result.accountKeys as any,
-          instructions: result.instructions as any,
+          errorData: result.error as Record<string, unknown> | null,
+          accountKeys: result.accountKeys as unknown as AccountKey[],
+          instructions: result.instructions as unknown as ParsedInstruction[],
           logs: result.logs,
-          balanceChanges: result.balanceChanges as any,
-          tokenBalanceChanges: result.tokenBalanceChanges as any,
+          balanceChanges: result.balanceChanges as unknown as BalanceChange[],
+          tokenBalanceChanges: result.tokenBalanceChanges as unknown as TokenBalanceChange[],
           computeUnits: meta?.computeUnitsConsumed ?? null,
         }).catch(() => {});
-      } catch { /* ignore */ }
+      } catch (e) { console.warn(`[tx/${sig}] DB write-back failed:`, (e as Error).message); }
 
       return result;
     }, { ttl: 120_000, swr: 600_000 }); // 2min fresh, 10min stale (immutable data)
@@ -343,12 +402,13 @@ export async function GET(
     }
 
     // Remove internal flag
-    const { _fromDb, ...response } = detail;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _fromDb: _, ...response } = detail;
     return NextResponse.json(response);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[tx detail]', err);
     return NextResponse.json(
-      { error: err.message ?? 'Failed to fetch transaction' },
+      { error: (err as Error).message ?? 'Failed to fetch transaction' },
       { status: 500 },
     );
   }

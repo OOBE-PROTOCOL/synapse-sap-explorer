@@ -1,78 +1,178 @@
 export const dynamic = 'force-dynamic';
 
-/* ──────────────────────────────────────────────
- * GET /api/sap/escrows/events — Escrow lifecycle events
- *
- * Query params:
- *   ?escrow=<pda>  — filter by escrow PDA
- *   ?limit=100     — max events to return
- *
- * Events are extracted from indexed transactions and stored in DB.
- * ────────────────────────────────────────────── */
-
 import { NextRequest } from 'next/server';
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
 import { peek, swr } from '~/lib/cache';
 import {
   selectEscrowEvents,
-  selectAllEscrows,
   upsertEscrowEvents,
+  selectTransactions,
+  selectTxDetails,
 } from '~/lib/db/queries';
 import { dbEscrowEventToApi } from '~/lib/db/mappers';
-import { extractEscrowEvents, type TxForEventExtraction } from '~/lib/escrow-events';
-import { selectTransactions, selectTxDetails } from '~/lib/db/queries';
+import { isDbDown } from '~/db';
+import { getSapClient } from '~/lib/sap/discovery';
+import type { EscrowEventType } from '~/db/schema';
+import type { ParsedAnchorEvent } from '~/types';
+
+/** SDK event name → internal EscrowEventType */
+const SDK_EVENT_TO_TYPE: Record<string, EscrowEventType> = {
+  EscrowCreatedEvent:   'create_escrow',
+  EscrowDepositedEvent: 'deposit_escrow',
+  PaymentSettledEvent:  'settle_calls',
+  BatchSettledEvent:    'settle_calls',
+  EscrowWithdrawnEvent: 'withdraw_escrow',
+  EscrowClosedEvent:    'close_escrow',
+};
+
+/** Extract a base58 string from a PublicKey-like value */
+const toStr = (v: unknown): string | null => {
+  if (!v) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object' && v !== null && 'toBase58' in v) return (v as { toBase58: () => string }).toBase58();
+  return String(v);
+};
+
+/** Extract a numeric string from a BN-like or number value */
+const toNum = (v: unknown): string | null => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'object' && v !== null && 'toNumber' in v) {
+    try { return String((v as { toNumber: () => number }).toNumber()); } catch { return (v as { toString: () => string }).toString(); }
+  }
+  return String(v);
+};
 
 /**
- * Scan recent transactions for escrow events and upsert them.
- * This is the "event extraction" background job.
+ * Derive balanceBefore and balanceAfter from on-chain event data.
+ * On-chain events emit different fields per type:
+ *
+ * | Event               | amount field        | balance field     | balanceBefore formula       |
+ * |---------------------|---------------------|-------------------|-----------------------------|
+ * | EscrowCreatedEvent  | initial_deposit     | (none)            | 0                           |
+ * | EscrowDepositedEvent| amount              | new_balance       | new_balance - amount        |
+ * | PaymentSettledEvent | amount              | remaining_balance | remaining_balance + amount  |
+ * | BatchSettledEvent   | total_amount        | remaining_balance | remaining_balance + amount  |
+ * | EscrowWithdrawnEvent| amount              | remaining_balance | remaining_balance + amount  |
+ * | EscrowClosedEvent   | (none)              | (none)            | 0 (constraint: balance==0) |
+ */
+function deriveBalances(
+  eventName: string,
+  data: ParsedAnchorEvent['data'],
+): { balanceBefore: string | null; balanceAfter: string | null; amountChanged: string | null } {
+  switch (eventName) {
+    case 'EscrowCreatedEvent': {
+      const deposit = toNum(data.initialDeposit ?? data.initial_deposit) ?? '0';
+      return {
+        balanceBefore: '0',
+        balanceAfter: deposit,
+        amountChanged: deposit,
+      };
+    }
+    case 'EscrowDepositedEvent': {
+      const amount = toNum(data.amount) ?? '0';
+      const newBalance = toNum(data.newBalance ?? data.new_balance) ?? '0';
+      const before = String(BigInt(newBalance) - BigInt(amount));
+      return {
+        balanceBefore: before,
+        balanceAfter: newBalance,
+        amountChanged: amount,
+      };
+    }
+    case 'PaymentSettledEvent': {
+      const amount = toNum(data.amount) ?? '0';
+      const remaining = toNum(data.remainingBalance ?? data.remaining_balance) ?? '0';
+      const before = String(BigInt(remaining) + BigInt(amount));
+      return {
+        balanceBefore: before,
+        balanceAfter: remaining,
+        amountChanged: `-${amount}`,
+      };
+    }
+    case 'BatchSettledEvent': {
+      const totalAmount = toNum(data.totalAmount ?? data.total_amount) ?? '0';
+      const remaining = toNum(data.remainingBalance ?? data.remaining_balance) ?? '0';
+      const before = String(BigInt(remaining) + BigInt(totalAmount));
+      return {
+        balanceBefore: before,
+        balanceAfter: remaining,
+        amountChanged: `-${totalAmount}`,
+      };
+    }
+    case 'EscrowWithdrawnEvent': {
+      const amount = toNum(data.amount) ?? '0';
+      const remaining = toNum(data.remainingBalance ?? data.remaining_balance) ?? '0';
+      const before = String(BigInt(remaining) + BigInt(amount));
+      return {
+        balanceBefore: before,
+        balanceAfter: remaining,
+        amountChanged: `-${amount}`,
+      };
+    }
+    case 'EscrowClosedEvent': {
+      return {
+        balanceBefore: '0',
+        balanceAfter: '0',
+        amountChanged: '0',
+      };
+    }
+    default:
+      return { balanceBefore: null, balanceAfter: null, amountChanged: null };
+  }
+}
+
+/**
+ * Scan recent indexed transactions for escrow events using the SDK EventParser.
+ * Parses real Anchor emitted events and derives all balance fields.
  */
 async function extractAndStoreEvents() {
-  // Get all known escrow PDAs
-  const escrows = await selectAllEscrows();
-  const escrowPdas = new Set(escrows.map((e) => e.pda));
-  if (escrowPdas.size === 0) return [];
+  const sap = getSapClient();
+  const txRows = await selectTransactions(150);
+  if (txRows.length === 0) return [];
 
-  // Get recent transactions
-  const txRows = await selectTransactions(200);
-
-  // Filter to only escrow-related txs
-  const escrowTxs = txRows.filter((tx) =>
-    (tx.sapInstructions ?? []).some((ix) =>
-      /escrow|settle|deposit|withdraw|close/i.test(ix),
-    ),
-  );
-
-  if (escrowTxs.length === 0) return [];
-
-  // For each tx, try to get detail (accountKeys) for PDA matching
   const events: Parameters<typeof upsertEscrowEvents>[0] = [];
+  const seen = new Set<string>();
 
-  for (const tx of escrowTxs) {
+  for (const tx of txRows) {
     const detail = await selectTxDetails(tx.signature);
-    const accountKeys = detail?.accountKeys as any[] | undefined;
+    if (!detail?.logs?.length) continue;
 
-    const txForExtraction: TxForEventExtraction = {
-      signature: tx.signature,
-      slot: tx.slot,
-      blockTime: tx.blockTime,
-      signer: tx.signer,
-      sapInstructions: tx.sapInstructions ?? [],
-      accountKeys: accountKeys ?? undefined,
-    };
+    let parsed: ParsedAnchorEvent[] = [];
+    try {
+      parsed = sap.events.parseLogs(detail.logs);
+    } catch (e) {
+      console.warn(`[escrow-events] parseLogs failed for ${tx.signature.slice(0, 12)}:`, (e as Error).message);
+      continue;
+    }
 
-    const extracted = extractEscrowEvents(txForExtraction, escrowPdas);
-    for (const ev of extracted) {
-      // Enrich with escrow data
-      const escrow = escrows.find((e) => e.pda === ev.escrowPda);
+    for (const evt of parsed) {
+      const eventType = SDK_EVENT_TO_TYPE[evt.name];
+      if (!eventType) continue;
+
+      const d = evt.data;
+      const escrowPda = toStr(d.escrow);
+      if (!escrowPda) continue;
+
+      const key = `${tx.signature}:${eventType}:${escrowPda}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const isBatch = evt.name === 'BatchSettledEvent';
+      const { balanceBefore, balanceAfter, amountChanged } = deriveBalances(evt.name, d);
+
       events.push({
-        escrowPda: ev.escrowPda,
-        txSignature: ev.txSignature,
-        eventType: ev.eventType,
-        slot: ev.slot,
-        blockTime: ev.blockTime,
-        signer: ev.signer,
-        agentPda: escrow?.agentPda ?? ev.agentPda,
-        depositor: escrow?.depositor ?? ev.depositor,
+        escrowPda,
+        txSignature: tx.signature,
+        eventType,
+        slot: tx.slot,
+        blockTime: tx.blockTime ? new Date(tx.blockTime) : null,
+        signer: tx.signer,
+        agentPda:      toStr(d.agent),
+        depositor:     toStr(d.depositor),
+        balanceBefore,
+        balanceAfter,
+        amountChanged,
+        callsSettled:  toNum(isBatch ? d.totalCalls : d.callsSettled),
         indexedAt: new Date(),
       });
     }
@@ -91,44 +191,35 @@ export const GET = withSynapseError(async (req: NextRequest) => {
 
   const cacheKey = escrowPda ? `escrow-events:${escrowPda}` : 'escrow-events:all';
 
-  // Step 1: cache peek
-  const cached = peek<any>(cacheKey);
+  const cached = peek<{ events: unknown[]; total: number }>(cacheKey);
   if (cached) {
-    // Fire-and-forget extraction + cache refresh
     swr(cacheKey, async () => {
-      await extractAndStoreEvents();
+      extractAndStoreEvents().catch(() => {});
       const rows = await selectEscrowEvents(escrowPda, limit);
-      return { events: rows.map(dbEscrowEventToApi), total: rows.length };
+      const events = rows.map(dbEscrowEventToApi);
+      return { events, total: events.length };
     }, { ttl: 30_000, swr: 120_000 }).catch(() => {});
     return synapseResponse(cached);
   }
 
-  // Step 2: DB read (fast)
-  try {
-    const rows = await selectEscrowEvents(escrowPda, limit);
-    if (rows.length > 0) {
-      const result = { events: rows.map(dbEscrowEventToApi), total: rows.length };
-      // Fire-and-forget extraction
-      swr(cacheKey, async () => {
-        await extractAndStoreEvents();
-        const fresh = await selectEscrowEvents(escrowPda, limit);
-        return { events: fresh.map(dbEscrowEventToApi), total: fresh.length };
-      }, { ttl: 30_000, swr: 120_000 }).catch(() => {});
-      return synapseResponse(result);
-    }
-  } catch (e) {
-    console.warn('[escrow-events] DB read failed:', (e as Error).message);
-  }
-
-  // Step 3: Cold start — extract events then read
   try {
     await extractAndStoreEvents();
   } catch (e) {
     console.warn('[escrow-events] Event extraction failed:', (e as Error).message);
   }
 
-  const rows = await selectEscrowEvents(escrowPda, limit);
-  const result = { events: rows.map(dbEscrowEventToApi), total: rows.length };
+  let events: Array<ReturnType<typeof dbEscrowEventToApi>> = [];
+  if (!isDbDown()) {
+    try {
+      const rows = await selectEscrowEvents(escrowPda, limit);
+      events = rows.map(dbEscrowEventToApi);
+    } catch (e) {
+      console.warn('[escrow-events] DB read failed:', (e as Error).message);
+      events = [];
+    }
+  }
+
+  const result = { events, total: events.length };
   swr(cacheKey, () => Promise.resolve(result), { ttl: 30_000, swr: 120_000 }).catch(() => {});
   return synapseResponse(result);
 });

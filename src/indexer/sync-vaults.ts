@@ -19,7 +19,7 @@ export async function syncVaults(): Promise<number> {
   let upserted = 0;
 
   for (const v of raw) {
-    const d = v.account;
+    const d = v.account as Record<string, unknown>;
     const row = {
       pda: pk(v.pda),
       agentPda: pk(d.agent),
@@ -39,8 +39,8 @@ export async function syncVaults(): Promise<number> {
         set: conflictUpdateSet(vaults, ['pda']),
       });
       upserted++;
-    } catch (e: any) {
-      logErr('vaults', `Failed pda=${row.pda.slice(0, 8)}: ${e.message}`);
+    } catch (e: unknown) {
+      logErr('vaults', `Failed pda=${row.pda.slice(0, 8)}: ${(e as Error).message}`);
     }
   }
 

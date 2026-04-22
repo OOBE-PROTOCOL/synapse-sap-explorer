@@ -10,6 +10,8 @@ const nextConfig = {
   // Next 15: serverComponentsExternalPackages moved out of experimental
   serverExternalPackages: [
     '@oobe-protocol-labs/synapse-client-sdk',
+    '@oobe-protocol-labs/synapse-sap-sdk',
+    '@triton-one/yellowstone-grpc',
     '@langchain/openai',
     '@langchain/core',
     'langchain',

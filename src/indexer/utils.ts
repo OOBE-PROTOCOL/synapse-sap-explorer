@@ -1,10 +1,8 @@
-// src/indexer/utils.ts — Shared helpers for the indexer worker
+// src/indexer/utils.ts
 
-import type { PublicKey } from '@solana/web3.js';
 import { getTableColumns, sql } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
-
-/* ── Logger ───────────────────────────────────────────── */
+import type { BNLike, NumLike, PKLike, AnchorEnum } from '~/types';
 
 export function log(label: string, msg: string) {
   const ts = new Date().toISOString().slice(11, 23);
@@ -16,7 +14,6 @@ export function logErr(label: string, msg: string) {
   console.error(`[${ts}] [indexer:${label}] ❌ ${msg}`);
 }
 
-/* ── Retry with exponential backoff ───────────────────── */
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
@@ -29,9 +26,9 @@ export async function withRetry<T>(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await fn();
-    } catch (err: any) {
+    } catch (err: unknown) {
       lastErr = err;
-      const msg: string = err?.message ?? '';
+      const msg: string = (err as Error)?.message ?? '';
       const isTransient =
         msg.includes('EOF') ||
         msg.includes('ECONNRESET') ||
@@ -55,32 +52,30 @@ export async function withRetry<T>(
   throw lastErr;
 }
 
-/* ── Serialization helpers ────────────────────────────── */
 
 /** PublicKey → base58 string, handles null/undefined/already-string */
-export function pk(val: PublicKey | string | null | undefined): string {
+export function pk(val: PKLike | unknown): string {
   if (!val) return '';
   if (typeof val === 'string') return val;
-  if (typeof val.toBase58 === 'function') return val.toBase58();
+  if (typeof val === 'object' && 'toBase58' in val && typeof val.toBase58 === 'function') return val.toBase58();
   return String(val);
 }
 
 /** BN / number / bigint → string, handles null/undefined */
-export function bn(val: any): string {
+export function bn(val: BNLike | unknown): string {
   if (val == null) return '0';
   if (typeof val === 'string') return val;
-  if (typeof val.toString === 'function') return val.toString();
-  return String(val);
+  return val.toString();
 }
 
 /** BN / number → number, handles null/undefined */
-export function num(val: any): number {
+export function num(val: NumLike | unknown): number {
   if (val == null) return 0;
   return Number(val);
 }
 
 /** BN (unix seconds) → Date, returns null for 0/null */
-export function bnToDate(val: any): Date | null {
+export function bnToDate(val: BNLike | unknown): Date | null {
   if (val == null) return null;
   const n = Number(val);
   if (n === 0) return null;
@@ -88,13 +83,13 @@ export function bnToDate(val: any): Date | null {
 }
 
 /** Byte array → hex string, handles null/undefined */
-export function hashToHex(val: number[] | Uint8Array | null | undefined): string | null {
+export function hashToHex(val: number[] | Uint8Array | unknown): string | null {
   if (!val || (Array.isArray(val) && val.length === 0)) return null;
-  return Buffer.from(val).toString('hex');
+  return Buffer.from(val as number[] | Uint8Array).toString('hex');
 }
 
 /** Enum object { key: {} } → first key string (Anchor enum representation) */
-export function enumKey(val: any): string | null {
+export function enumKey(val: AnchorEnum | null | undefined | unknown): string | null {
   if (val == null) return null;
   if (typeof val === 'string') return val;
   if (typeof val === 'object') {
@@ -104,7 +99,6 @@ export function enumKey(val: any): string | null {
   return String(val);
 }
 
-/* ── Drizzle upsert helper ────────────────────────────── */
 
 /**
  * Build the `set` object for onConflictDoUpdate using `excluded.*` references.
@@ -113,17 +107,15 @@ export function enumKey(val: any): string | null {
 export function conflictUpdateSet<T extends PgTable>(
   table: T,
   exclude: string[] = [],
-): Record<string, any> {
+): Record<string, ReturnType<typeof sql.raw>> {
   const cols = getTableColumns(table);
-  const set: Record<string, any> = {};
+  const set: Record<string, ReturnType<typeof sql.raw>> = {};
   for (const [tsKey, col] of Object.entries(cols)) {
     if (exclude.includes(tsKey)) continue;
-    set[tsKey] = sql.raw(`excluded."${(col as any).name}"`);
+    set[tsKey] = sql.raw(`excluded."${(col as { name: string }).name}"`);
   }
   return set;
 }
-
-/* ── Pacing ───────────────────────────────────────────── */
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

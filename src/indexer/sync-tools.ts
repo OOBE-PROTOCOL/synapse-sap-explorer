@@ -4,6 +4,7 @@ import { tools } from '~/db/schema';
 import { findAllTools } from '~/lib/sap/discovery';
 import { log, logErr, withRetry, pk, bn, num, bnToDate, enumKey, hashToHex, conflictUpdateSet } from './utils';
 import { setCursor } from './cursor';
+import { ToolDescriptorData } from '@oobe-protocol-labs/synapse-sap-sdk/types';
 
 export async function syncTools(): Promise<number> {
   log('tools', 'Fetching all tools from RPC...');
@@ -25,7 +26,7 @@ export async function syncTools(): Promise<number> {
     const rows = batch
       .filter((t) => t.descriptor)
       .map((t) => {
-        const desc = t.descriptor as any;
+        const desc = t.descriptor as ToolDescriptorData;
         return {
           pda: pk(t.pda),
           agentPda: pk(desc.agent),
@@ -62,8 +63,8 @@ export async function syncTools(): Promise<number> {
           set: conflictUpdateSet(tools, ['pda']),
         });
       upserted += rows.length;
-    } catch (e: any) {
-      logErr('tools', `Batch failed (i=${i}): ${e.message}`);
+    } catch (e: unknown) {
+      logErr('tools', `Batch failed (i=${i}): ${(e as Error).message}`);
       for (const row of rows) {
         try {
           await db.insert(tools).values(row).onConflictDoUpdate({
@@ -71,8 +72,8 @@ export async function syncTools(): Promise<number> {
             set: conflictUpdateSet(tools, ['pda']),
           });
           upserted++;
-        } catch (e2: any) {
-          logErr('tools', `Single failed pda=${row.pda.slice(0, 8)}: ${e2.message}`);
+        } catch (e2: unknown) {
+          logErr('tools', `Single failed pda=${row.pda.slice(0, 8)}: ${(e2 as Error).message}`);
         }
       }
     }

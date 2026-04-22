@@ -38,6 +38,12 @@ import {
   dbFeedbackToApi,
   dbVaultToApi,
 } from '~/lib/db/mappers';
+// import { RawAccountInfo } from '@oobe-protocol-labs/synapse-client-sdk';
+// import { SapAccountType } from '@oobe-protocol-labs/synapse-sap-sdk';
+import type { RpcSignatureInfo, TransactionError } from '~/types/indexer';
+
+/** Minimal shape shared by DB-mapped API types and RPC-serialized entities. */
+type EntityRecord = Record<string, unknown> & { pda: string };
 
 export async function GET(
   _req: Request,
@@ -57,12 +63,12 @@ export async function GET(
       ]);
 
       // 2) Try DB first for entity lookups (instant)
-      let agentsData: any[] = [];
-      let toolsData: any[] = [];
-      let escrowsData: any[] = [];
-      let attestationsData: any[] = [];
-      let feedbacksData: any[] = [];
-      let vaultsData: any[] = [];
+      let agentsData: EntityRecord[] = [];
+      let toolsData: EntityRecord[] = [];
+      let escrowsData: EntityRecord[] = [];
+      let attestationsData: EntityRecord[] = [];
+      let feedbacksData: EntityRecord[] = [];
+      let vaultsData: EntityRecord[] = [];
       let fromDb = false;
 
       try {
@@ -83,7 +89,7 @@ export async function GET(
           feedbacksData = dbFbs.map(dbFeedbackToApi);
           vaultsData = dbVaults.map(dbVaultToApi);
         }
-      } catch { /* DB unavailable */ }
+      } catch (e) { console.warn(`[address/${address}] DB lookup failed:`, (e as Error).message); }
 
       // 3) RPC fallback if DB empty
       if (!fromDb) {
@@ -104,9 +110,9 @@ export async function GET(
       }
 
       // Match address against known entities
-      const matchPda = (entity: any) => entity.pda === address;
-      const matchWallet = (entity: any) => {
-        const w = entity.identity?.wallet ?? entity.wallet;
+      const matchPda = (entity: EntityRecord) => entity.pda === address;
+      const matchWallet = (entity: EntityRecord) => {
+        const w = (entity.identity as Record<string, unknown> | undefined)?.wallet ?? entity.wallet;
         return w === address;
       };
 
@@ -120,35 +126,35 @@ export async function GET(
 
       // Related entities
       const relatedTools = toolsData.filter((t) => {
-        const agent = t.agent ?? t.account?.agent;
+        const agent = t.agent ?? (t.account as EntityRecord | undefined)?.agent;
         return agent === address || t.agentPda === address;
       });
       const relatedEscrows = escrowsData.filter((e) => {
-        const a = e.account ?? e;
+        const a = (e.account as EntityRecord | undefined) ?? e;
         return e.pda === address || a.agentPda === address || a.depositor === address ||
           a.agentWallet === address || a.agent === address;
       });
       const relatedAttestations = attestationsData.filter((a) => {
-        const acc = a.account ?? a;
+        const acc = (a.account as EntityRecord | undefined) ?? a;
         return acc.agentPda === address || acc.attester === address || acc.agent === address;
       });
       const relatedFeedbacks = feedbacksData.filter((f) => {
-        const acc = f.account ?? f;
+        const acc = (f.account as EntityRecord | undefined) ?? f;
         return acc.agentPda === address || acc.reviewer === address || acc.agent === address;
       });
 
       // 4) Recent transactions (lightweight RPC call)
-      let recentTxs: any[] = [];
+      let recentTxs: RpcSignatureInfo[] = [];
       try {
         const sigs = await synConn.getSignaturesForAddress(pubkey, { limit: 20 });
         recentTxs = sigs.map((s) => ({
           signature: s.signature,
           slot: s.slot,
           blockTime: s.blockTime ?? null,
-          err: s.err !== null,
+          err: s.err as TransactionError,
           memo: s.memo ?? null,
         }));
-      } catch { /* ignore */ }
+      } catch (e) { console.warn(`[address/${address}] tx history fetch failed:`, (e as Error).message); }
 
       const entityType = asAgentPda ? 'agent' :
         asToolPda ? 'tool' :
@@ -168,7 +174,7 @@ export async function GET(
         executable: accountInfo?.executable ?? false,
         rentEpoch: accountInfo?.rentEpoch ?? null,
         dataSize: accountInfo?.data
-          ? (accountInfo.data as any).length ?? 0
+          ? (accountInfo.data as Buffer | Uint8Array).length ?? 0
           : 0,
         agent: asAgentPda ?? asAgentWallet ?? null,
         tool: asToolPda ?? null,
@@ -185,10 +191,10 @@ export async function GET(
     }, { ttl: 30_000, swr: 300_000 });
 
     return NextResponse.json(result);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[address]', err);
     return NextResponse.json(
-      { error: err.message ?? 'Failed to fetch address data' },
+      { error: (err as Error).message ?? 'Failed to fetch address data' },
       { status: 500 },
     );
   }

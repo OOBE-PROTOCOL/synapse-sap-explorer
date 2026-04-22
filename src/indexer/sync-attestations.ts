@@ -19,12 +19,12 @@ export async function syncAttestations(): Promise<number> {
   let upserted = 0;
 
   for (const a of raw) {
-    const d = a.account;
+    const d = a.account as Record<string, unknown>;
     const row = {
       pda: pk(a.pda),
       agentPda: pk(d.agent),
       attester: pk(d.attester),
-      attestationType: d.attestationType ?? '',
+      attestationType: (d.attestationType ?? '') as string,
       isActive: Boolean(d.isActive),
       metadataHash: d.metadataHash ? (typeof d.metadataHash === 'string' ? d.metadataHash : hashToHex(d.metadataHash)) : null,
       createdAt: bnToDate(d.createdAt) ?? new Date(),
@@ -38,8 +38,8 @@ export async function syncAttestations(): Promise<number> {
         set: conflictUpdateSet(attestations, ['pda']),
       });
       upserted++;
-    } catch (e: any) {
-      logErr('attestations', `Failed pda=${row.pda.slice(0, 8)}: ${e.message}`);
+    } catch (e: unknown) {
+      logErr('attestations', `Failed pda=${row.pda.slice(0, 8)}: ${(e as Error).message}`);
     }
   }
 

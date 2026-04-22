@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Protocols | Synapse Explorer',
     description: 'Browse protocols in the SAP network — agent adoption, capability mapping, and analytics.',
-    images: [{ url: `${SITE_URL}/api/og?type=page&title=Protocols&desc=Browse+protocols+in+the+SAP+network+%E2%80%94+agent+adoption%2C+capability+mapping%2C+and+analytics.`, width: 1200, height: 630 }],
+    images: [{ url: `${SITE_URL}/synapse-metadata-logo.png`, width: 1200, height: 630 }],
   },
 };
 

@@ -22,3 +22,16 @@ This is a Next.js 14 (App Router) on-chain explorer for the Solana Agent Protoco
 - Tailwind CSS for styling, custom glassmorphism classes in `globals.css`
 - Server Components by default, `'use client'` only when needed
 - d3-force for network graph visualization
+
+## Skills
+This project has 1 specialized skill in `.github/skills/`:
+
+| Skill | Use When |
+|-------|----------|
+| `shadcn-explorer` | Any UI work — creating pages, components, styling, shadcn primitives, design system tokens, explorer page anatomy |
+
+### Skill Pipeline
+For any UI change:
+1. **Load**: `.github/skills/shadcn/SKILL.md` — always first for any `src/components/` or `src/app/` work
+2. **Build**: Follow the Page Anatomy or Refactor Procedure in the skill
+3. **Check**: Run the skill checklist before shipping

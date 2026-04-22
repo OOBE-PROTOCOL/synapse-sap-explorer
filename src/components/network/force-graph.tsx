@@ -13,6 +13,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { GraphData, GraphNode, GraphLink } from '~/lib/sap/discovery';
+import type { Simulation } from 'd3-force';
 
 /* ── Simulation types ─────────────────────────────────── */
 
@@ -33,24 +34,24 @@ export type SimLink = Omit<GraphLink, 'source' | 'target'> & {
 /* ── Color palette ────────────────────────────────────── */
 
 const COLORS = {
-  agent:      { fill: '#7c3aed', glow: 'rgba(124, 58, 237, 0.35)', ring: 'rgba(167, 139, 250, 0.5)' },
-  protocol:   { fill: '#06b6d4', glow: 'rgba(6, 182, 212, 0.30)',  ring: 'rgba(34, 211, 238, 0.4)'  },
-  capability: { fill: '#f59e0b', glow: 'rgba(245, 158, 11, 0.25)', ring: 'rgba(251, 191, 36, 0.4)'  },
-  tool:       { fill: '#ec4899', glow: 'rgba(236, 72, 153, 0.30)', ring: 'rgba(244, 114, 182, 0.4)' },
+  agent:      { fill: '#07A4B5', glow: 'rgba(7,  164, 181, 0.4)',   ring: 'rgba(7,  164, 181, 0.55)' },
+  protocol:   { fill: '#0891B2', glow: 'rgba(8,  145, 178, 0.35)',  ring: 'rgba(8,  145, 178, 0.45)' },
+  capability: { fill: '#22D3EE', glow: 'rgba(34, 211, 238, 0.30)',  ring: 'rgba(34, 211, 238, 0.45)' },
+  tool:       { fill: '#0E7490', glow: 'rgba(14, 116, 144, 0.35)',  ring: 'rgba(14, 116, 144, 0.50)' },
 } as const;
 
 const LINK_COLORS: Record<string, string> = {
-  protocol:        'rgba(6, 182, 212, 0.15)',
-  capability:      'rgba(251, 191, 36, 0.12)',
-  tool:            'rgba(236, 72, 153, 0.15)',
-  'shared-protocol': 'rgba(52, 211, 153, 0.18)',
+  protocol:          'rgba(8,  145, 178, 0.30)',
+  capability:        'rgba(34, 211, 238, 0.26)',
+  tool:              'rgba(14, 116, 144, 0.28)',
+  'shared-protocol': 'rgba(7,  164, 181, 0.36)',
 };
 
 const LINK_GLOW: Record<string, string> = {
-  protocol:        'rgba(6, 182, 212, 0.4)',
-  capability:      'rgba(251, 191, 36, 0.35)',
-  tool:            'rgba(236, 72, 153, 0.4)',
-  'shared-protocol': 'rgba(52, 211, 153, 0.45)',
+  protocol:          'rgba(8,  145, 178, 0.65)',
+  capability:        'rgba(34, 211, 238, 0.60)',
+  tool:              'rgba(14, 116, 144, 0.62)',
+  'shared-protocol': 'rgba(7,  164, 181, 0.70)',
 };
 
 /* ── Props ────────────────────────────────────────────── */
@@ -67,8 +68,7 @@ export type ForceGraphProps = {
 
 export default function ForceGraph({ data, width, height, onNodeClick, onNodeHover }: ForceGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const simRef = useRef<any>(null);
+  const simRef = useRef<Simulation<SimNode, undefined> | null>(null);
   const nodesRef = useRef<SimNode[]>([]);
   const linksRef = useRef<SimLink[]>([]);
   const animRef = useRef<number | undefined>(undefined);
@@ -118,14 +118,14 @@ export default function ForceGraph({ data, width, height, onNodeClick, onNodeHov
 
       const sim = d3
         .forceSimulation(nodes)
-        .force('link', d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(90).strength(0.25))
-        .force('charge', d3.forceManyBody().strength(-300).distanceMax(400))
-        .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
-        .force('collision', d3.forceCollide<SimNode>().radius((d) => d.radius + 6).strength(0.7))
-        .force('x', d3.forceX(width / 2).strength(0.02))
-        .force('y', d3.forceY(height / 2).strength(0.02))
-        .alphaDecay(0.008)
-        .velocityDecay(0.3);
+        .force('link', d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(110).strength(0.3))
+        .force('charge', d3.forceManyBody().strength(-450).distanceMax(600))
+        .force('center', d3.forceCenter(width / 2, height / 2).strength(0.04))
+        .force('collision', d3.forceCollide<SimNode>().radius((d) => d.radius + 10).strength(0.85))
+        .force('x', d3.forceX(width / 2).strength(0.015))
+        .force('y', d3.forceY(height / 2).strength(0.015))
+        .alphaDecay(0.006)
+        .velocityDecay(0.28);
 
       simRef.current = sim;
 
@@ -162,15 +162,14 @@ export default function ForceGraph({ data, width, height, onNodeClick, onNodeHov
     const cam = cameraRef.current;
     const t = tickRef.current;
 
-    // Clear with dark bg
-    ctx.fillStyle = '#080612';
-    ctx.fillRect(0, 0, width, height);
+    // Transparent — page gradient shows through
+    ctx.clearRect(0, 0, width, height);
 
-    // Subtle radial gradient backdrop
-    const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, Math.max(width, height) * 0.6);
-    bgGrad.addColorStop(0, 'rgba(124, 58, 237, 0.03)');
-    bgGrad.addColorStop(0.5, 'rgba(6, 182, 212, 0.015)');
-    bgGrad.addColorStop(1, 'transparent');
+    // Subtle teal depth gradient overlay
+    const bgGrad = ctx.createRadialGradient(width / 2, height * 0.4, 0, width / 2, height * 0.4, Math.max(width, height) * 0.65);
+    bgGrad.addColorStop(0,   'rgba(7, 164, 181, 0.05)');
+    bgGrad.addColorStop(0.5, 'rgba(6, 182, 212, 0.02)');
+    bgGrad.addColorStop(1,   'transparent');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
@@ -189,13 +188,13 @@ export default function ForceGraph({ data, width, height, onNodeClick, onNodeHov
       const glowColor = LINK_GLOW[lt] ?? LINK_GLOW.protocol;
       const isHighlight = hovId && (link.source.id === hovId || link.target.id === hovId);
 
-      // Glow layer (wider, blurred)
+      // Glow layer (wider)
       if (isHighlight) {
         ctx.beginPath();
         ctx.moveTo(link.source.x, link.source.y);
         ctx.lineTo(link.target.x, link.target.y);
         ctx.strokeStyle = glowColor;
-        ctx.lineWidth = 4 / cam.zoom;
+        ctx.lineWidth = 5 / cam.zoom;
         ctx.stroke();
       }
 
@@ -204,7 +203,7 @@ export default function ForceGraph({ data, width, height, onNodeClick, onNodeHov
       ctx.moveTo(link.source.x, link.source.y);
       ctx.lineTo(link.target.x, link.target.y);
       ctx.strokeStyle = isHighlight ? glowColor : baseColor;
-      ctx.lineWidth = (isHighlight ? 1.5 : 0.6) / cam.zoom;
+      ctx.lineWidth = (isHighlight ? 2.0 : 1.0) / cam.zoom;
       ctx.stroke();
 
       // Animated pulse dot along link
@@ -226,25 +225,27 @@ export default function ForceGraph({ data, width, height, onNodeClick, onNodeHov
       const palette = COLORS[node.type] ?? COLORS.agent;
       const r = node.radius;
 
-      // Outer glow halo (always, subtle pulse)
-      const pulse = 1 + Math.sin(t * 0.03 + (node.type === 'agent' ? 0 : Math.PI * 0.5)) * 0.15;
-      const haloR = r * (1.6 + (isHov ? 0.4 : 0)) * pulse;
-      const haloGrad = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, haloR);
-      haloGrad.addColorStop(0, palette.glow);
-      haloGrad.addColorStop(1, 'transparent');
+      // Outer glow halo — bigger, brighter, pulsing
+      const pulse = 1 + Math.sin(t * 0.025 + (node.type === 'agent' ? 0 : Math.PI * 0.5)) * 0.18;
+      const haloR = r * (2.0 + (isHov ? 0.6 : 0)) * pulse;
+      const haloGrad = ctx.createRadialGradient(node.x, node.y, r * 0.4, node.x, node.y, haloR);
+      haloGrad.addColorStop(0,   palette.glow);
+      haloGrad.addColorStop(0.6, palette.glow.replace(/[\d.]+\)$/, '0.15)'));
+      haloGrad.addColorStop(1,   'transparent');
       ctx.beginPath();
       ctx.arc(node.x, node.y, haloR, 0, Math.PI * 2);
       ctx.fillStyle = haloGrad;
       ctx.fill();
 
-      // Main circle
+      // Main circle with rich radial gradient
       ctx.beginPath();
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-      const cGrad = ctx.createRadialGradient(node.x - r * 0.3, node.y - r * 0.3, 0, node.x, node.y, r);
-      cGrad.addColorStop(0, lighten(palette.fill, 30));
-      cGrad.addColorStop(1, palette.fill);
+      const cGrad = ctx.createRadialGradient(node.x - r * 0.35, node.y - r * 0.35, r * 0.05, node.x, node.y, r);
+      cGrad.addColorStop(0,   lighten(palette.fill, 55));
+      cGrad.addColorStop(0.5, lighten(palette.fill, 20));
+      cGrad.addColorStop(1,   palette.fill);
       ctx.fillStyle = cGrad;
-      ctx.globalAlpha = node.isActive ? 1 : 0.4;
+      ctx.globalAlpha = node.isActive ? 1 : 0.45;
       ctx.fill();
       ctx.globalAlpha = 1;
 
@@ -347,7 +348,7 @@ export default function ForceGraph({ data, width, height, onNodeClick, onNodeHov
   }, [hitTest]);
 
   /* ── Mouse: up (end drag / pan / click) ───────────── */
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+  const handleMouseUp = useCallback(() => {
     if (dragRef.current) {
       dragRef.current.fx = null;
       dragRef.current.fy = null;
@@ -398,15 +399,96 @@ export default function ForceGraph({ data, width, height, onNodeClick, onNodeHov
     cam.zoom = newZoom;
   }, []);
 
+  /* ── Touch (mobile) ──────────────────────────────── */
+  const pinchRef = useRef<number | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touches = e.touches;
+    if (touches.length === 1) {
+      const t = touches[0];
+      const node = hitTest(t.clientX, t.clientY);
+      if (node) {
+        dragRef.current = node;
+        node.fx = node.x; node.fy = node.y;
+        simRef.current?.alphaTarget(0.3).restart();
+      } else {
+        const cam = cameraRef.current;
+        panRef.current = { active: true, startX: t.clientX, startY: t.clientY, origOx: cam.offsetX, origOy: cam.offsetY };
+      }
+    } else if (touches.length === 2) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      pinchRef.current = Math.hypot(dx, dy);
+      panRef.current.active = false;
+    }
+  }, [hitTest]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    const touches = e.touches;
+
+    if (touches.length === 1) {
+      const t = touches[0];
+      if (dragRef.current) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const cam = cameraRef.current;
+        dragRef.current.fx = (t.clientX - rect.left - cam.offsetX) / cam.zoom;
+        dragRef.current.fy = (t.clientY - rect.top - cam.offsetY) / cam.zoom;
+        simRef.current?.alpha(0.3).restart();
+      } else if (panRef.current.active) {
+        const cam = cameraRef.current;
+        cam.offsetX = panRef.current.origOx + (t.clientX - panRef.current.startX);
+        cam.offsetY = panRef.current.origOy + (t.clientY - panRef.current.startY);
+      }
+    } else if (touches.length === 2 && pinchRef.current !== null) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const factor = dist / pinchRef.current;
+      pinchRef.current = dist;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const cx = (touches[0].clientX + touches[1].clientX) / 2 - rect.left;
+      const cy = (touches[0].clientY + touches[1].clientY) / 2 - rect.top;
+      const cam = cameraRef.current;
+      const newZoom = Math.max(0.15, Math.min(5, cam.zoom * factor));
+      cam.offsetX = cx - (cx - cam.offsetX) * (newZoom / cam.zoom);
+      cam.offsetY = cy - (cy - cam.offsetY) * (newZoom / cam.zoom);
+      cam.zoom = newZoom;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      if (dragRef.current) {
+        const node = dragRef.current;
+        dragRef.current = null;
+        node.fx = null; node.fy = null;
+        simRef.current?.alphaTarget(0);
+        // Treat short tap as click
+        onNodeClick?.(node);
+      }
+      panRef.current.active = false;
+      pinchRef.current = null;
+    }
+  }, [onNodeClick]);
+
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: '100%', height: '100%', display: 'block' }}
+      style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
       onWheel={handleWheel}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     />
   );
 }

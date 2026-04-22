@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const toolCount = String(identity.capabilities?.length ?? 0);
     const isActive = identity.isActive ? 'active' : 'inactive';
 
-    const ogUrl = new URL(`${SITE_URL}/api/og`);
+    const ogUrl = new URL(`${SITE_URL}/synapse-metadata-logo.png`);
     ogUrl.searchParams.set('type', 'agent');
     ogUrl.searchParams.set('name', name);
     ogUrl.searchParams.set('score', String(score));

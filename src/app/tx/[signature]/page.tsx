@@ -17,6 +17,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '~/lib/utils';
+import { short, timeAgo } from '~/lib/format';
+import { useAgentMapCtx } from '~/providers/sap-data-provider';
 import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -61,7 +63,7 @@ interface TxInstruction {
   data: string | null;
   accounts: string[];
   parsed: Record<string, unknown> | null;
-  decodedArgs: Record<string, any> | null;
+  decodedArgs: Record<string, unknown> | null;
   innerInstructions: TxInstruction[];
 }
 
@@ -72,7 +74,7 @@ interface TokenBalanceChange {
   preAmount: string; postAmount: string; decimals: number;
 }
 
-interface SapEvent { name: string; data: Record<string, any> }
+interface SapEvent { name: string; data: Record<string, unknown> }
 
 interface TxDetail {
   signature: string;
@@ -80,7 +82,7 @@ interface TxDetail {
   blockTime: number | null;
   fee: number;
   status: string;
-  error: any;
+  error: unknown;
   confirmations: number | null;
   version: string;
   recentBlockhash: string | null;
@@ -93,8 +95,6 @@ interface TxDetail {
   computeUnitsConsumed: number | null;
 }
 
-/** wallet → { name, pda, score } from /api/sap/agents/map */
-type AgentMap = Record<string, { name: string; pda: string; score: number }>;
 /** address → agent display label (both wallet keys and PDA keys) */
 type AddressLabels = Record<string, string>;
 
@@ -131,15 +131,6 @@ const TOKENS: Record<string, { symbol: string; icon: string; color: string }> = 
  *  Helpers
  * ════════════════════════════════════════════════════ */
 
-function timeAgo(ts: number): string {
-  const d = Math.floor(Date.now() / 1000 - ts);
-  if (d < 5)     return 'just now';
-  if (d < 60)    return `${d} secs ago`;
-  if (d < 3600)  return `${Math.floor(d / 60)} mins ago`;
-  if (d < 86400) return `${Math.floor(d / 3600)} hrs ago`;
-  return `${Math.floor(d / 86400)}d ago`;
-}
-
 function fmtTime(ts: number): string {
   const d = new Date(ts * 1000);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -152,11 +143,7 @@ function fmtTime(ts: number): string {
   return `${mo} ${day}, ${yr}, ${hh}:${mm}:${ss} UTC`;
 }
 
-function short(a: string, c = 8): string {
-  return a.length <= c * 2 + 2 ? a : `${a.slice(0, c)}…${a.slice(-c)}`;
-}
-
-function progName(pid: string): string { return PROGRAMS[pid] ?? short(pid, 6); }
+function progName(pid: string): string { return PROGRAMS[pid] ?? short(pid, 6, 6); }
 
 /**
  * Parse per-instruction Compute Units from transaction logs.
@@ -345,11 +332,11 @@ const BAR_COLORS = [
   'bg-[#60A5FA]', 'bg-[#34D399]', 'bg-[#FBBF24]', 'bg-[#A78BFA]', 'bg-[#F87171]', 'bg-[#22D3EE]',
 ];
 const DOT_COLORS = [
-  'bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-violet-400', 'bg-red-400', 'bg-cyan-400',
+  'bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-primary', 'bg-red-400', 'bg-primary',
 ];
 
-function CUDistribution({ instructions, cuPerIx, total }: {
-  instructions: TxInstruction[]; cuPerIx: number[]; total: number | null;
+function CUDistribution({ cuPerIx, total }: {
+  cuPerIx: number[]; total: number | null;
 }) {
   if (!total || cuPerIx.length === 0) return null;
   return (
@@ -482,23 +469,40 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
           </div>
 
           {/* Decoded arguments (SAP instructions) */}
-          {ix.decodedArgs && Object.keys(ix.decodedArgs).length > 0 && (
-            <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70 block mb-2">
-                Decoded Arguments
-              </span>
-              <div className="space-y-1">
-                {Object.entries(ix.decodedArgs).map(([k, v]) => (
-                  <div key={k} className="flex items-start gap-3 text-[10px]">
-                    <span className="text-muted-foreground font-mono shrink-0 w-36">{k}</span>
-                    <span className="text-foreground/80 font-mono break-all">
-                      {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                    </span>
-                  </div>
-                ))}
+          {ix.decodedArgs && Object.keys(ix.decodedArgs).length > 0 && (() => {
+            const entries = Object.entries(ix.decodedArgs);
+            const setEntries = entries.filter(([, v]) => v !== null && v !== undefined);
+            const unsetEntries = entries.filter(([, v]) => v === null || v === undefined);
+            return (
+              <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70 block mb-2">
+                  Decoded Arguments
+                </span>
+                <div className="space-y-1">
+                  {setEntries.map(([k, v]) => (
+                    <div key={k} className="flex items-start gap-3 text-[10px]">
+                      <span className="text-muted-foreground font-mono shrink-0 w-36">{k}</span>
+                      <span className="text-foreground/80 font-mono break-all">
+                        {typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}
+                      </span>
+                    </div>
+                  ))}
+                  {unsetEntries.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-primary/10">
+                      <span className="text-[9px] text-muted-foreground/50 uppercase tracking-wider block mb-1">
+                        Unchanged Fields ({unsetEntries.length})
+                      </span>
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                        {unsetEntries.map(([k]) => (
+                          <span key={k} className="text-[10px] font-mono text-muted-foreground/40 italic">{k}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Parsed data (non-SAP native instructions) */}
           {ix.parsed && Object.keys(ix.parsed).length > 0 && !ix.decodedArgs && (
@@ -568,7 +572,7 @@ function logCls(l: string): string {
   if (l.startsWith('Program') && l.includes('success'))  return 'text-emerald-400';
   if (l.includes('failed') || l.includes('Error'))       return 'text-red-400';
   if (l.includes('Program data:'))                       return 'text-amber-400';
-  if (l.includes('consumed'))                            return 'text-cyan-400/70';
+  if (l.includes('consumed'))                            return 'text-primary/70';
   if (l.includes('Program log:'))                        return 'text-foreground/60';
   return 'text-muted-foreground/50';
 }
@@ -582,29 +586,22 @@ export default function TransactionDetailPage() {
   const router = useRouter();
 
   const [tx, setTx]           = useState<TxDetail | null>(null);
-  const [agents, setAgents]   = useState<AgentMap>({});
+  const { map: agents } = useAgentMapCtx();
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
-  /* ── fetch tx + agents in parallel ── */
+  /* ── fetch tx ── */
   const load = useCallback(async () => {
     try {
-      const [txRes, agRes] = await Promise.all([
-        fetch(`/api/sap/tx/${signature}`),
-        fetch('/api/sap/agents/map').catch(() => null),
-      ]);
+      const txRes = await fetch(`/api/sap/tx/${signature}`);
       if (!txRes.ok) {
         const j = await txRes.json().catch(() => ({}));
         throw new Error(j.error ?? `HTTP ${txRes.status}`);
       }
       setTx(await txRes.json());
-      if (agRes?.ok) {
-        const map = await agRes.json();
-        if (map && typeof map === 'object' && !map.error) setAgents(map);
-      }
       setError(null);
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to fetch transaction');
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Failed to fetch transaction');
     } finally {
       setLoading(false);
     }
@@ -612,12 +609,12 @@ export default function TransactionDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  /* ── Build address → label map (wallet + PDA) ── */
+  /* ── Build address → label map (wallet + PDA) from shared provider ── */
   const labels: AddressLabels = {};
   for (const [wallet, info] of Object.entries(agents)) {
     if (info.name) {
-      labels[wallet] = info.name;          // wallet key → agent name
-      if (info.pda) labels[info.pda] = info.name; // PDA key → agent name
+      labels[wallet] = info.name;
+      if (info.pda) labels[info.pda] = info.name;
     }
   }
 
@@ -711,7 +708,7 @@ export default function TransactionDetailPage() {
                 {ok ? 'SUCCESS' : 'FAILED'}
               </Badge>
               <span className="text-[10px] text-muted-foreground">Finalized (MAX Confirmations)</span>
-              {tx.error && <span className="text-[10px] text-red-400/70 font-mono ml-2">{JSON.stringify(tx.error)}</span>}
+              {tx.error ? <span className="text-[10px] text-red-400/70 font-mono ml-2">{JSON.stringify(tx.error)}</span> : null}
             </div>
           </Row>
 
@@ -784,7 +781,7 @@ export default function TransactionDetailPage() {
       <Section title="Instruction Details" count={instructions.length}>
         <div className="space-y-4">
           {/* CU distribution */}
-          <CUDistribution instructions={tx.instructions} cuPerIx={cuPerIx} total={tx.computeUnitsConsumed} />
+          <CUDistribution cuPerIx={cuPerIx} total={tx.computeUnitsConsumed} />
 
           {cuPerIx.length > 0 && <Separator className="opacity-40" />}
 
@@ -800,15 +797,26 @@ export default function TransactionDetailPage() {
       {/* ═══ SAP EVENTS ═══ */}
       {events.length > 0 && (
         <Section title="SAP Events" count={events.length} open={true}>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {events.map((evt, i) => (
-              <div key={i} className="rounded-lg bg-muted/50 border border-border p-3">
-                <Badge variant="secondary" className="text-[9px] font-mono">{evt.name}</Badge>
+              <div key={i} className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] text-muted-foreground/50 font-mono">#{i + 1}</span>
+                  <Badge className="text-[9px] font-mono bg-primary/15 text-primary border-primary/20">{evt.name}</Badge>
+                </div>
                 {Object.keys(evt.data).length > 0 && (
-                  <pre className="text-[10px] font-mono text-foreground/60 mt-2 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap"
-                       style={{ scrollbarWidth: 'thin' }}>
-                    {JSON.stringify(evt.data, null, 2)}
-                  </pre>
+                  <div className="space-y-1">
+                    {Object.entries(evt.data).map(([k, v]) => (
+                      <div key={k} className="flex items-start gap-3 text-[10px]">
+                        <span className="text-muted-foreground font-mono shrink-0 w-36">{k}</span>
+                        <span className="text-foreground/80 font-mono break-all">
+                          {v === null || v === undefined
+                            ? <span className="text-muted-foreground/40 italic">null</span>
+                            : typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             ))}
@@ -818,7 +826,7 @@ export default function TransactionDetailPage() {
 
       {/* ═══ PROGRAM LOGS ═══ */}
       {logs.length > 0 && (
-        <Section title="Program Logs" count={logs.length} open={true}>
+        <Section title="Program Logs" count={logs.length} open={false}>
           <div className="rounded-lg bg-muted/20 p-3 max-h-[500px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {logs.map((line, i) => (
               <div key={i} className="flex gap-3 py-0.5 hover:bg-muted/30 rounded px-1 transition-colors">
@@ -929,7 +937,7 @@ export default function TransactionDetailPage() {
                         <div className="flex items-center gap-1.5">
                           {tk
                             ? <span className="text-[10px] font-medium text-foreground/80">{tk.symbol}</span>
-                            : <Cp text={t.mint} display={short(t.mint, 6)} className="text-[10px]" />}
+                            : <Cp text={t.mint} display={short(t.mint, 6, 6)} className="text-[10px]" />}
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-[10px] font-mono tabular-nums text-foreground/70">{t.preAmount}</TableCell>

@@ -1,10 +1,6 @@
-// src/indexer/worker.ts — Indexer entry point
-//
 // Usage:
 //   pnpm indexer          → continuous loop (polling)
 //   pnpm indexer:once     → single run, then exit (safe for CRON)
-//
-// Must be first import — loads .env before any module-level code
 import 'dotenv/config';
 
 import * as fs from 'node:fs';
@@ -17,8 +13,6 @@ import { syncFeedbacks } from './sync-feedbacks';
 import { syncVaults } from './sync-vaults';
 import { syncTransactions } from './sync-transactions';
 import { syncSnapshots } from './sync-snapshots';
-// Lazy-imported only when gRPC mode is needed (avoids hard dep on @grpc/grpc-js in polling mode)
-// import { startGrpcTransactionStream } from './stream-transactions';
 import { log, logErr, sleep } from './utils';
 
 /* ── Config ───────────────────────────────────────────── */
@@ -62,7 +56,6 @@ function releaseLock() {
   try { fs.unlinkSync(LOCKFILE); } catch {}
 }
 
-/* ── Graceful shutdown ────────────────────────────────── */
 
 let running = true;
 
@@ -75,15 +68,14 @@ process.on('SIGTERM', () => {
   running = false;
 });
 
-process.on('unhandledRejection', (reason: any) => {
-  logErr('worker', `Unhandled rejection: ${reason?.message ?? String(reason)}`);
+process.on('unhandledRejection', (reason: unknown) => {
+  logErr('worker', `Unhandled rejection: ${(reason as Error)?.message ?? String(reason)}`);
 });
 
-process.on('uncaughtException', (err: any) => {
+process.on('uncaughtException', (err: Error) => {
   logErr('worker', `Uncaught exception: ${err?.message ?? String(err)}`);
 });
 
-/* ── Sync cycles ──────────────────────────────────────── */
 
 async function syncAllEntities() {
   log('worker', '── Entity sync cycle starting ──');
@@ -108,8 +100,8 @@ async function syncAllEntities() {
     await sleep(INTER_ENTITY_DELAY_MS);
 
     await syncVaults();
-  } catch (e: any) {
-    logErr('worker', `Entity cycle failed: ${e.message}`);
+  } catch (e: unknown) {
+    logErr('worker', `Entity cycle failed: ${(e as Error).message}`);
   }
 
   log('worker', `── Entity sync cycle done in ${((Date.now() - t0) / 1000).toFixed(1)}s ──`);
@@ -118,29 +110,25 @@ async function syncAllEntities() {
 async function syncTx() {
   try {
     await syncTransactions();
-  } catch (e: any) {
-    logErr('worker', `Transaction cycle failed: ${e.message}`);
+  } catch (e: unknown) {
+    logErr('worker', `Transaction cycle failed: ${(e as Error).message}`);
   }
 }
 
 async function syncSnap() {
   try {
     await syncSnapshots();
-  } catch (e: any) {
-    logErr('worker', `Snapshot cycle failed: ${e.message}`);
+  } catch (e: unknown) {
+    logErr('worker', `Snapshot cycle failed: ${(e as Error).message}`);
   }
 }
 
-/* ── Main ─────────────────────────────────────────────── */
 
 async function main() {
-  log('worker', '═══════════════════════════════════════');
-  log('worker', '  SAP Indexer Worker starting');
-  log('worker', `  Run: ${ONCE ? 'SINGLE RUN (--once)' : 'CONTINUOUS DAEMON'}`);
-  log('worker', `  Indexer mode: ${INDEXER_MODE.toUpperCase()}`);
-  log('worker', `  Intervals: entity=${ENTITY_INTERVAL_MS / 1000}s  tx=${TX_INTERVAL_MS / 1000}s  snap=${SNAPSHOT_INTERVAL_MS / 1000}s`);
-  log('worker', `  DB: ${process.env.DATABASE_URL?.replace(/:[^@]+@/, ':***@') ?? 'NOT SET'}`);
-  log('worker', '═══════════════════════════════════════');
+  log('worker', 'SAP Indexer starting');
+  log('worker', `  mode=${INDEXER_MODE} run=${ONCE ? 'once' : 'daemon'}`);
+  log('worker', `  intervals: entity=${ENTITY_INTERVAL_MS / 1000}s tx=${TX_INTERVAL_MS / 1000}s snap=${SNAPSHOT_INTERVAL_MS / 1000}s`);
+  log('worker', `  db=${process.env.DATABASE_URL?.replace(/:[^@]+@/, ':***@') ?? 'NOT SET'}`);
 
   if (!process.env.DATABASE_URL) {
     logErr('worker', 'DATABASE_URL not set! Exiting.');

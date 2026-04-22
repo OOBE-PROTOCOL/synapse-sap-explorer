@@ -11,6 +11,5 @@ const files = typeof rawSource.files === 'function'
 
 export const source = loader({
   baseUrl: '/docs',
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  source: { files } as any,
+  source: { files } as Parameters<typeof loader>[0]['source'],
 });

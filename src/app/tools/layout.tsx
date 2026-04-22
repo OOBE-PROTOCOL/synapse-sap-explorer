@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Tools | Synapse Explorer',
     description: 'Explore registered on-chain tools in the SAP network — invocation counts, categories, and descriptors.',
-    images: [{ url: `${SITE_URL}/api/og?type=page&title=Tools&desc=Explore+registered+on-chain+tools+%E2%80%94+invocation+counts%2C+categories%2C+and+descriptors.`, width: 1200, height: 630 }],
+    images: [{ url: `${SITE_URL}/synapse-metadata-logo.png`, width: 1200, height: 630 }],
   },
 };
 

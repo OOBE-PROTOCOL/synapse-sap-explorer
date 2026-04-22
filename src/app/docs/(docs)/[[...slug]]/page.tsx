@@ -19,18 +19,18 @@ export default async function Page({ params }: PageProps) {
 
   if (!page) return notFound();
 
-  const MDXContent = (page.data as any).body;
+  const MDXContent = (page.data as Record<string, unknown>).body as React.ComponentType<{ components: ReturnType<typeof getMDXComponents> }>;
 
   return (
     <DocsPage
-      toc={(page.data as any).toc}
+      toc={(page.data as Record<string, unknown>).toc as Parameters<typeof DocsPage>[0]['toc']}
       tableOfContent={{
         style: "clerk",
         single: false,
       }}
     >
-      <DocsTitle>{(page.data as any).title}</DocsTitle>
-      <DocsDescription>{(page.data as any).description}</DocsDescription>
+      <DocsTitle>{(page.data as Record<string, unknown>).title as string}</DocsTitle>
+      <DocsDescription>{(page.data as Record<string, unknown>).description as string}</DocsDescription>
       <DocsBody>
         <MDXContent components={getMDXComponents()} />
       </DocsBody>
@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!page) return {};
 
   return {
-    title: (page.data as any).title,
-    description: (page.data as any).description,
+    title: (page.data as Record<string, unknown>).title as string,
+    description: (page.data as Record<string, unknown>).description as string,
   };
 }

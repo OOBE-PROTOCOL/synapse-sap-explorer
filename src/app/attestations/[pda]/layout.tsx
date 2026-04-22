@@ -9,7 +9,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const short = pda.length > 12 ? `${pda.slice(0, 6)}...${pda.slice(-4)}` : pda;
   const title = `Attestation ${short}`;
   const desc = `Trust endorsement details on the Solana Agent Protocol.`;
-  const ogUrl = `${SITE_URL}/api/og?type=page&title=${encodeURIComponent(title)}&desc=${encodeURIComponent(desc)}`;
+  const ogUrl = `${SITE_URL}/synapse-metadata-logo.png`;
   return {
     title,
     description: `Attestation ${short} — trust endorsement details on the Solana Agent Protocol.`,

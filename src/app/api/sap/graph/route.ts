@@ -16,6 +16,7 @@ import {
   buildGraphData,
 } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
+import type { GraphData } from '~/types/sap';
 
 async function rpcFetchGraph(capability: string | null, protocol: string | null) {
   let agents: DiscoveredAgent[];
@@ -44,7 +45,7 @@ export const GET = withSynapseError(async (req: Request) => {
   const cacheKey = `graph:${protocol ?? ''}:${capability ?? ''}`;
 
   // Instant return if cache warm
-  const cached = peek<any>(cacheKey);
+  const cached = peek<GraphData>(cacheKey);
   if (cached) {
     swr(cacheKey, () => rpcFetchGraph(capability, protocol), { ttl: 60_000, swr: 300_000 }).catch(() => {});
     return synapseResponse(cached);

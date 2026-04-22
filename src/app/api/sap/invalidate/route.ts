@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { NextResponse } from 'next/server';
-import { invalidate, invalidatePrefix } from '~/lib/cache';
+import { invalidatePrefix } from '~/lib/cache';
 
 const ALL_PREFIXES = [
   'agents',
@@ -46,8 +46,8 @@ export async function POST(req: Request) {
       invalidated: ALL_PREFIXES,
       message: 'All caches invalidated. Next request will fetch fresh data from DB + trigger RPC refresh.',
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 

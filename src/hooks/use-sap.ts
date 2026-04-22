@@ -1,27 +1,37 @@
 /* ──────────────────────────────────────────────────────────
  * useSap — Client-side hooks to fetch SAP data from API routes
  *
- * Uses native fetch + React state. No external data-fetching lib.
- * All data comes from the real SAP SDK via API routes (server-only).
+ * Powered by TanStack Query via useSapQuery for caching,
+ * deduplication, retry, and window-focus refetch.
  * ────────────────────────────────────────────────────────── */
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useSapQuery } from '~/hooks/use-sap-query';
 import type {
   SerializedDiscoveredAgent,
   SerializedAgentProfile,
   SerializedNetworkOverview,
   SerializedDiscoveredTool,
-  SerializedToolDescriptor,
   SerializedEscrow,
   SerializedAttestation,
   SerializedFeedback,
-  SerializedVault,
   GraphData,
-} from '~/lib/sap/discovery';
+} from '~/types/sap';
+import type {
+  SapEvent,
+  ToolEvent,
+  InscribedSchema,
+  ReceiptBatch,
+  Dispute,
+  AgentRevenueResponse,
+  X402PaymentRow,
+  X402Stats,
+  SearchResult,
+  ApiEscrowEvent,
+} from '~/types/api';
 
-/* ── Generic fetcher ──────────────────────────────────── */
+/* ── Generic fetcher — delegates to TanStack Query ──── */
 
 type FetchState<T> = {
   data: T | null;
@@ -30,41 +40,43 @@ type FetchState<T> = {
   refetch: () => void;
 };
 
-function useFetch<T>(url: string | null): FetchState<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tick, setTick] = useState(0);
+type FetchOptions = {
+  /** Auto-poll interval in ms. 0 = no polling (default). */
+  pollInterval?: number;
+  /** (kept for API compat — TanStack handles stale data automatically) */
+  keepStale?: boolean;
+};
 
-  const refetch = useCallback(() => setTick((t) => t + 1), []);
-
-  useEffect(() => {
-    if (!url) { setLoading(false); return; }
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetch(url)
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `HTTP ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((json) => {
-        if (!cancelled) { setData(json); setLoading(false); }
-      })
-      .catch((err) => {
-        if (!cancelled) { setError(err.message); setLoading(false); }
-      });
-
-    return () => { cancelled = true; };
-  }, [url, tick]);
-
-  return { data, error, loading, refetch };
+/** Derive a stable query key from the URL. */
+function urlToKey(url: string): readonly unknown[] {
+  const u = new URL(url, 'http://localhost');
+  const parts = u.pathname.split('/').filter(Boolean);
+  const params = Object.fromEntries(u.searchParams.entries());
+  return Object.keys(params).length > 0 ? [...parts, params] : parts;
 }
+
+function useFetch<T>(url: string | null, opts?: FetchOptions): FetchState<T> {
+  return useSapQuery<T>({
+    queryKey: url ? urlToKey(url) : ['__disabled'],
+    url,
+    pollInterval: opts?.pollInterval,
+  });
+}
+
+/* ── Re-export types for consumers importing from hooks ── */
+
+export type {
+  SapEvent,
+  ToolEvent,
+  InscribedSchema,
+  ReceiptBatch,
+  Dispute,
+  AgentRevenueSeriesEntry,
+  AgentRevenueResponse,
+  X402PaymentRow,
+  X402Stats,
+  SearchResult,
+} from '~/types/api';
 
 /* ── Typed hooks ──────────────────────────────────────── */
 
@@ -79,22 +91,6 @@ type AgentProfileResponse = {
   profile: SerializedAgentProfile;
 };
 
-/** Response from /api/sap/analytics */
-type AnalyticsResponse = {
-  categories: Array<{ category: string; categoryNum: number; toolCount: number }>;
-};
-
-/** Response from /api/sap/transactions */
-type TransactionsResponse = {
-  transactions: Array<{
-    signature: string;
-    slot: number;
-    blockTime: number | null;
-    err: boolean;
-    memo: string | null;
-  }>;
-};
-
 /** Response from /api/sap/tools */
 type ToolsResponse = {
   tools: SerializedDiscoveredTool[];
@@ -102,9 +98,28 @@ type ToolsResponse = {
   total: number;
 };
 
+/** Default polling intervals (ms). 0 = off. */
+const POLL = {
+  agents: 120_000,
+  transactions: 10_000,
+  escrows: 15_000,
+  vaults: 30_000,
+  vaultDetail: 15_000,
+  metrics: 30_000,
+  events: 10_000,
+} as const;
+
 export function useAgents(params?: Record<string, string>) {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-  return useFetch<AgentsResponse>(`/api/sap/agents${qs}`);
+  return useFetch<AgentsResponse>(`/api/sap/agents${qs}`, { pollInterval: POLL.agents, keepStale: true });
+}
+
+export type { EnrichedAgentsResponse, EnrichedAgent, TokenBalance, AgentBalanceSummary, AgentMetadata, AgentStakeSummary } from '~/app/api/sap/agents/enriched/route';
+
+type EnrichedAgentsRes = import('~/app/api/sap/agents/enriched/route').EnrichedAgentsResponse;
+
+export function useEnrichedAgents() {
+  return useFetch<EnrichedAgentsRes>('/api/sap/agents/enriched', { pollInterval: POLL.agents, keepStale: true });
 }
 
 export function useAgent(wallet: string | null) {
@@ -112,22 +127,63 @@ export function useAgent(wallet: string | null) {
   return useFetch<AgentProfileResponse>(url);
 }
 
-export function useMetrics() {
-  return useFetch<SerializedNetworkOverview>('/api/sap/metrics');
+export function useAgentStaking(agentPda: string | null) {
+  const url = agentPda ? `/api/sap/agents/${agentPda}/staking` : null;
+  return useFetch<import('~/app/api/sap/agents/enriched/route').AgentStakeSummary | null>(url);
 }
 
-export function useAnalytics() {
-  return useFetch<AnalyticsResponse>('/api/sap/analytics');
+export type { WalletBalancesResponse, TokenBalance as WalletTokenBalance } from '~/app/api/sap/agents/[wallet]/balances/route';
+
+type WalletBalancesRes = import('~/app/api/sap/agents/[wallet]/balances/route').WalletBalancesResponse;
+
+export function useAgentBalances(wallet: string | null) {
+  const url = wallet ? `/api/sap/agents/${wallet}/balances` : null;
+  return useFetch<WalletBalancesRes>(url, { pollInterval: 30_000, keepStale: true });
+}
+
+/* ── Token metadata (shared, DB-cached) ───────────────── */
+
+export type TokenMetaEntry = {
+  mint: string;
+  symbol: string;
+  name: string;
+  logo: string | null;
+  source: string;
+};
+
+type TokenMetaResponse = {
+  tokens: Record<string, TokenMetaEntry>;
+};
+
+/**
+ * Resolve metadata (name, symbol, logo) for a list of token mints.
+ * Uses the shared DB-cached endpoint. Skips fetch if mints is empty.
+ */
+export function useTokenMetadata(mints: string[]) {
+  const dedupedMints = [...new Set(mints.filter(Boolean))];
+  const url = dedupedMints.length > 0
+    ? `/api/sap/tokens/metadata?mints=${dedupedMints.join(',')}`
+    : null;
+  const { data, loading, error } = useFetch<TokenMetaResponse>(url, { keepStale: true });
+  return { tokens: data?.tokens ?? {}, loading, error };
+}
+
+export function useMetrics() {
+  return useFetch<SerializedNetworkOverview>('/api/sap/metrics', { pollInterval: POLL.metrics, keepStale: true });
 }
 
 export function useGraph(params?: Record<string, string>) {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-  return useFetch<GraphData>(`/api/sap/graph${qs}`);
-}
-
-export function useTransactions(limit?: number) {
-  const qs = limit ? `?limit=${limit}` : '';
-  return useFetch<TransactionsResponse>(`/api/sap/transactions${qs}`);
+  const url = `/api/sap/graph${qs}`;
+  return useSapQuery<GraphData>({
+    queryKey: urlToKey(url),
+    url,
+    queryOptions: {
+      // Keep previous graph visible while new data loads — prevents flash to empty
+      placeholderData: (prev: GraphData | undefined) => prev,
+      staleTime: 3 * 60_000,  // graph topology rarely changes — stay fresh for 3 min
+    },
+  });
 }
 
 export function useTools(params?: Record<string, string>) {
@@ -135,7 +191,29 @@ export function useTools(params?: Record<string, string>) {
   return useFetch<ToolsResponse>(`/api/sap/tools${qs}`);
 }
 
-/* ── New entity hooks ─────────────────────────────────── */
+type ToolSchemasResponse = {
+  schemas: InscribedSchema[];
+  total: number;
+};
+
+/** Fetch inscribed schemas for a tool PDA (from TX logs) */
+export function useToolSchemas(pda: string | null) {
+  return useFetch<ToolSchemasResponse>(pda ? `/api/sap/tools/${pda}/schemas` : null);
+}
+
+type ToolEventsResponse = {
+  events: ToolEvent[];
+  total: number;
+};
+
+/** Fetch lifecycle events for a tool PDA */
+export function useToolEvents(pda: string | null, limit = 50) {
+  return useFetch<ToolEventsResponse>(
+    pda ? `/api/sap/tools/${pda}/events?limit=${limit}` : null,
+  );
+}
+
+/* ── Entity response types ────────────────────────────── */
 
 /** Response from /api/sap/escrows */
 type EscrowsResponse = {
@@ -155,52 +233,179 @@ type FeedbacksResponse = {
   total: number;
 };
 
-/** Response from /api/sap/vaults */
 type VaultsResponse = {
-  vaults: SerializedVault[];
+  vaults: import('~/hooks/use-sap-vaults').EnrichedVault[];
   total: number;
 };
 
+/* ── Vault hooks — re-exported from domain file ───────── */
+
+export {
+  useVaults,
+  useAgentMemory,
+} from '~/hooks/use-sap-vaults';
+
+export type {
+  EnrichedVault,
+  RingEntry,
+  VaultDetailLedgerPage,
+  VaultDetailLedger,
+  VaultDetailEpochPage,
+  VaultDetailCheckpoint,
+  VaultDetailDelegate,
+  VaultDetailEvent,
+  VaultDetailSession,
+  VaultMemorySummary,
+  VaultDetailResponse,
+  ParsedInscription,
+  ParsedLedgerEntry,
+  InscriptionResult,
+  AgentMemoryVaultSummary,
+  AgentMemoryResponse,
+} from '~/hooks/use-sap-vaults';
+
 export function useEscrows() {
-  return useFetch<EscrowsResponse>('/api/sap/escrows');
+  return useFetch<EscrowsResponse>('/api/sap/escrows', { pollInterval: POLL.escrows, keepStale: true });
 }
 
-/** Response from /api/sap/escrows/events */
-type EscrowEvent = {
-  id: number;
-  escrowPda: string;
-  txSignature: string;
-  eventType: string;
-  slot: number;
-  blockTime: string | null;
-  signer: string | null;
-  balanceBefore: string | null;
-  balanceAfter: string | null;
-  amountChanged: string | null;
-  callsSettled: string | null;
-  agentPda: string | null;
-  depositor: string | null;
-  indexedAt: string;
+/** Single escrow by PDA — no N+1 */
+export function useEscrow(pda: string | null) {
+  const url = pda ? `/api/sap/escrows/${pda}` : null;
+  return useFetch<{ escrow: SerializedEscrow }>(url, { keepStale: true });
+}
+
+/* ── v0.7 entity hooks ────────────────────────────────── */
+
+type ReceiptBatchesResponse = {
+  receipts: ReceiptBatch[];
+  total: number;
 };
 
+export function useReceiptBatches(escrowPda?: string) {
+  const qs = escrowPda ? `?escrow=${encodeURIComponent(escrowPda)}` : '';
+  return useFetch<ReceiptBatchesResponse>(`/api/sap/receipts${qs}`, { pollInterval: 30_000, keepStale: true });
+}
+
+type DisputesResponse = {
+  disputes: Dispute[];
+  total: number;
+};
+
+export function useDisputes() {
+  return useFetch<DisputesResponse>('/api/sap/disputes', { pollInterval: 15_000, keepStale: true });
+}
+
 type EscrowEventsResponse = {
-  events: EscrowEvent[];
+  events: ApiEscrowEvent[];
   total: number;
 };
 
 export function useEscrowEvents(escrowPda?: string) {
   const qs = escrowPda ? `?escrow=${encodeURIComponent(escrowPda)}` : '';
-  return useFetch<EscrowEventsResponse>(`/api/sap/escrows/events${qs}`);
+  return useFetch<EscrowEventsResponse>(`/api/sap/escrows/events${qs}`, { pollInterval: POLL.events, keepStale: true });
 }
 
 export function useAttestations() {
-  return useFetch<AttestationsResponse>('/api/sap/attestations');
+  return useFetch<AttestationsResponse>('/api/sap/attestations', { pollInterval: 60_000, keepStale: true });
 }
 
 export function useFeedbacks() {
-  return useFetch<FeedbacksResponse>('/api/sap/feedbacks');
+  return useFetch<FeedbacksResponse>('/api/sap/feedbacks', { pollInterval: 60_000, keepStale: true });
 }
 
-export function useVaults() {
-  return useFetch<VaultsResponse>('/api/sap/vaults');
+/* ── SSE stream hooks — re-exported from domain file ──── */
+
+export { useAllEvents } from '~/hooks/use-sap-stream';
+export type { StreamEvent } from '~/hooks/use-sap-stream';
+
+/* ── Agent memory — re-exported from vault domain ─────── */
+// (AgentMemory types already re-exported above from use-sap-vaults)
+
+/* ── Address event timeline ───────────────────────────── */
+
+type AddressEventsResponse = {
+  events: SapEvent[];
+  total: number;
+  scanned: number;
+};
+
+/**
+ * Fetch all SAP events for a PDA (tool, agent, escrow, etc.)
+ * from /api/sap/address/[addr]/events
+ */
+export function useAddressEvents(
+  addr: string | null,
+  opts?: { limit?: number; filter?: string },
+) {
+  const qs = new URLSearchParams();
+  if (opts?.limit) qs.set('limit', String(opts.limit));
+  if (opts?.filter) qs.set('filter', opts.filter);
+  const query = qs.toString();
+  const url = addr ? `/api/sap/address/${addr}/events${query ? `?${query}` : ''}` : null;
+  return useFetch<AddressEventsResponse>(url);
+}
+
+/* ── Agent revenue series ─────────────────────────────── */
+
+export function useAgentRevenue(wallet: string | null, days = 30) {
+  const url = wallet ? `/api/sap/agents/${wallet}/revenue?days=${days}` : null;
+  return useFetch<AgentRevenueResponse>(url);
+}
+
+/* ── Batched overview (single call for homepage) ──────── */
+
+type OverviewResponse = {
+  metrics: SerializedNetworkOverview & {
+    totalVolumeLamports: string;
+    totalCallsSettled: string;
+    totalDeposited: string;
+    totalEscrowBalance: string;
+    activeEscrows: number;
+    fundedEscrows: number;
+    totalEscrows: number;
+    topAgentsByRevenue: Array<{
+      agentPda: string;
+      totalSettled: string;
+      totalCalls: string;
+      escrowCount: number;
+    }>;
+  };
+  agents: AgentsResponse;
+  tools: ToolsResponse;
+  escrows: EscrowsResponse;
+  attestations: AttestationsResponse;
+  feedbacks: FeedbacksResponse;
+  vaults: VaultsResponse;
+  escrowEvents: EscrowEventsResponse;
+};
+
+export function useOverview() {
+  return useFetch<OverviewResponse>('/api/sap/overview');
+}
+
+/* ── x402 Direct Payments ─────────────────────────────── */
+
+type X402PaymentsResponse = {
+  wallet: string;
+  payments: X402PaymentRow[];
+  total: number;
+  stats: X402Stats;
+};
+
+export function useX402Payments(wallet: string | null, opts?: { limit?: number; scan?: boolean }) {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.scan) params.set('scan', 'true');
+  const qs = params.toString();
+  const url = wallet ? `/api/sap/agents/${wallet}/x402${qs ? `?${qs}` : ''}` : null;
+  return useFetch<X402PaymentsResponse>(url, { pollInterval: POLL.escrows, keepStale: true });
+}
+
+/* ── Global Search ────────────────────────────────────── */
+
+type SearchResponse = { results: SearchResult[]; total: number };
+
+export function useGlobalSearch(query: string) {
+  const url = query.length >= 2 ? `/api/sap/search?q=${encodeURIComponent(query)}` : null;
+  return useFetch<SearchResponse>(url);
 }

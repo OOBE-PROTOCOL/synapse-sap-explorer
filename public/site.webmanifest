@@ -4,8 +4,8 @@
   "description": "Real-time on-chain explorer for the Solana Agent Protocol",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0e0b16",
-  "theme_color": "#7c3aed",
+  "background_color": "#0a0a0a",
+  "theme_color": "#07A4B5",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

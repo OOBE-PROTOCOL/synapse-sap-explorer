@@ -1,16 +1,11 @@
-/* ──────────────────────────────────────────────
- * DB Query Layer — Read/Write for all SAP entities
- *
- * Provides typed select + upsert functions for each table.
- * Used by API routes as the primary data source (DB → RPC fallback).
- * ────────────────────────────────────────────── */
-
-import { eq, desc, sql, and } from 'drizzle-orm';
+import { eq, desc, sql, and, count } from 'drizzle-orm';
 import { db } from '~/db';
 import {
   agents,
   agentStats,
   tools,
+  toolEvents,
+  toolSchemas,
   escrows,
   escrowEvents,
   attestations,
@@ -20,6 +15,8 @@ import {
   txDetails,
   networkSnapshots,
   syncCursors,
+  settlementLedger,
+  x402DirectPayments,
 } from '~/db/schema';
 
 /* ── Agents ───────────────────────────────────── */
@@ -328,12 +325,39 @@ export async function upsertVaults(dataArr: (typeof vaults.$inferInsert)[]) {
 
 /* ── Transactions ─────────────────────────────── */
 
-export async function selectTransactions(limit = 50) {
+export async function selectTransactions(limit = 50, offset = 0) {
   return db
-    .select()
+    .select({
+      signature: transactions.signature,
+      slot: transactions.slot,
+      blockTime: transactions.blockTime,
+      err: transactions.err,
+      memo: transactions.memo,
+      signer: transactions.signer,
+      fee: transactions.fee,
+      feeSol: transactions.feeSol,
+      programs: transactions.programs,
+      sapInstructions: transactions.sapInstructions,
+      instructionCount: transactions.instructionCount,
+      innerInstructionCount: transactions.innerInstructionCount,
+      computeUnits: transactions.computeUnits,
+      signerBalanceChange: transactions.signerBalanceChange,
+      version: transactions.version,
+      indexedAt: transactions.indexedAt,
+      accountKeys: txDetails.accountKeys,
+      tokenBalanceChanges: txDetails.tokenBalanceChanges,
+      balanceChanges: txDetails.balanceChanges,
+    })
     .from(transactions)
+    .leftJoin(txDetails, eq(transactions.signature, txDetails.signature))
     .orderBy(desc(transactions.slot))
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
+}
+
+export async function countTransactions() {
+  const result = await db.select({ count: count() }).from(transactions);
+  return result[0]?.count ?? 0;
 }
 
 export async function selectTransactionBySignature(signature: string) {
@@ -461,4 +485,512 @@ export async function upsertSyncCursor(entity: string, lastSlot?: number, lastSi
         lastSyncedAt: new Date(),
       },
     });
+}
+
+/* ── Protocol Volume Aggregates ───────────────── */
+
+/**
+ * Sum all escrow settlement/deposit/balance data across the protocol.
+ * Used for protocol net volume metric.
+ */
+export async function getEscrowAggregates() {
+  const rows = await db.select({
+    totalVolume:    sql<string>`COALESCE(SUM(${escrows.totalSettled}), '0')`,
+    totalDeposited: sql<string>`COALESCE(SUM(${escrows.totalDeposited}), '0')`,
+    totalBalance:   sql<string>`COALESCE(SUM(${escrows.balance}), '0')`,
+    totalCalls:     sql<string>`COALESCE(SUM(${escrows.totalCallsSettled}), '0')`,
+    totalEscrows:   sql<number>`COUNT(*)::int`,
+    activeEscrows:  sql<number>`COUNT(*) FILTER (WHERE ${escrows.balance}::numeric > 0)::int`,
+    fundedEscrows:  sql<number>`COUNT(*) FILTER (WHERE ${escrows.totalDeposited}::numeric > 0)::int`,
+  }).from(escrows);
+  return rows[0] ?? null;
+}
+
+/**
+ * Per-agent settlement totals derived from escrow accounts.
+ * Returns agents ranked by total SOL settled (authoritative revenue metric).
+ */
+export async function getAgentRevenueRanking(limit = 10) {
+  return db.select({
+    agentPda:     escrows.agentPda,
+    totalSettled: sql<string>`SUM(${escrows.totalSettled})`,
+    totalCalls:   sql<string>`SUM(${escrows.totalCallsSettled})`,
+    escrowCount:  sql<number>`COUNT(*)::int`,
+  })
+    .from(escrows)
+    .where(sql`${escrows.totalSettled}::numeric > 0`)
+    .groupBy(escrows.agentPda)
+    .orderBy(sql`SUM(${escrows.totalSettled}) DESC`)
+    .limit(limit);
+}
+
+/**
+ * Per-agent settlement stats for ALL agents (for data unification).
+ * Key = agentPda, Value = { totalSettled, totalCalls, escrowCount }
+ */
+export async function getAgentSettlementMap() {
+  const rows = await db.select({
+    agentPda:     escrows.agentPda,
+    totalSettled: sql<string>`COALESCE(SUM(${escrows.totalSettled}), '0')`,
+    totalCalls:   sql<string>`COALESCE(SUM(${escrows.totalCallsSettled}), '0')`,
+    totalDeposited: sql<string>`COALESCE(SUM(${escrows.totalDeposited}), '0')`,
+    escrowCount:  sql<number>`COUNT(*)::int`,
+    activeEscrows: sql<number>`COUNT(*) FILTER (WHERE ${escrows.balance}::numeric > 0)::int`,
+  })
+    .from(escrows)
+    .groupBy(escrows.agentPda);
+
+  const map: Record<string, {
+    totalSettled: string;
+    totalCalls: string;
+    totalDeposited: string;
+    escrowCount: number;
+    activeEscrows: number;
+  }> = {};
+  for (const r of rows) {
+    if (r.agentPda) map[r.agentPda] = r;
+  }
+  return map;
+}
+
+/* ── Settlement Ledger ────────────────────────── */
+
+export async function upsertSettlementEntry(data: typeof settlementLedger.$inferInsert) {
+  return db
+    .insert(settlementLedger)
+    .values(data)
+    .onConflictDoNothing();       // unique constraint handled at INSERT level
+}
+
+export async function upsertSettlementEntries(dataArr: (typeof settlementLedger.$inferInsert)[]) {
+  if (dataArr.length === 0) return;
+  await Promise.allSettled(dataArr.map((d) => upsertSettlementEntry(d)));
+}
+
+/* ── Daily / Hourly Volume ────────────────────── */
+
+/**
+ * Returns daily settlement volume bucketed by UTC day.
+ * Falls back to escrow-level data when settlement_ledger is empty.
+ */
+export async function getDailyVolume(days = 30) {
+  return db.select({
+    day:           sql<string>`DATE_TRUNC('day', ${settlementLedger.blockTime}) AT TIME ZONE 'UTC'`,
+    totalLamports: sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}), '0')`,
+    totalCalls:    sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}), '0')`,
+    txCount:       sql<number>`COUNT(DISTINCT ${settlementLedger.signature})::int`,
+  })
+    .from(settlementLedger)
+    .where(sql`${settlementLedger.blockTime} >= NOW() - INTERVAL '${sql.raw(String(days))} days'`)
+    .groupBy(sql`DATE_TRUNC('day', ${settlementLedger.blockTime})`)
+    .orderBy(sql`DATE_TRUNC('day', ${settlementLedger.blockTime}) ASC`);
+}
+
+export async function getHourlyVolume(hours = 24) {
+  return db.select({
+    hour:          sql<string>`DATE_TRUNC('hour', ${settlementLedger.blockTime}) AT TIME ZONE 'UTC'`,
+    totalLamports: sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}), '0')`,
+    totalCalls:    sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}), '0')`,
+    txCount:       sql<number>`COUNT(DISTINCT ${settlementLedger.signature})::int`,
+  })
+    .from(settlementLedger)
+    .where(sql`${settlementLedger.blockTime} >= NOW() - INTERVAL '${sql.raw(String(hours))} hours'`)
+    .groupBy(sql`DATE_TRUNC('hour', ${settlementLedger.blockTime})`)
+    .orderBy(sql`DATE_TRUNC('hour', ${settlementLedger.blockTime}) ASC`);
+}
+
+/* ── Top Depositors ───────────────────────────── */
+
+/**
+ * Returns the top depositors ranked by total SOL deposited (from escrow accounts).
+ */
+export async function getTopDepositors(limit = 10) {
+  return db.select({
+    depositor:      escrows.depositor,
+    totalDeposited: sql<string>`SUM(${escrows.totalDeposited})`,
+    totalSettled:   sql<string>`SUM(${escrows.totalSettled})`,
+    totalBalance:   sql<string>`SUM(${escrows.balance})`,
+    totalCalls:     sql<string>`SUM(${escrows.totalCallsSettled})`,
+    escrowCount:    sql<number>`COUNT(*)::int`,
+  })
+    .from(escrows)
+    .where(sql`${escrows.totalDeposited}::numeric > 0`)
+    .groupBy(escrows.depositor)
+    .orderBy(sql`SUM(${escrows.totalDeposited}) DESC`)
+    .limit(limit);
+}
+
+/* ── Agent Revenue Series ─────────────────────── */
+
+/**
+ * Time-series revenue for a single agent from settlement ledger.
+ * Buckets by UTC day for the given look-back window.
+ */
+export async function getAgentRevenueSeries(agentPda: string, days = 30) {
+  return db.select({
+    day:           sql<string>`DATE_TRUNC('day', ${settlementLedger.blockTime}) AT TIME ZONE 'UTC'`,
+    totalLamports: sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}), '0')`,
+    totalCalls:    sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}), '0')`,
+    txCount:       sql<number>`COUNT(*)::int`,
+  })
+    .from(settlementLedger)
+    .where(
+      and(
+        eq(settlementLedger.agentPda, agentPda),
+        sql`${settlementLedger.blockTime} >= NOW() - INTERVAL '${sql.raw(String(days))} days'`,
+      ),
+    )
+    .groupBy(sql`DATE_TRUNC('day', ${settlementLedger.blockTime})`)
+    .orderBy(sql`DATE_TRUNC('day', ${settlementLedger.blockTime}) ASC`);
+}
+
+/* ── Network Health ───────────────────────────── */
+
+/**
+ * Returns protocol-wide health metrics:
+ * active agent %, escrow utilisation, avg. reputation, recent activity.
+ */
+export async function getNetworkHealth() {
+  const agentMetrics = await db.select({
+    total:        sql<number>`COUNT(*)::int`,
+    active:       sql<number>`COUNT(*) FILTER (WHERE ${agents.isActive} = true)::int`,
+    avgRep:       sql<number>`COALESCE(AVG(${agents.reputationScore}), 0)::float`,
+    withX402:     sql<number>`COUNT(*) FILTER (WHERE ${agents.x402Endpoint} IS NOT NULL)::int`,
+    recent7d:     sql<number>`COUNT(*) FILTER (WHERE ${agents.updatedAt} >= NOW() - INTERVAL '7 days')::int`,
+  }).from(agents);
+
+  const escrowMetrics = await db.select({
+    total:        sql<number>`COUNT(*)::int`,
+    active:       sql<number>`COUNT(*) FILTER (WHERE ${escrows.balance}::numeric > 0)::int`,
+    totalVol:     sql<string>`COALESCE(SUM(${escrows.totalSettled}), '0')`,
+    totalDep:     sql<string>`COALESCE(SUM(${escrows.totalDeposited}), '0')`,
+    expiringSoon: sql<number>`COUNT(*) FILTER (WHERE ${escrows.expiresAt} IS NOT NULL AND ${escrows.expiresAt} BETWEEN NOW() AND NOW() + INTERVAL '48 hours')::int`,
+  }).from(escrows);
+
+  const toolCount = await db.select({ count: sql<number>`COUNT(*)::int` }).from(tools);
+  const vaultCount = await db.select({ count: sql<number>`COUNT(*)::int` }).from(vaults);
+
+  return {
+    agents: agentMetrics[0] ?? { total: 0, active: 0, avgRep: 0, withX402: 0, recent7d: 0 },
+    escrows: escrowMetrics[0] ?? { total: 0, active: 0, totalVol: '0', totalDep: '0', expiringSoon: 0 },
+    tools: toolCount[0]?.count ?? 0,
+    vaults: vaultCount[0]?.count ?? 0,
+  };
+}
+
+/* ── Expiring Escrows ─────────────────────────── */
+
+export async function getExpiringEscrows(hoursAhead = 48) {
+  return db.select()
+    .from(escrows)
+    .where(
+      and(
+        sql`${escrows.expiresAt} IS NOT NULL`,
+        sql`${escrows.expiresAt} > NOW()`,
+        sql`${escrows.expiresAt} <= NOW() + INTERVAL '${sql.raw(String(hoursAhead))} hours'`,
+        sql`${escrows.balance}::numeric > 0`,
+      ),
+    )
+    .orderBy(escrows.expiresAt);
+}
+
+/* ── Protocol Growth Rate ─────────────────────── */
+
+/**
+ * Compares registered entity counts between two 7-day windows.
+ * Returns week-over-week deltas for agents, tools, escrows.
+ */
+export async function getProtocolGrowthRate() {
+  const agentGrowth = await db.select({
+    thisWeek: sql<number>`COUNT(*) FILTER (WHERE ${agents.createdAt} >= NOW() - INTERVAL '7 days')::int`,
+    lastWeek: sql<number>`COUNT(*) FILTER (WHERE ${agents.createdAt} >= NOW() - INTERVAL '14 days' AND ${agents.createdAt} < NOW() - INTERVAL '7 days')::int`,
+  }).from(agents);
+
+  const toolGrowth = await db.select({
+    thisWeek: sql<number>`COUNT(*) FILTER (WHERE ${tools.createdAt} >= NOW() - INTERVAL '7 days')::int`,
+    lastWeek: sql<number>`COUNT(*) FILTER (WHERE ${tools.createdAt} >= NOW() - INTERVAL '14 days' AND ${tools.createdAt} < NOW() - INTERVAL '7 days')::int`,
+  }).from(tools);
+
+  const escrowGrowth = await db.select({
+    thisWeek: sql<number>`COUNT(*) FILTER (WHERE ${escrows.createdAt} >= NOW() - INTERVAL '7 days')::int`,
+    lastWeek: sql<number>`COUNT(*) FILTER (WHERE ${escrows.createdAt} >= NOW() - INTERVAL '14 days' AND ${escrows.createdAt} < NOW() - INTERVAL '7 days')::int`,
+  }).from(escrows);
+
+  function delta(thisW: number, lastW: number) {
+    if (lastW === 0) return thisW > 0 ? 100 : 0;
+    return Math.round(((thisW - lastW) / lastW) * 100);
+  }
+
+  const ag = agentGrowth[0] ?? { thisWeek: 0, lastWeek: 0 };
+  const tg = toolGrowth[0] ?? { thisWeek: 0, lastWeek: 0 };
+  const eg = escrowGrowth[0] ?? { thisWeek: 0, lastWeek: 0 };
+
+  return {
+    agents:  { thisWeek: ag.thisWeek, lastWeek: ag.lastWeek, deltaPercent: delta(ag.thisWeek, ag.lastWeek) },
+    tools:   { thisWeek: tg.thisWeek, lastWeek: tg.lastWeek, deltaPercent: delta(tg.thisWeek, tg.lastWeek) },
+    escrows: { thisWeek: eg.thisWeek, lastWeek: eg.lastWeek, deltaPercent: delta(eg.thisWeek, eg.lastWeek) },
+  };
+}
+
+/* ── Settlement Ledger Queries ────────────────── */
+
+/** Paginated settlement ledger with optional filters */
+export async function selectSettlementLedger(opts?: {
+  agentPda?: string;
+  depositor?: string;
+  escrowPda?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const conditions = [];
+  if (opts?.agentPda) conditions.push(eq(settlementLedger.agentPda, opts.agentPda));
+  if (opts?.depositor) conditions.push(eq(settlementLedger.depositor, opts.depositor));
+  if (opts?.escrowPda) conditions.push(eq(settlementLedger.escrowPda, opts.escrowPda));
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const limit = opts?.limit ?? 100;
+  const offset = opts?.offset ?? 0;
+
+  const [rows, countResult] = await Promise.all([
+    db.select()
+      .from(settlementLedger)
+      .where(where)
+      .orderBy(desc(settlementLedger.blockTime))
+      .limit(limit)
+      .offset(offset),
+    db.select({ count: sql<number>`COUNT(*)::int` })
+      .from(settlementLedger)
+      .where(where),
+  ]);
+
+  return { rows, total: countResult[0]?.count ?? 0 };
+}
+
+/** Settlement ledger aggregate stats */
+export async function getSettlementLedgerStats() {
+  const rows = await db.select({
+    totalEntries:    sql<number>`COUNT(*)::int`,
+    totalLamports:   sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}), '0')`,
+    totalCalls:      sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}), '0')`,
+    uniqueAgents:    sql<number>`COUNT(DISTINCT ${settlementLedger.agentPda})::int`,
+    uniqueDepositors: sql<number>`COUNT(DISTINCT ${settlementLedger.depositor})::int`,
+    uniqueEscrows:   sql<number>`COUNT(DISTINCT ${settlementLedger.escrowPda})::int`,
+    singleSettles:   sql<number>`COUNT(*) FILTER (WHERE ${settlementLedger.eventType} = 'PaymentSettledEvent')::int`,
+    batchSettles:    sql<number>`COUNT(*) FILTER (WHERE ${settlementLedger.eventType} = 'BatchSettledEvent')::int`,
+  }).from(settlementLedger);
+  return rows[0] ?? null;
+}
+
+/* ── x402 Global Payments Queries ─────────────── */
+
+/** Paginated x402 direct payments (global) */
+export async function selectX402Payments(opts?: {
+  agentWallet?: string;
+  payerWallet?: string;
+  hasX402Memo?: boolean;
+  limit?: number;
+  offset?: number;
+}) {
+  const conditions = [];
+  if (opts?.agentWallet) conditions.push(eq(x402DirectPayments.agentWallet, opts.agentWallet));
+  if (opts?.payerWallet) conditions.push(eq(x402DirectPayments.payerWallet, opts.payerWallet));
+  if (opts?.hasX402Memo !== undefined) conditions.push(eq(x402DirectPayments.hasX402Memo, opts.hasX402Memo));
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const limit = opts?.limit ?? 100;
+  const offset = opts?.offset ?? 0;
+
+  const [rows, countResult] = await Promise.all([
+    db.select()
+      .from(x402DirectPayments)
+      .where(where)
+      .orderBy(desc(x402DirectPayments.blockTime))
+      .limit(limit)
+      .offset(offset),
+    db.select({ count: sql<number>`COUNT(*)::int` })
+      .from(x402DirectPayments)
+      .where(where),
+  ]);
+
+  return { rows, total: countResult[0]?.count ?? 0 };
+}
+
+/* ── Network Snapshots History ────────────────── */
+
+/** Returns snapshot history for growth charts */
+export async function selectSnapshotHistory(days = 30) {
+  return db.select()
+    .from(networkSnapshots)
+    .where(sql`${networkSnapshots.capturedAt} >= NOW() - INTERVAL '${sql.raw(String(days))} days'`)
+    .orderBy(networkSnapshots.capturedAt);
+}
+
+/* ── Depositor Profile ────────────────────────── */
+
+/** Get full depositor portfolio — all escrows for a given depositor */
+export async function getDepositorProfile(depositor: string) {
+  const escrowRows = await db.select()
+    .from(escrows)
+    .where(eq(escrows.depositor, depositor))
+    .orderBy(desc(escrows.createdAt));
+
+  const settleRows = await db.select({
+    totalSettled: sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}), '0')`,
+    totalCalls:   sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}), '0')`,
+    txCount:      sql<number>`COUNT(DISTINCT ${settlementLedger.signature})::int`,
+  })
+    .from(settlementLedger)
+    .where(eq(settlementLedger.depositor, depositor));
+
+  return {
+    depositor,
+    escrows: escrowRows,
+    settlements: settleRows[0] ?? { totalSettled: '0', totalCalls: '0', txCount: 0 },
+  };
+}
+
+/* ── Global Search ────────────────────────────── */
+
+/** Search across agents, tools, escrows by name/PDA/wallet */
+export async function globalSearch(query: string, limit = 20) {
+  const pattern = `%${query}%`;
+
+  const [agentResults, toolResults, escrowResults] = await Promise.all([
+    db.select({ pda: agents.pda, name: agents.name, wallet: agents.wallet, type: sql<string>`'agent'` })
+      .from(agents)
+      .where(sql`${agents.name} ILIKE ${pattern} OR ${agents.pda} ILIKE ${pattern} OR ${agents.wallet} ILIKE ${pattern}`)
+      .limit(limit),
+    db.select({ pda: tools.pda, name: tools.toolName, wallet: sql<string>`NULL`, type: sql<string>`'tool'` })
+      .from(tools)
+      .where(sql`${tools.toolName} ILIKE ${pattern} OR ${tools.pda} ILIKE ${pattern}`)
+      .limit(limit),
+    db.select({ pda: escrows.pda, name: sql<string>`NULL`, wallet: escrows.depositor, type: sql<string>`'escrow'` })
+      .from(escrows)
+      .where(sql`${escrows.pda} ILIKE ${pattern} OR ${escrows.depositor} ILIKE ${pattern} OR ${escrows.agentPda} ILIKE ${pattern}`)
+      .limit(limit),
+  ]);
+
+  return [...agentResults, ...toolResults, ...escrowResults].slice(0, limit);
+}
+
+/* ── Tool Events ──────────────────────────────── */
+
+export async function selectToolEvents(toolPda: string, limit = 50) {
+  return db
+    .select()
+    .from(toolEvents)
+    .where(eq(toolEvents.toolPda, toolPda))
+    .orderBy(desc(toolEvents.slot))
+    .limit(limit);
+}
+
+export async function selectToolEventsByAgent(agentPda: string, limit = 100) {
+  return db
+    .select()
+    .from(toolEvents)
+    .where(eq(toolEvents.agentPda, agentPda))
+    .orderBy(desc(toolEvents.slot))
+    .limit(limit);
+}
+
+export async function insertToolEvent(data: typeof toolEvents.$inferInsert) {
+  // Dedup via unique constraint: (tx_signature, event_type, tool_pda)
+  try {
+    return await db.insert(toolEvents).values(data).returning({ id: toolEvents.id });
+  } catch (e: unknown) {
+    if ((e as { code?: string }).code === '23505') return null; // duplicate — skip
+    throw e;
+  }
+}
+
+export async function insertToolEvents(dataArr: (typeof toolEvents.$inferInsert)[]) {
+  if (dataArr.length === 0) return;
+  await Promise.allSettled(dataArr.map((d) => insertToolEvent(d)));
+}
+
+/* ── Tool Schemas ─────────────────────────────── */
+
+export async function selectToolSchemas(toolPda: string) {
+  return db
+    .select()
+    .from(toolSchemas)
+    .where(eq(toolSchemas.toolPda, toolPda))
+    .orderBy(desc(toolSchemas.version), desc(toolSchemas.schemaType));
+}
+
+export async function selectToolSchemasByAgent(agentPda: string) {
+  return db
+    .select()
+    .from(toolSchemas)
+    .where(eq(toolSchemas.agentPda, agentPda))
+    .orderBy(desc(toolSchemas.version));
+}
+
+export async function selectToolSchemaCounts() {
+  return db
+    .select({
+      toolPda: toolSchemas.toolPda,
+      count: count(toolSchemas.id),
+    })
+    .from(toolSchemas)
+    .groupBy(toolSchemas.toolPda);
+}
+
+export async function upsertToolSchema(data: typeof toolSchemas.$inferInsert) {
+  // Unique on (tool_pda, schema_type, version)
+  try {
+    const existing = await db
+      .select({ id: toolSchemas.id })
+      .from(toolSchemas)
+      .where(
+        and(
+          eq(toolSchemas.toolPda, data.toolPda),
+          eq(toolSchemas.schemaType, data.schemaType),
+          eq(toolSchemas.version, data.version ?? 0),
+        ),
+      )
+      .limit(1);
+    if (existing.length > 0) {
+      return await db
+        .update(toolSchemas)
+        .set({
+          schemaData: data.schemaData,
+          schemaJson: data.schemaJson,
+          schemaHash: data.schemaHash,
+          computedHash: data.computedHash,
+          verified: data.verified,
+          compression: data.compression,
+          txSignature: data.txSignature,
+          blockTime: data.blockTime,
+          indexedAt: new Date(),
+        })
+        .where(eq(toolSchemas.id, existing[0].id));
+    }
+    return await db.insert(toolSchemas).values(data);
+  } catch (e: unknown) {
+    if ((e as { code?: string }).code === '23505') return null;
+    throw e;
+  }
+}
+
+export async function upsertToolSchemas(dataArr: (typeof toolSchemas.$inferInsert)[]) {
+  if (dataArr.length === 0) return;
+  await Promise.allSettled(dataArr.map((d) => upsertToolSchema(d)));
+}
+
+/** Mark a tool as closed in DB (PDA reclaimed on-chain) */
+export async function markToolClosed(pda: string) {
+  return db
+    .update(tools)
+    .set({ isActive: false, indexedAt: new Date() })
+    .where(eq(tools.pda, pda));
+}
+
+/** Select tools by agent PDA */
+export async function selectToolsByAgent(agentPda: string) {
+  return db
+    .select()
+    .from(tools)
+    .where(eq(tools.agentPda, agentPda))
+    .orderBy(desc(tools.updatedAt));
 }

@@ -8,7 +8,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const title = `Capability ${id}`;
   const desc = `Protocol binding, description, and agent owners on SAP.`;
-  const ogUrl = `${SITE_URL}/api/og?type=page&title=${encodeURIComponent(title)}&desc=${encodeURIComponent(desc)}`;
+  const ogUrl = `${SITE_URL}/synapse-metadata-logo.png`;
   return {
     title,
     description: `Capability ${id} — protocol binding, description, and agent owners on the Solana Agent Protocol.`,

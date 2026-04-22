@@ -1,15 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import * as AvatarPrimitive from '@radix-ui/react-avatar'
 
 import { cn } from '~/lib/utils'
 
 const Avatar = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Root
+  <div
     ref={ref}
     className={cn(
       'relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full',
@@ -18,25 +17,38 @@ const Avatar = React.forwardRef<
     {...props}
   />
 ))
-Avatar.displayName = AvatarPrimitive.Root.displayName
+Avatar.displayName = 'Avatar'
 
 const AvatarImage = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Image>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image
-    ref={ref}
-    className={cn('aspect-square h-full w-full', className)}
-    {...props}
-  />
-))
-AvatarImage.displayName = AvatarPrimitive.Image.displayName
+  HTMLImageElement,
+  React.ImgHTMLAttributes<HTMLImageElement>
+>(({ className, src, alt, onError, ...props }, ref) => {
+  const [failed, setFailed] = React.useState(false)
+
+  if (failed || !src) return null
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      ref={ref}
+      src={src}
+      alt={alt ?? ''}
+      onError={(e) => {
+        setFailed(true)
+        onError?.(e)
+      }}
+      className={cn('aspect-square h-full w-full', className)}
+      {...props}
+    />
+  )
+})
+AvatarImage.displayName = 'AvatarImage'
 
 const AvatarFallback = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Fallback>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Fallback
+  <div
     ref={ref}
     className={cn(
       'flex h-full w-full items-center justify-center rounded-full bg-muted',
@@ -45,6 +57,6 @@ const AvatarFallback = React.forwardRef<
     {...props}
   />
 ))
-AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
+AvatarFallback.displayName = 'AvatarFallback'
 
 export { Avatar, AvatarImage, AvatarFallback }

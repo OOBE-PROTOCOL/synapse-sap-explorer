@@ -1,16 +1,10 @@
 export const dynamic = 'force-dynamic';
 
-/* ──────────────────────────────────────────────
- * GET /api/sap/agents/map — Lightweight wallet→agent name map
- *
- * SWR cached (5min fresh, 50min stale window).
- * Tries DB first, then falls back to RPC.
- * ────────────────────────────────────────────── */
-
 import { NextResponse } from 'next/server';
 import { findAllAgents, serializeDiscoveredAgent } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
 import { selectAllAgents } from '~/lib/db/queries';
+import { isDbDown, markDbDown } from '~/db';
 
 type AgentMap = Record<string, { name: string; pda: string; score: number }>;
 
@@ -32,15 +26,13 @@ async function rpcFetchAgentMap(): Promise<AgentMap> {
 
 export async function GET() {
   try {
-    // Step 1: cache peek
     const cached = peek<AgentMap>('agents:map');
     if (cached && Object.keys(cached).length > 0) {
       swr('agents:map', rpcFetchAgentMap, { ttl: 60_000, swr: 300_000 }).catch(() => {});
       return NextResponse.json(cached);
     }
 
-    // Step 2: DB read
-    try {
+    if (!isDbDown()) try {
       const dbRows = await selectAllAgents();
       if (dbRows.length > 0) {
         const map: AgentMap = {};
@@ -58,9 +50,9 @@ export async function GET() {
       }
     } catch (e) {
       console.warn('[agents/map] DB read failed:', (e as Error).message);
+      markDbDown();
     }
 
-    // Step 3: cold start
     const data = await rpcFetchAgentMap();
     swr('agents:map', () => Promise.resolve(data), { ttl: 60_000, swr: 300_000 }).catch(() => {});
     return NextResponse.json(data);

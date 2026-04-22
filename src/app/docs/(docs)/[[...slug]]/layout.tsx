@@ -1,5 +1,6 @@
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { baseOptions } from "@/app/docs/layout.config";
 import { source } from "@/lib/source";
 import { BackToExplorer } from "@/components/docs/BackToHome";
@@ -22,14 +23,14 @@ export default function Layout({ children }: { children: ReactNode }) {
                 Identity, payments, memory, and discovery.
               </p>
             </div>
-            <a
+            <Link
               href="/docs/sdk/quickstart"
               className="group flex items-center gap-2 rounded-md bg-fd-primary/10 px-3 py-2 text-[0.75rem] font-semibold text-fd-primary transition-colors hover:bg-fd-primary/20"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><polygon points="5 3 19 12 5 21 5 3" /></svg>
               Get Started
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="ml-auto shrink-0 transition-transform group-hover:translate-x-0.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            </a>
+            </Link>
           </div>
         ),
         footer: <BackToExplorer />,

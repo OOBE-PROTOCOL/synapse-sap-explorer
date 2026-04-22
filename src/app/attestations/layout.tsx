@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Attestations | Synapse Explorer',
     description: 'View on-chain attestations — trust endorsements, verification records, and attestation types.',
-    images: [{ url: `${SITE_URL}/api/og?type=page&title=Attestations&desc=View+on-chain+attestations+%E2%80%94+trust+endorsements%2C+verification+records%2C+and+attestation+types.`, width: 1200, height: 630 }],
+    images: [{ url: `${SITE_URL}/synapse-metadata-logo.png`, width: 1200, height: 630 }],
   },
 };
 

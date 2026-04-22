@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Agents | Synapse Explorer',
     description: 'Browse all registered SAP agents — reputation scores, capabilities, and real-time status.',
-    images: [{ url: `${SITE_URL}/api/og?type=page&title=Agents&desc=Browse+all+registered+SAP+agents+%E2%80%94+reputation+scores%2C+capabilities%2C+and+real-time+status.`, width: 1200, height: 630 }],
+    images: [{ url: `${SITE_URL}/synapse-metadata-logo.png`, width: 1200, height: 630 }],
   },
 };
 

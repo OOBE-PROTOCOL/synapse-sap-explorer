@@ -7,28 +7,19 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
-import { findAllAttestations } from '~/lib/sap/discovery';
+import { findAllAttestations, serialize } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
 import { selectAllAttestations, upsertAttestations } from '~/lib/db/queries';
+import { isDbDown, markDbDown } from '~/db';
 import { dbAttestationToApi, apiAttestationToDb } from '~/lib/db/mappers';
+import type { ApiAttestation } from '~/types';
 
 async function rpcFetchAttestations() {
   const attestations = await findAllAttestations();
-  const serialized = attestations.map((a) => {
-    const d = a.account;
-    return {
-      pda: a.pda.toBase58(),
-      agent: d.agent?.toBase58?.() ?? String(d.agent ?? ''),
-      attester: d.attester?.toBase58?.() ?? String(d.attester ?? ''),
-      attestationType: d.attestationType ?? '',
-      isActive: d.isActive ?? false,
-      createdAt: d.createdAt?.toString?.() ?? '0',
-      expiresAt: d.expiresAt?.toString?.() ?? '0',
-      metadataHash: d.metadataHash
-        ? Buffer.from(d.metadataHash).toString('hex')
-        : '',
-    };
-  });
+  const serialized = attestations.map((a) => ({
+    pda: a.pda.toBase58(),
+    ...serialize(a.account),
+  })) as ApiAttestation[];
   upsertAttestations(serialized.map(apiAttestationToDb)).catch((e) =>
     console.warn('[attestations] DB write failed:', (e as Error).message),
   );
@@ -36,13 +27,13 @@ async function rpcFetchAttestations() {
 }
 
 export const GET = withSynapseError(async () => {
-  const cached = peek<any>('attestations');
+  const cached = peek<{ attestations: ApiAttestation[]; total: number }>('attestations');
   if (cached && cached.attestations?.length > 0) {
     swr('attestations', rpcFetchAttestations, { ttl: 60_000, swr: 300_000 }).catch(() => {});
     return synapseResponse(cached);
   }
 
-  try {
+  if (!isDbDown()) try {
     const dbRows = await selectAllAttestations();
     if (dbRows.length > 0) {
       const result = { attestations: dbRows.map(dbAttestationToApi), total: dbRows.length };
@@ -51,6 +42,7 @@ export const GET = withSynapseError(async () => {
     }
   } catch (e) {
     console.warn('[attestations] DB read failed:', (e as Error).message);
+    markDbDown();
   }
 
   const data = await rpcFetchAttestations();

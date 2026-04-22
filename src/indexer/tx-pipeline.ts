@@ -1,8 +1,11 @@
 // src/indexer/tx-pipeline.ts — Shared tx hydration + upsert pipeline
 import { db } from '~/db';
 import { transactions, txDetails } from '~/db/schema';
+import type { TxProgram, AccountKey, ParsedInstruction, BalanceChange, TokenBalanceChange } from '~/db/schema';
 import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
 import { conflictUpdateSet } from './utils';
+import type { RpcTransaction, TransactionError, RpcTransactionMeta } from '~/types/indexer';
+import type { TransactionInsert, TxDetailInsert } from '~/types/db';
 
 const PROGRAMS: Record<string, string> = {
   '11111111111111111111111111111111': 'System Program',
@@ -18,13 +21,13 @@ export type SignatureLike = {
   signature: string;
   slot: number;
   blockTime: number | null;
-  err: unknown | null;
+  err: TransactionError;
   memo: string | null;
 };
 
-export function hydrateTx(sig: SignatureLike, tx: any | null): {
-  txRow: any;
-  detailRow: any | null;
+export function hydrateTx(sig: SignatureLike, tx: RpcTransaction | null): {
+  txRow: TransactionInsert;
+  detailRow: TxDetailInsert | null;
 } {
   const base = {
     signature: sig.signature,
@@ -35,7 +38,7 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
     signer: null as string | null,
     fee: 0,
     feeSol: 0,
-    programs: [] as any[],
+    programs: [] as TxProgram[],
     sapInstructions: [] as string[],
     instructionCount: 0,
     innerInstructionCount: 0,
@@ -53,11 +56,11 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
 
   let accountKeys: string[] = [];
   if (message.accountKeys) {
-    accountKeys = message.accountKeys.map((k: any) =>
-      typeof k === 'string' ? k : (k.pubkey ?? k.toBase58?.() ?? String(k)),
+    accountKeys = message.accountKeys.map((k: unknown) =>
+      typeof k === 'string' ? k : ((k as { pubkey?: string; toBase58?: () => string }).pubkey ?? (k as { toBase58?: () => string }).toBase58?.() ?? String(k)),
     );
   } else if (message.staticAccountKeys) {
-    accountKeys = message.staticAccountKeys.map((k: any) =>
+    accountKeys = message.staticAccountKeys.map((k: unknown) =>
       typeof k === 'string' ? k : String(k),
     );
   }
@@ -74,15 +77,17 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
   const header = message.header;
 
   const programIds = new Set<string>();
-  const ixs = message.instructions ?? message.compiledInstructions ?? [];
+  // Normalize both instruction formats into a common shape
+  type NormalizedIx = { programId?: string; programIdIndex?: number; accounts?: (number | string)[]; accountKeyIndexes?: number[]; data?: string | Uint8Array };
+  const ixs: NormalizedIx[] = (message.instructions ?? message.compiledInstructions ?? []) as NormalizedIx[];
   for (const ix of ixs) {
-    const pid = ix.programId ?? accountKeys[ix.programIdIndex];
+    const pid = ix.programId ?? (ix.programIdIndex != null ? accountKeys[ix.programIdIndex] : undefined);
     if (pid) programIds.add(typeof pid === 'string' ? pid : String(pid));
   }
-  const innerIxs = meta?.innerInstructions ?? [];
+  const innerIxs: NonNullable<RpcTransactionMeta['innerInstructions']> = meta?.innerInstructions ?? [];
   for (const inner of innerIxs) {
     for (const ix of inner.instructions ?? []) {
-      const pid = ix.programId ?? accountKeys[ix.programIdIndex];
+      const pid = ix.programId ?? (ix.programIdIndex != null ? accountKeys[ix.programIdIndex] : undefined);
       if (pid) programIds.add(typeof pid === 'string' ? pid : String(pid));
     }
   }
@@ -92,10 +97,24 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
   }));
 
   const logs: string[] = meta?.logMessages ?? [];
+
+  // Extract SAP instruction names — only from SAP program invoke context
+  // Pattern: "Program SAP...ETZ invoke [N]" followed by "Program log: Instruction: XYZ"
   const sapInstructions: string[] = [];
+  let inSapContext = false;
   for (const l of logs) {
-    const m = l.match(/Instruction:\s+(\w+)/);
-    if (m && !sapInstructions.includes(m[1])) sapInstructions.push(m[1]);
+    if (l.includes(SAP_PROGRAM_ADDRESS) && l.includes('invoke')) {
+      inSapContext = true;
+      continue;
+    }
+    if (inSapContext && l.includes('success')) {
+      inSapContext = false;
+      continue;
+    }
+    if (inSapContext) {
+      const m = l.match(/Instruction:\s+(\w+)/);
+      if (m && !sapInstructions.includes(m[1])) sapInstructions.push(m[1]);
+    }
   }
   if (sapInstructions.length === 0) {
     if (logs.some((l) => l.includes(SAP_PROGRAM_ADDRESS) && l.includes('invoke'))) {
@@ -117,7 +136,7 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
     sapInstructions,
     instructionCount: ixs.length,
     innerInstructionCount: innerIxs.reduce(
-      (sum: number, inner: any) => sum + (inner.instructions?.length ?? 0),
+      (sum: number, inner: { instructions?: unknown[] }) => sum + (inner.instructions?.length ?? 0),
       0,
     ),
     computeUnits: meta?.computeUnitsConsumed ?? null,
@@ -125,7 +144,7 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
     version: tx.version != null ? String(tx.version) : 'legacy',
   };
 
-  const accountKeysDetail = accountKeys.map((pubkey: string, i: number) => ({
+  const accountKeysDetail: AccountKey[] = accountKeys.map((pubkey: string, i: number) => ({
     pubkey,
     signer: i < (header?.numRequiredSignatures ?? 0),
     writable: i < ((header?.numRequiredSignatures ?? 0) - (header?.numReadonlySignedAccounts ?? 0)) ||
@@ -133,15 +152,16 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
        i < (accountKeys.length - (header?.numReadonlyUnsignedAccounts ?? 0))),
   }));
 
-  const parsedInstructions = ixs.map((ix: any) => {
-    const programId = accountKeys[ix.programIdIndex] ?? String(ix.programIdIndex);
-    const ixAccounts = (ix.accounts ?? ix.accountKeyIndexes ?? []).map(
+  const parsedInstructions: ParsedInstruction[] = ixs.map((ix) => {
+    const programId = ix.programIdIndex != null ? (accountKeys[ix.programIdIndex] ?? String(ix.programIdIndex)) : (ix.programId ?? 'unknown');
+    const ixAccounts = ((ix.accounts ?? ix.accountKeyIndexes ?? []) as number[]).map(
       (accIdx: number) => accountKeys[accIdx] ?? String(accIdx),
     );
+    const data = ix.data != null ? (typeof ix.data === 'string' ? ix.data : Buffer.from(ix.data).toString('base64')) : '';
     return {
       programId,
       program: PROGRAMS[programId] ?? programId.slice(0, 8),
-      data: ix.data ?? '',
+      data,
       accounts: ixAccounts,
       parsed: null,
       type: null,
@@ -149,7 +169,7 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
     };
   });
 
-  const balanceChanges = accountKeys.map((pubkey: string, i: number) => ({
+  const balanceChanges: BalanceChange[] = accountKeys.map((pubkey: string, i: number) => ({
     account: pubkey,
     pre: preBalances[i] ?? 0,
     post: postBalances[i] ?? 0,
@@ -158,7 +178,7 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
 
   const preTokenBalances = meta?.preTokenBalances ?? [];
   const postTokenBalances = meta?.postTokenBalances ?? [];
-  const tokenMap = new Map<string, any>();
+  const tokenMap = new Map<string, TokenBalanceChange>();
   for (const tb of preTokenBalances) {
     const key = `${tb.accountIndex}-${tb.mint}`;
     tokenMap.set(key, { account: accountKeys[tb.accountIndex], mint: tb.mint, pre: tb.uiTokenAmount?.uiAmountString ?? '0', post: '0', change: '0' });
@@ -169,12 +189,12 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
     existing.post = tb.uiTokenAmount?.uiAmountString ?? '0';
     tokenMap.set(key, existing);
   }
-  const tokenBalanceChanges = Array.from(tokenMap.values()).map((t) => ({
+  const tokenBalanceChanges: TokenBalanceChange[] = Array.from(tokenMap.values()).map((t) => ({
     ...t,
     change: String(Number(t.post) - Number(t.pre)),
   })).filter((t) => t.change !== '0');
 
-  const detailRow = {
+  const detailRow: TxDetailInsert = {
     signature: sig.signature,
     status: meta?.err ? 'failed' : 'success',
     errorData: meta?.err ?? null,
@@ -190,7 +210,7 @@ export function hydrateTx(sig: SignatureLike, tx: any | null): {
   return { txRow, detailRow };
 }
 
-export async function upsertHydratedTx(txRow: any, detailRow: any | null): Promise<void> {
+export async function upsertHydratedTx(txRow: TransactionInsert, detailRow: TxDetailInsert | null): Promise<void> {
   await db
     .insert(transactions)
     .values(txRow)

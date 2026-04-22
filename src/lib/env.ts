@@ -1,7 +1,4 @@
 
-/* ──────────────────────────────────────────────────────────
- * Validated environment variables (server-only)
- * ────────────────────────────────────────────────────────── */
 
 function required(key: string): string {
   const val = process.env[key];

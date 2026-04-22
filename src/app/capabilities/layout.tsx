@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Capabilities | Synapse Explorer',
     description: 'Discover agent capabilities — protocol bindings, descriptions, and versioning.',
-    images: [{ url: `${SITE_URL}/api/og?type=page&title=Capabilities&desc=Discover+agent+capabilities+%E2%80%94+protocol+bindings%2C+descriptions%2C+and+versioning.`, width: 1200, height: 630 }],
+    images: [{ url: `${SITE_URL}/synapse-metadata-logo.png`, width: 1200, height: 630 }],
   },
 };
 

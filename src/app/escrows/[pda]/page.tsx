@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Wallet } from 'lucide-react';
-import { Skeleton, Address } from '~/components/ui';
+import { ArrowLeft, Wallet, Activity } from 'lucide-react';
+import { Skeleton } from '~/components/ui';
 import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -16,24 +15,19 @@ import {
   SectionHeader,
   DetailPageShell,
 } from '~/components/ui/explorer';
-import { useEscrows, useAgents } from '~/hooks/use-sap';
+import { useEscrow, useAddressEvents, type SapEvent } from '~/hooks/use-sap';
+import { useAgentMapCtx } from '~/providers/sap-data-provider';
+import { AgentTag } from '~/components/ui/agent-tag';
+import { formatTokenAmount } from '~/lib/format';
 
 export default function EscrowDetailPage() {
   const { pda } = useParams<{ pda: string }>();
   const router = useRouter();
-  const { data, loading: eLoading } = useEscrows();
-  const { data: agentsData, loading: aLoading } = useAgents({ limit: '100' });
-  const loading = eLoading || aLoading;
+  const { data, loading } = useEscrow(pda);
+  const { data: eventsData, loading: evLoading } = useAddressEvents(pda, { limit: 50 });
+  const { map: agentMap } = useAgentMapCtx();
 
-  const escrow = useMemo(() => {
-    if (!data?.escrows) return null;
-    return data.escrows.find((e) => e.pda === pda) ?? null;
-  }, [data, pda]);
-
-  const agent = useMemo(() => {
-    if (!escrow || !agentsData?.agents) return null;
-    return agentsData.agents.find((a) => a.pda === escrow.agent) ?? null;
-  }, [escrow, agentsData]);
+  const escrow = data?.escrow ?? null;
 
   if (loading) {
     return (
@@ -56,7 +50,7 @@ export default function EscrowDetailPage() {
   }
 
   const dec = escrow.tokenDecimals ?? 9;
-  const formatAmount = (v: string | number) => (Number(v) / 10 ** dec).toFixed(dec > 6 ? 4 : 2);
+  const formatAmount = (v: string | number) => formatTokenAmount(v, dec);
   const balance = Number(escrow.balance);
   const isExpired = escrow.expiresAt !== '0' && Number(escrow.expiresAt) * 1000 < Date.now();
   const hasBalance = balance > 0;
@@ -110,9 +104,18 @@ export default function EscrowDetailPage() {
         <CardContent className="pt-6">
           <SectionHeader title="Account Information" />
           <CopyableField label="Escrow PDA" value={escrow.pda} />
-          <CopyableField label="Agent" value={agent?.identity?.name ? `${agent.identity.name} (${escrow.agent.slice(0, 8)}…)` : escrow.agent} href={`/address/${escrow.agent}`} />
+          <CopyableField label="Agent" value={escrow.agent} href={`/address/${escrow.agent}`} truncate />
+          {agentMap[escrow.agent] && (
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agent} className="text-[11px]" /></div>
+          )}
           <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} truncate />
+          {agentMap[escrow.agentWallet] && (
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agentWallet} className="text-[11px]" /></div>
+          )}
           <CopyableField label="Depositor" value={escrow.depositor} href={`/address/${escrow.depositor}`} truncate />
+          {agentMap[escrow.depositor] && (
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.depositor} className="text-[11px]" /></div>
+          )}
           {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} truncate />}
           <CopyableField label="Token Decimals" value={String(escrow.tokenDecimals)} mono={false} />
           <div className="flex items-start justify-between gap-4 py-2.5 border-b border-border/50">
@@ -146,7 +149,7 @@ export default function EscrowDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {escrow.volumeCurve.map((tier: any, i: number) => (
+                {escrow.volumeCurve.map((tier, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-mono tabular-nums text-muted-foreground">{Number(tier.afterCalls).toLocaleString()}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums text-muted-foreground">{formatAmount(tier.pricePerCall)}</TableCell>
@@ -182,6 +185,103 @@ export default function EscrowDetailPage() {
       </Card>
 
       <OnChainDataSection title="Raw Escrow Account (On-Chain)" data={escrow as unknown as Record<string, unknown>} />
+
+      {/* Event Timeline */}
+      <EscrowEventTimeline events={eventsData?.events ?? []} loading={evLoading} />
     </DetailPageShell>
+  );
+}
+
+/* ── Escrow Event Timeline component ───────────── */
+
+const ESCROW_EVENT_COLORS: Record<string, string> = {
+  EscrowCreatedEvent:   'text-emerald-500',
+  EscrowDepositedEvent: 'text-blue-500',
+  PaymentSettledEvent:  'text-primary',
+  BatchSettledEvent:    'text-primary',
+  EscrowWithdrawnEvent: 'text-amber-500',
+};
+
+const ESCROW_EVENT_SHORT: Record<string, string> = {
+  EscrowCreatedEvent:   'Created',
+  EscrowDepositedEvent: 'Deposited',
+  PaymentSettledEvent:  'Settled',
+  BatchSettledEvent:    'Batch Settled',
+  EscrowWithdrawnEvent: 'Withdrawn',
+};
+
+function EscrowEventTimeline({
+  events,
+  loading,
+}: {
+  events: SapEvent[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <SectionHeader title="Event Timeline" />
+          <Skeleton className="h-24 w-full mt-2" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <SectionHeader title="Event Timeline" count={events.length} />
+        {events.length === 0 ? (
+          <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+            <Activity className="h-4 w-4 shrink-0" />
+            <span>No events found for this escrow on-chain.</span>
+          </div>
+        ) : (
+          <div className="relative space-y-0 mt-3">
+            <div className="absolute left-[9px] top-2 bottom-2 w-px bg-border" />
+            {events.map((ev, i) => {
+              const color = ESCROW_EVENT_COLORS[ev.name] ?? 'text-muted-foreground';
+              const short = ESCROW_EVENT_SHORT[ev.name] ?? ev.name.replace('Event', '');
+              return (
+                <div key={i} className="relative flex items-start gap-3 py-2">
+                  <div className={`relative z-10 mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-background border border-border ${color}`}>
+                    <Activity className="h-2.5 w-2.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-semibold ${color}`}>{short}</span>
+                      {ev.data?.callsSettled !== undefined && Number(ev.data.callsSettled) > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-4">{Number(ev.data.callsSettled)} calls</Badge>
+                      )}
+                      {ev.data?.amount !== undefined && (
+                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                          {(Number(ev.data.amount) / 1e9).toFixed(6)} SOL
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      {ev.blockTime && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(ev.blockTime * 1000).toLocaleString()}
+                        </span>
+                      )}
+                      {ev.txSignature && (
+                        <a
+                          href={`/tx/${ev.txSignature}`}
+                          className="text-[10px] font-mono text-primary/70 hover:text-primary transition-colors"
+                        >
+                          {ev.txSignature.slice(0, 8)}…
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

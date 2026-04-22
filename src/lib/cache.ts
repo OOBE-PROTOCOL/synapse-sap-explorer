@@ -1,21 +1,16 @@
-/* ──────────────────────────────────────────────
- * Shared in-memory SWR cache for API routes
- *
- * Pattern:
- *   const data = await swr('agents', fetchFromDB, fetchFromRPC, { ttl, swr });
- *
- * 1. Cache HIT (< ttl) → return instantly
- * 2. Stale HIT (< ttl + swr) → return stale, revalidate in background
- * 3. Cache MISS → call primary (DB), fallback to secondary (RPC)
- * ────────────────────────────────────────────── */
-
 type CacheEntry<T> = {
   data: T;
   ts: number;
 };
 
-const _store = new Map<string, CacheEntry<any>>();
-const _inflight = new Map<string, Promise<any>>();
+// Persist cache across HMR reloads in development
+const globalForCache = globalThis as unknown as {
+  __swrStore?: Map<string, CacheEntry<unknown>>;
+  __swrInflight?: Map<string, Promise<unknown>>;
+};
+
+const _store = globalForCache.__swrStore ?? (globalForCache.__swrStore = new Map<string, CacheEntry<unknown>>());
+const _inflight = globalForCache.__swrInflight ?? (globalForCache.__swrInflight = new Map<string, Promise<unknown>>());
 
 type SwrOpts = {
   /** Fresh TTL in ms (default 60s) */
