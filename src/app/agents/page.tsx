@@ -366,8 +366,8 @@ function AgentCard({ data }: { data: CardData }) {
       )}>
 
         {/* ────────────── HEADER ────────────── */}
-        <div className="p-6 pb-0">
-          <div className="flex items-start gap-4">
+        <div className="p-4 sm:p-6 pb-0">
+          <div className="flex items-start gap-3 sm:gap-4">
             {/* Avatar */}
             <div className="relative shrink-0">
               <AgentAvatar
@@ -380,18 +380,18 @@ function AgentCard({ data }: { data: CardData }) {
 
             {/* Identity */}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2.5">
-                <h3 className="text-[15px] font-semibold tracking-tight truncate text-foreground group-hover:text-primary transition-colors duration-200">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-[14px] sm:text-[15px] font-semibold tracking-tight truncate text-foreground group-hover:text-primary transition-colors duration-200 max-w-full">
                   {id.name}
                 </h3>
                 {/* Status pill */}
                 <span className={cn(
                   'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[9px] font-medium tracking-wide shrink-0',
                   id.isActive
-                    ? 'text-emerald-400/90 bg-emerald-400/8'
+                    ? 'text-emerald-500 dark:text-emerald-400/90 bg-emerald-500/10 dark:bg-emerald-400/8'
                     : 'text-muted-foreground/40 bg-muted/20',
                 )}>
-                  <span className={cn('h-1 w-1 rounded-full', id.isActive ? 'bg-emerald-400' : 'bg-muted-foreground/30')} />
+                  <span className={cn('h-1 w-1 rounded-full', id.isActive ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground/30')} />
                   {id.isActive ? 'ONLINE' : 'OFFLINE'}
                 </span>
               </div>
@@ -399,10 +399,11 @@ function AgentCard({ data }: { data: CardData }) {
               {/* Address with copy */}
               <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
                 <button
-                  className="min-w-0 max-w-[18rem] truncate text-left text-xs font-mono text-muted-foreground/55 transition-colors hover:text-muted-foreground/80"
+                  className="min-w-0 flex-1 truncate text-left text-[11px] sm:text-xs font-mono text-muted-foreground/55 transition-colors hover:text-muted-foreground/80"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`${SOLSCAN}/account/${agent.pda}`, '_blank', 'noopener'); }}
                 >
-                  {agent.pda}
+                  <span className="sm:hidden">{agent.pda.slice(0, 6)}…{agent.pda.slice(-4)}</span>
+                  <span className="hidden sm:inline">{agent.pda}</span>
                 </button>
                 <CopyBtn value={agent.pda} />
               </div>
@@ -426,14 +427,14 @@ function AgentCard({ data }: { data: CardData }) {
 
           {/* Description */}
           {(wellKnown?.description || id.description) && (
-            <p className="text-[12px] leading-relaxed text-muted-foreground/60 line-clamp-2 mt-4">
+            <p className="text-[12px] leading-relaxed text-muted-foreground/60 line-clamp-2 mt-3 sm:mt-4">
               {wellKnown?.description || id.description}
             </p>
           )}
         </div>
 
         {/* ────────────── STATS ROW ────────────── */}
-        <div className="mt-4 border-t border-border/10 px-6 py-4">
+        <div className="mt-4 border-t border-border/10 px-4 sm:px-6 py-3 sm:py-4">
           <div className="mb-3 flex items-center gap-2">
             <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/45">STATS</span>
             <span className="h-px flex-1 bg-border/65" />
@@ -515,7 +516,7 @@ function AgentCard({ data }: { data: CardData }) {
 
         {/* ────────────── TAGS ────────────── */}
         {visibleTags.length > 0 && (
-          <div className="border-t border-border/10 px-6 py-4 flex items-center gap-2 flex-wrap">
+          <div className="border-t border-border/10 px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-2 flex-wrap">
             {visibleTags.map((tag) => (
               <span
                 key={tag.label}
@@ -536,14 +537,14 @@ function AgentCard({ data }: { data: CardData }) {
         )}
 
         {/* ────────────── FOOTER ────────────── */}
-        <div className="mt-auto border-t border-border/10 px-6 py-3.5 flex items-center justify-between gap-3">
+        <div className="mt-auto border-t border-border/10 px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
           {/* Left: wallet + protocols */}
-          <div className="flex items-center gap-2.5 min-w-0 text-xs text-muted-foreground/45">
-            <span className="font-mono min-w-0 max-w-[10rem] truncate text-muted-foreground/70">{id.wallet}</span>
+          <div className="flex items-center gap-2 min-w-0 text-xs text-muted-foreground/45">
+            <span className="font-mono min-w-0 max-w-[8rem] sm:max-w-[10rem] truncate text-muted-foreground/70">{id.wallet}</span>
             {protocols.length > 0 && (
               <>
                 <span className="text-border/30">&middot;</span>
-                <span>{protocols.length} protocol{protocols.length !== 1 ? 's' : ''}</span>
+                <span className="shrink-0">{protocols.length} protocol{protocols.length !== 1 ? 's' : ''}</span>
               </>
             )}
           </div>
