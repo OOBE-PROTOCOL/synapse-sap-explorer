@@ -821,26 +821,26 @@ export default function TransactionsPage() {
       ) : (
         <section className="flex-1 min-h-0 flex flex-col overflow-hidden rounded-lg border border-border/40 bg-background/20 backdrop-blur-[2px]">
           {/* Solscan-style pagination/summary bar */}
-          <div className="shrink-0 h-10 px-3 border-b border-border/50 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span>Show</span>
+          <div className="shrink-0 px-3 py-2 sm:py-0 sm:h-10 border-b border-border/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="hidden sm:inline">Show</span>
               <select
                 value={perPage}
                 onChange={(e) => {
                   setPerPage(Number(e.target.value));
                   setPage(1);
                 }}
-                className="h-7 rounded border border-border/60 bg-background/80 px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-7 rounded border border-border/60 bg-background/80 px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
-              <span>{start} - {end} of {total.toLocaleString()}</span>
+              <span className="tabular-nums whitespace-nowrap">{start}–{end} of {total.toLocaleString()}</span>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 overflow-x-auto">
               <button
                 type="button"
                 onClick={() => setPage(1)}

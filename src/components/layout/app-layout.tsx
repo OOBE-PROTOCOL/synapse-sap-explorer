@@ -27,6 +27,7 @@ import {
   Activity,
   Home,
   Vault,
+  X,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { Button } from '~/components/ui/button';
@@ -285,21 +286,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             effectiveCollapsed ? 'h-12 justify-center px-2' : 'h-14 px-4 lg:px-5',
           )}
         >
-          {/* Mobile hamburger toggle inside the rail */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="lg:hidden flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-          >
-            {mobileOpen ? (
-              <ChevronLeft className="h-4 w-4" />
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
-          </button>
-
           {/* Brand text: desktop expanded only */}
           {!effectiveCollapsed && !isMobile && (
             <Link href="/" className="truncate flex-1">
@@ -307,11 +293,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="ml-1.5 text-[10px] font-medium font-sans text-primary uppercase tracking-widest">EXPLORER</span>
             </Link>
           )}
-          {/* Logo: mobile drawer expanded, or desktop collapsed */}
-          {((effectiveCollapsed && !isMobile) || (isMobile && mobileOpen)) && (
-            <Link href="/" className="flex items-center justify-center ml-1">
+          {/* Logo: desktop collapsed */}
+          {effectiveCollapsed && !isMobile && (
+            <Link href="/" className="flex items-center justify-center">
               <Image src="/explorer_logo.png" alt="Synapse Explorer" width={28} height={28} />
             </Link>
+          )}
+          {/* Mobile drawer: logo left + brand text + X right */}
+          {isMobile && mobileOpen && (
+            <>
+              <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
+                <Image src="/explorer_logo.png" alt="Synapse Explorer" width={26} height={26} className="shrink-0" />
+                <span className="text-sm font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
+                <span className="text-[10px] font-medium text-primary uppercase tracking-widest">Explorer</span>
+              </Link>
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </>
           )}
         </div>
 
@@ -394,26 +397,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* ── Mobile Topbar (Solscan-style) ── */}
         <div className="lg:hidden flex items-center h-12 px-3 gap-2 bg-card border-b border-border shrink-0">
+          <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
+            <Image src="/explorer_logo.png" alt="Synapse Explorer" width={26} height={26} className="shrink-0" />
+            <span className="text-[13px] font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
+            <span className="text-[9px] font-medium text-primary uppercase tracking-widest hidden xs:inline">Explorer</span>
+          </Link>
+          <span className="flex items-center gap-1 text-[9px] text-foreground font-medium uppercase tracking-widest shrink-0">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            Mainnet
+          </span>
           <button
             onClick={() => setMobileOpen(true)}
-            className="flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors -ml-1"
+            className="flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors -mr-1 shrink-0"
             aria-label="Open menu"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <Link href="/" className="flex items-center gap-2 min-w-0">
-            <Image src="/explorer_logo.png" alt="Synapse Explorer" width={24} height={24} className="shrink-0" />
-            <span className="text-[13px] font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
-            <span className="text-[9px] font-medium text-primary uppercase tracking-widest hidden xs:inline">Explorer</span>
-          </Link>
-          <div className="ml-auto flex items-center gap-2 shrink-0">
-            <span className="flex items-center gap-1 text-[9px] text-foreground font-medium uppercase tracking-widest">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-              Mainnet
-            </span>
-          </div>
         </div>
 
         {/* ── Breadcrumb + Status Bar ── */}
