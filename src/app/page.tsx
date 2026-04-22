@@ -376,8 +376,8 @@ export default function OverviewPage() {
                       key={tx.signature}
                       href={`/tx/${tx.signature}`}
                       className={cn(
-                        'flex items-center gap-3 py-2.5 px-3 rounded-lg transition-all duration-200 group',
-                        'hover:bg-neutral-800/50',
+                        'flex items-center gap-2 sm:gap-3 py-2.5 px-2 sm:px-3 rounded-lg transition-all duration-200 group',
+                        'hover:bg-accent/40',
                         idx === 0 && txTick > 0 && 'animate-fade-in',
                       )}
                     >
@@ -393,19 +393,23 @@ export default function OverviewPage() {
                       </div>
 
                       {/* Content */}
-                      <div className="min-w-0 flex-1 space-y-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-neutral-400 truncate group-hover:text-white transition-colors">
-                            {short(tx.signature, 32, 8)}
+                      <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-mono text-[11px] sm:text-xs text-muted-foreground truncate group-hover:text-foreground transition-colors">
+                            <span className="sm:hidden">{short(tx.signature, 8, 4)}</span>
+                            <span className="hidden sm:inline">{short(tx.signature, 32, 8)}</span>
                           </span>
                           <Badge variant="neon" className="text-xs h-4 px-1.5 hidden sm:inline-flex shrink-0">
                             {rawAction.length > 16 ? rawAction.slice(0, 14) + '…' : rawAction}
                           </Badge>
-                          {tx.err && <Badge variant="neon-rose" className="text-[8px] h-4 px-1.5">ERR</Badge>}
+                          {tx.err && <Badge variant="neon-rose" className="text-[8px] h-4 px-1.5 shrink-0">ERR</Badge>}
                         </div>
                         <div className="flex items-center gap-2 min-w-0">
                           <BotIcon className="h-3 w-3 text-primary/40 shrink-0" />
-                          <span className="text-[11px] sm:text-[12px] text-secondary50 font-mono truncate min-w-0">{tx.signer ?? ''}</span>
+                          <span className="text-[10px] sm:text-[12px] text-muted-foreground/70 font-mono truncate min-w-0">
+                            <span className="sm:hidden">{tx.signer ? short(tx.signer, 6, 4) : ''}</span>
+                            <span className="hidden sm:inline">{tx.signer ?? ''}</span>
+                          </span>
                           {tx.feeSol > 0 && (
                             <>
                               <span className="text-[10px] text-muted-foreground/20 hidden sm:inline">·</span>
@@ -448,28 +452,28 @@ export default function OverviewPage() {
                   return (
                     <div
                       key={ev.id ?? i}
-                      className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/10 transition-colors"
+                      className="flex items-center gap-2 sm:gap-3 py-2 px-2 sm:px-3 rounded-lg hover:bg-muted/10 transition-colors"
                     >
                       <CircleDot className={cn('h-3.5 w-3.5 shrink-0', meta.color)} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="glass" className={cn('text-[9px] h-4 px-1.5', meta.color)}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Badge variant="glass" className={cn('text-[9px] h-4 px-1.5 shrink-0', meta.color)}>
                             {meta.label}
                           </Badge>
                           {ev.amountChanged && Number(ev.amountChanged) > 0 && (
-                            <span className="text-[10px] font-mono tabular-nums text-foreground/60">{fmtUsdc(Number(ev.amountChanged), 4)}</span>
+                            <span className="text-[10px] font-mono tabular-nums text-foreground/60 truncate">{fmtUsdc(Number(ev.amountChanged), 4)}</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-2 mt-0.5 min-w-0">
                           {ev.escrowPda && (
-                            <Link href={`/escrows/${ev.escrowPda}`} className="text-[10px] font-mono text-neutral-500 hover:text-primary transition-colors">
+                            <Link href={`/escrows/${ev.escrowPda}`} className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors shrink-0">
                               {short(ev.escrowPda, 4, 4)}
                             </Link>
                           )}
                           {ev.txSignature && (
                             <>
                               <span className="text-[10px] text-muted-foreground/20">·</span>
-                              <Link href={`/tx/${ev.txSignature}`} className="text-[10px] font-mono text-muted-foreground/40 hover:text-foreground transition-colors">
+                              <Link href={`/tx/${ev.txSignature}`} className="text-[10px] font-mono text-muted-foreground/40 hover:text-foreground transition-colors truncate">
                                 {short(ev.txSignature, 6, 4)}
                               </Link>
                             </>
