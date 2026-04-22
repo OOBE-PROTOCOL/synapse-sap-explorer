@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowUpDown, Wrench, Hash, FileJson, User, Activity, ChevronUp, ChevronDown, BookOpen, Search, X } from 'lucide-react';
+import { ArrowUpDown, Wrench, Hash, User, Activity, ChevronUp, ChevronDown, BookOpen, Search, X } from 'lucide-react';
 import { EmptyState, StatusBadge, CategoryBadge, HttpMethodBadge, ExplorerPagination, usePagination, ExplorerPageShell, ExplorerMetric } from '~/components/ui';
 import { AgentTag } from '~/components/ui/agent-tag';
 import { Skeleton } from '~/components/ui/skeleton';

@@ -3,12 +3,11 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, Hash, ChevronRight } from 'lucide-react';
-import { ScoreRing, ReputationBar, StatusBadge, Address, ProtocolBadge, Skeleton, Tabs, EmptyState, AgentAvatar, ExplorerPagination, usePagination } from '~/components/ui';
+import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, ChevronRight } from 'lucide-react';
+import { ReputationBar, StatusBadge, Address, ProtocolBadge, Skeleton, Tabs, EmptyState, AgentAvatar, ExplorerPagination, usePagination } from '~/components/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import { Separator } from '~/components/ui/separator';
 import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking } from '~/hooks/use-sap';
 import type { SapEvent, X402PaymentRow, X402Stats } from '~/hooks/use-sap';
 import { toast } from 'sonner';

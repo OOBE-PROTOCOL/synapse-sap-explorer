@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Layers, Users, Sparkles, Filter, RotateCcw, AlertCircle, Bot, ArrowUpRight } from 'lucide-react';
-import { ExplorerPageShell, ExplorerFilterBar, ExplorerMetric, Skeleton, EmptyState, ProtocolBadge, StatusBadge } from '~/components/ui';
+import { ExplorerPageShell, ExplorerFilterBar, ExplorerMetric, Skeleton, EmptyState, StatusBadge } from '~/components/ui';
 import { Card, CardContent, CardHeader } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
