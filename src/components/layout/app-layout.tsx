@@ -27,7 +27,6 @@ import {
   Activity,
   Home,
   Vault,
-  X,
 } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { Button } from '~/components/ui/button';
@@ -193,10 +192,25 @@ function useBreadcrumbs(pathname: string) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);  const { theme, setTheme } = useTheme();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const breadcrumbs = useBreadcrumbs(pathname);
   useEffect(() => setMounted(true), []);
+
+  // Track viewport: <1024px => mobile rail mode
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(max-width: 1023px)');
+    const apply = () => setIsMobile(mql.matches);
+    apply();
+    mql.addEventListener('change', apply);
+    return () => mql.removeEventListener('change', apply);
+  }, []);
+
+  // On mobile, the sidebar is always icon-rail unless drawer is open
+  const effectiveCollapsed = isMobile ? !mobileOpen : collapsed;
 
   // Close mobile sidebar on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
@@ -240,15 +254,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* ── Sidebar ─────────────────────────────── */}
       <aside
         className={cn(
-          'sidebar transition-all duration-300',
-          /* desktop */
-          'hidden lg:flex',
+          'sidebar flex flex-col transition-all duration-300',
+          /* mobile: always-visible icon rail; expands to overlay drawer when open */
+          mobileOpen
+            ? 'fixed inset-y-0 left-0 w-[240px] max-w-[80vw] z-[60] shadow-2xl'
+            : 'w-[56px]',
+          /* desktop overrides */
           collapsed ? 'lg:w-[68px]' : 'lg:w-[260px]',
-          /* mobile: fixed slide-in from left */
-          mobileOpen && '!flex flex-col fixed inset-y-0 left-0 w-[280px] max-w-[85vw] z-[60] shadow-2xl',
         )}
       >
-        {/* Collapse toggle (desktop only — overlaps drawer on mobile) */}
+        {/* Collapse / expand toggle — visible everywhere */}
         <Button
           variant="outline"
           size="icon"
@@ -266,61 +281,71 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* ── Sidebar Header ── */}
         <div
           className={cn(
-            'sidebar-header flex items-center gap-3 transition-all duration-300',
-            collapsed ? 'h-12 justify-center px-3' : 'h-14 px-5',
+            'sidebar-header flex items-center gap-2 transition-all duration-300',
+            effectiveCollapsed ? 'h-12 justify-center px-2' : 'h-14 px-4 lg:px-5',
           )}
         >
-          {collapsed ? (
-            <Link href="/" className="flex items-center justify-center">
-              <Image src="/explorer_logo.png" alt="Synapse Explorer" width={32} height={32} />
-            </Link>
-          ) : (
+          {/* Mobile hamburger toggle inside the rail */}
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="lg:hidden flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          >
+            {mobileOpen ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            )}
+          </button>
+
+          {/* Brand: shown when expanded (desktop or mobile drawer open) */}
+          {!effectiveCollapsed && (
             <Link href="/" className="truncate flex-1">
               <span className="text-sm font-bold text-foreground tracking-wide">SYNAPSE</span>
               <span className="ml-1.5 text-[10px] font-medium font-sans text-primary uppercase tracking-widest">EXPLORER</span>
             </Link>
           )}
-          {/* Mobile close button */}
-          <button
-            onClick={() => setMobileOpen(false)}
-            className="lg:hidden ml-auto flex items-center justify-center h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            aria-label="Close menu"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {/* Logo: shown when collapsed on desktop only */}
+          {effectiveCollapsed && !isMobile && (
+            <Link href="/" className="flex items-center justify-center">
+              <Image src="/explorer_logo.png" alt="Synapse Explorer" width={28} height={28} />
+            </Link>
+          )}
         </div>
 
         {/* ── Search ── */}
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div className="shrink-0 px-4 pb-3 pt-4">
             <SearchCommand />
           </div>
         )}
 
         {/* ── Nav ── */}
-        <NavScrollable collapsed={collapsed} isNavActive={isNavActive} pathname={pathname} />
+        <NavScrollable collapsed={effectiveCollapsed} isNavActive={isNavActive} pathname={pathname} />
 
         {/* ── Sidebar Footer ── */}
-        <div className={cn('sidebar-footer', collapsed ? 'p-2 pb-3' : 'p-4')}>
+        <div className={cn('sidebar-footer', effectiveCollapsed ? 'p-2 pb-3' : 'p-4')}>
           {/* Theme toggle */}
-          <div className={cn('mb-3', collapsed ? 'flex justify-center' : '')}>
+          <div className={cn('mb-3', effectiveCollapsed ? 'flex justify-center' : '')}>
             <Button
               variant="outline"
-              size={collapsed ? 'icon' : 'sm'}
+              size={effectiveCollapsed ? 'icon' : 'sm'}
               className={cn(
                 'h-8 rounded-lg border-border bg-card hover:bg-accent text-muted-foreground',
-                !collapsed && 'w-full justify-start gap-2 text-xs',
+                !effectiveCollapsed && 'w-full justify-start gap-2 text-xs',
               )}
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
               <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              {!collapsed && <span>{mounted ? (theme === 'dark' ? 'Dark Mode' : 'Light Mode') : '\u00A0'}</span>}
+              {!effectiveCollapsed && <span>{mounted ? (theme === 'dark' ? 'Dark Mode' : 'Light Mode') : '\u00A0'}</span>}
             </Button>
           </div>
 
           {/* External links */}
-          <div className={cn('mb-3 space-y-0.5', collapsed && 'space-y-1')}>
+          <div className={cn('mb-3 space-y-0.5', effectiveCollapsed && 'space-y-1')}>
             {[
               { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
               { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
@@ -331,20 +356,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={collapsed ? label : undefined}
+                title={effectiveCollapsed ? label : undefined}
                 className={cn(
                   'flex items-center gap-2 rounded-lg text-xs text-muted-foreground hover:text-foreground transition-colors',
-                  collapsed ? 'justify-center py-1.5' : 'px-2 py-1.5',
+                  effectiveCollapsed ? 'justify-center py-1.5' : 'px-2 py-1.5',
                 )}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
-                {!collapsed && <span className="truncate">{label}</span>}
+                {!effectiveCollapsed && <span className="truncate">{label}</span>}
               </a>
             ))}
           </div>
 
           {/* Program status */}
-          {!collapsed ? (
+          {!effectiveCollapsed ? (
             <div className="rounded-lg bg-card border border-border p-3">
               <div className="flex items-center gap-2 mb-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />
@@ -366,50 +391,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Content ─────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Mobile header */}
-        <div className="sticky top-0 z-30 flex h-12 items-center gap-2 px-3 lg:hidden border-b border-border bg-card">
-          {/* Hamburger */}
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="flex items-center justify-center h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            aria-label="Open menu"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-
-          <Link href="/" className="flex items-baseline gap-1.5 min-w-0 truncate">
-            <span className="text-sm font-bold text-foreground tracking-wide">SYNAPSE</span>
-            <span className="hidden xs:inline text-[10px] font-medium text-primary uppercase tracking-widest">EXPLORER</span>
-          </Link>
-
-          <div className="ml-auto flex items-center gap-0.5 shrink-0">
-            {/* Theme toggle on mobile */}
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              aria-label="Toggle theme"
-            >
-              {mounted && theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-            {NAV_ITEMS.slice(0, 3).map(({ href, icon: Icon }) => {
-              const active = isNavActive(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'rounded-lg p-2 transition-colors',
-                    active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                </Link>
-              );
-            })}
-          </div>
-        </div>
 
         {/* ── Breadcrumb + Status Bar ── */}
         <div className="content-topbar hidden lg:flex items-center h-10 px-6 gap-4 bg-card border-b border-border">

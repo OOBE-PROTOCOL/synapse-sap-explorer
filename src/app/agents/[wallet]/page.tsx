@@ -109,15 +109,15 @@ export default function AgentDetailPage() {
       </Button>
 
       {/* ═══════════ TOP IDENTITY BAR ═══════════ */}
-      <div className="rounded-xl bg-neutral-900 border border-neutral-800 p-5">
-        <div className="flex items-start gap-5">
-          <div className="shrink-0">
-            <AgentAvatar name={id.name} endpoint={id.x402Endpoint} size={72} />
+      <div className="rounded-xl bg-card border border-border p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-5">
+          <div className="shrink-0 self-start">
+            <AgentAvatar name={id.name} endpoint={id.x402Endpoint} size={56} />
           </div>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-2xl font-bold text-white tracking-tight">{id.name}</h1>
+          <div className="min-w-0 flex-1 w-full">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight break-words">{id.name}</h1>
               <StatusBadge active={computed.isActive} />
               {computed.hasX402 && (
                 <Badge className="text-[9px] bg-primary/15 text-primary border border-primary/20 px-1.5 py-0">x402</Badge>
@@ -135,30 +135,30 @@ export default function AgentDetailPage() {
             </div>
 
             {id.description && (
-              <p className="mt-1 text-sm text-neutral-400 line-clamp-2">{id.description}</p>
+              <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground line-clamp-3">{id.description}</p>
             )}
 
             {/* Address row */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-neutral-600 uppercase tracking-wider font-medium">PDA</span>
-                <button onClick={() => copyAddr(profile.pda)} className="flex items-center gap-1 text-[11px] font-mono text-neutral-300 hover:text-white transition-colors">
-                  {profile.pda.slice(0, 12)}…{profile.pda.slice(-8)}
-                  <Copy className={cn('h-3 w-3', copied === profile.pda ? 'text-primary' : 'text-neutral-600')} />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2.5">
+              <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                <span className="text-[9px] text-muted-foreground/70 uppercase tracking-wider font-medium shrink-0">PDA</span>
+                <button onClick={() => copyAddr(profile.pda)} className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors min-w-0">
+                  <span className="truncate">{profile.pda.slice(0, 6)}…{profile.pda.slice(-6)}</span>
+                  <Copy className={cn('h-3 w-3 shrink-0', copied === profile.pda ? 'text-primary' : 'text-muted-foreground/60')} />
                 </button>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-neutral-600 uppercase tracking-wider font-medium">Wallet</span>
-                <button onClick={() => copyAddr(id.wallet)} className="flex items-center gap-1 text-[11px] font-mono text-neutral-300 hover:text-white transition-colors">
-                  {id.wallet.slice(0, 12)}…{id.wallet.slice(-8)}
-                  <Copy className={cn('h-3 w-3', copied === id.wallet ? 'text-primary' : 'text-neutral-600')} />
+              <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                <span className="text-[9px] text-muted-foreground/70 uppercase tracking-wider font-medium shrink-0">Wallet</span>
+                <button onClick={() => copyAddr(id.wallet)} className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors min-w-0">
+                  <span className="truncate">{id.wallet.slice(0, 6)}…{id.wallet.slice(-6)}</span>
+                  <Copy className={cn('h-3 w-3 shrink-0', copied === id.wallet ? 'text-primary' : 'text-muted-foreground/60')} />
                 </button>
               </div>
               <a
                 href={`${SOLSCAN}/account/${id.wallet}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-primary transition-colors"
+                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
               >
                 Solscan <ExternalLink className="h-3 w-3" />
               </a>
@@ -167,7 +167,7 @@ export default function AgentDetailPage() {
                   href={id.x402Endpoint}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-primary transition-colors"
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
                 >
                   <Globe className="h-3 w-3" /> Endpoint
                 </a>
@@ -175,17 +175,17 @@ export default function AgentDetailPage() {
             </div>
 
             {/* Inline Stats Pills */}
-            <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-1.5 sm:gap-2 mt-3">
               {[
                 { label: 'Calls', value: totalCallsSettled.toLocaleString(), icon: Zap },
                 { label: 'Latency', value: `${id.avgLatencyMs}ms`, icon: Clock },
                 { label: 'Uptime', value: `${id.uptimePercent}%`, icon: TrendingUp },
                 { label: 'Rep', value: `${computed.reputationScore}`, icon: Shield },
               ].map((s) => (
-                <div key={s.label} className="flex items-center gap-1.5 rounded-md bg-neutral-800/60 px-2.5 py-1">
-                  <s.icon className="h-3 w-3 text-primary/70" />
-                  <span className="text-[11px] font-bold tabular-nums text-white font-mono">{s.value}</span>
-                  <span className="text-[9px] text-neutral-600 uppercase">{s.label}</span>
+                <div key={s.label} className="flex items-center gap-1.5 rounded-md bg-muted px-2 sm:px-2.5 py-1 min-w-0">
+                  <s.icon className="h-3 w-3 text-primary/70 shrink-0" />
+                  <span className="text-[11px] font-bold tabular-nums text-foreground font-mono truncate">{s.value}</span>
+                  <span className="text-[9px] text-muted-foreground uppercase ml-auto sm:ml-0">{s.label}</span>
                 </div>
               ))}
             </div>

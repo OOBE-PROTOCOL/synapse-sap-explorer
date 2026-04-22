@@ -403,13 +403,13 @@ export default function OverviewPage() {
                           </Badge>
                           {tx.err && <Badge variant="neon-rose" className="text-[8px] h-4 px-1.5">ERR</Badge>}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <BotIcon className="h-3 w-3 text-primary/40" />
-                          <span className="text-[12px] text-secondary50 font-mono">{short(tx.signer ?? '', 60, 0)}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <BotIcon className="h-3 w-3 text-primary/40 shrink-0" />
+                          <span className="text-[11px] sm:text-[12px] text-secondary50 font-mono truncate min-w-0">{tx.signer ?? ''}</span>
                           {tx.feeSol > 0 && (
                             <>
-                              <span className="text-[10px] text-muted-foreground/20">·</span>
-                              <span className="text-[10px] text-muted-foreground/30 tabular-nums">{tx.feeSol.toFixed(6)} SOL</span>
+                              <span className="text-[10px] text-muted-foreground/20 hidden sm:inline">·</span>
+                              <span className="text-[10px] text-muted-foreground/30 tabular-nums hidden sm:inline whitespace-nowrap">{tx.feeSol.toFixed(6)} SOL</span>
                             </>
                           )}
                         </div>
@@ -506,7 +506,7 @@ export default function OverviewPage() {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={agentChartData} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
+                <BarChart data={agentChartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
                       <stop offset="0%" stopColor="hsl(186, 93%, 37%)" stopOpacity={0.6} />
@@ -516,7 +516,7 @@ export default function OverviewPage() {
                   <XAxis type="number" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false}
                     tickFormatter={v => (v / 1e6).toFixed(1) + 'M'} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} axisLine={false}
-                    tickLine={false} width={80} />
+                    tickLine={false} width={64} />
                   <RechartsTooltip
                     contentStyle={TOOLTIP_STYLE}
                     formatter={(v: any) => v != null ? fmtUsdc(Number(v), 4) : ''}
@@ -607,8 +607,8 @@ export default function OverviewPage() {
               <div className="space-y-3">
                 {[
                   { label: 'Deposited', value: escrowStats.totalDeposited, color: 'bg-primary',     text: 'text-primary' },
-                  { label: 'Settled',   value: escrowStats.totalSettled,   color: 'bg-white',       text: 'text-white' },
-                  { label: 'Locked',    value: escrowStats.totalBalance,   color: 'bg-neutral-400', text: 'text-neutral-400' },
+                  { label: 'Settled',   value: escrowStats.totalSettled,   color: 'bg-foreground',  text: 'text-foreground' },
+                  { label: 'Locked',    value: escrowStats.totalBalance,   color: 'bg-muted-foreground', text: 'text-muted-foreground' },
                 ].map(({ label, value, color, text }) => (
                   <div key={label}>
                     <div className="flex items-center justify-between mb-1.5">
