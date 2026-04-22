@@ -754,7 +754,7 @@ function AgentX402Tab({
   return (
     <div className="space-y-6">
       {/* KPI strip */}
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
         {[
           { label: 'Total Payments', value: String(stats?.totalPayments ?? 0) },
           { label: 'Total Volume', value: `$${Number(stats?.totalAmount ?? 0).toFixed(2)}` },
@@ -856,7 +856,7 @@ function AgentRevenueTab({
   return (
     <div className="space-y-6">
       {/* KPI strip */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         {[
           { label: 'Total Settled', value: `${(totalSolSettled / 1e9).toFixed(4)} SOL` },
           { label: 'Total Calls Settled', value: totalCallsSettled.toLocaleString('en-US') },
@@ -1020,7 +1020,7 @@ function AgentMemoryTab({
   return (
     <div className="space-y-4">
       {/* Summary stats */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: 'Vaults', value: String(stats.vaultCount), icon: Database },
           { label: 'Sessions', value: String(stats.totalSessions), icon: FileText },

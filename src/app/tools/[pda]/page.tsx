@@ -58,7 +58,7 @@ export default function ToolDetailPage() {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
         </div>
         <Skeleton className="h-64 w-full" />
@@ -246,7 +246,7 @@ export default function ToolDetailPage() {
         <Card>
           <CardContent className="pt-6">
             <SectionHeader title="Pricing & Settlements" />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-3">
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mt-3">
               <div className="text-center p-3 bg-muted/30 rounded-lg">
                 <p className="text-lg font-bold tabular-nums">{escrowStats.count}</p>
                 <p className="text-[10px] text-muted-foreground">Active Escrows</p>
@@ -282,7 +282,7 @@ export default function ToolDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <SectionHeader title="Timestamps" />
-          <div className="grid gap-4 sm:grid-cols-2 mt-2">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 mt-2">
             <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
               <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
               <div>

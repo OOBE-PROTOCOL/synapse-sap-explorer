@@ -80,7 +80,7 @@ export default function EscrowDetailPage() {
       }
     >
       {/* Balance Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
         <Card><CardContent className="pt-6 text-center">
           <p className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatAmount(escrow.balance)}</p>
           <p className="text-[10px] text-muted-foreground">Current Balance</p>

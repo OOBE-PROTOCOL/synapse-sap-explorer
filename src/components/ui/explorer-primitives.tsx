@@ -57,33 +57,33 @@ export function ExplorerPageShell({
   className?: string;
 }) {
   return (
-    <div className={cn('space-y-6 animate-fade-in', className)}>
+    <div className={cn('space-y-4 sm:space-y-6 animate-fade-in', className)}>
       {/* ── Header ─── */}
       <div>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {icon && (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
+              <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
                 {icon}
               </div>
             )}
-            <div className="min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white truncate">{title}</h1>
                 {badge}
               </div>
               {subtitle && (
-                <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+                <p className="mt-1 text-xs sm:text-sm text-muted-foreground line-clamp-2">{subtitle}</p>
               )}
             </div>
           </div>
-          {actions && <div className="flex flex-1 items-center justify-end gap-2 min-w-0 pl-8">{actions}</div>}
+          {actions && <div className="flex items-center justify-end gap-2 shrink-0 w-full sm:w-auto sm:pl-4">{actions}</div>}
         </div>
       </div>
 
       {/* ── Stats Strip ─── */}
       {stats && (
-        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 stagger-children">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 stagger-children">
           {stats}
         </div>
       )}
@@ -170,13 +170,13 @@ export function ExplorerMetric({
 
   return (
     <Card className={cn('group overflow-hidden bg-neutral-900 border-neutral-700 hover:border-neutral-600 transition-all duration-300', className)}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="space-y-1 min-w-0">
             <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-400">
               {label}
             </p>
-            <p className="text-2xl font-bold tracking-tight text-white tabular-nums font-mono">
+            <p className="text-lg sm:text-2xl font-bold tracking-tight text-white tabular-nums font-mono truncate">
               {typeof value === 'number' ? value.toLocaleString() : value}
             </p>
             {sub && (
@@ -196,7 +196,7 @@ export function ExplorerMetric({
             )}
           </div>
           <div className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-300 group-hover:scale-110',
+            'flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg transition-all duration-300 group-hover:scale-110 shrink-0',
             a.iconBg, a.iconText,
           )}>
             {icon}
@@ -242,10 +242,10 @@ export function ExplorerFilterBar({
 
   return (
     <div className={cn('space-y-3', className)}>
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         {/* Search */}
         {onSearch !== undefined && (
-          <div className="relative flex-1 min-w-[220px] max-w-md group/search">
+          <div className="relative flex-1 min-w-0 sm:min-w-[220px] max-w-md group/search w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50 group-focus-within/search:text-primary transition-colors" />
             <Input
               value={search}
@@ -266,9 +266,9 @@ export function ExplorerFilterBar({
 
         {/* Sort */}
         {sort && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Select value={sort.value} onValueChange={sort.onChange}>
-              <SelectTrigger className="h-9 w-auto min-w-[140px] text-sm">
+              <SelectTrigger className="h-9 w-auto min-w-[110px] sm:min-w-[140px] text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
