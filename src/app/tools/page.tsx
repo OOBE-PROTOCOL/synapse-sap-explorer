@@ -49,6 +49,8 @@ export default function ToolsPage() {
         agentName: agent?.identity?.name ?? null,
         agentWallet: agent?.identity?.wallet ?? null,
         callsSettled,
+        hasInscribedSchema: t.hasInscribedSchema ?? false,
+        inscribedSchemaCount: t.inscribedSchemaCount ?? 0,
       };
     });
   }, [data, agentsData, agentCallsMap]);
