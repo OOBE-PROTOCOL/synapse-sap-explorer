@@ -2,7 +2,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { getSynapseConnection, findAllTools, getSapClient } from '~/lib/sap/discovery';
+import {
+  getSynapseConnection,
+  findAllTools,
+  getSapClient,
+  findAllAgents,
+  serializeDiscoveredAgent,
+} from '~/lib/sap/discovery';
 import { fetchAgentWellKnownBatch, type AgentWellKnown } from '~/lib/sap/well-known';
 import { resolveTokens } from '~/lib/sap/token-metadata';
 import { swr, peek } from '~/lib/cache';
@@ -200,22 +206,23 @@ function finalizeBalances(
 
 /* ── Route handler ──────────────────────────────────────── */
 
-async function fetchEnrichedAgents(req: Request): Promise<EnrichedAgentsResponse> {
-    const url = new URL(req.url);
-    const baseUrl = `${url.origin}/api/sap/agents?limit=100`;
-
-    // Fetch agents + SOL price in parallel
-    const [baseRes, solPrice] = await Promise.all([
-      fetch(baseUrl, { headers: { Accept: 'application/json' } }),
+async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
+    // Fetch agents directly in-process (avoid self-fetch over HTTPS which can
+    // hit ERR_SSL_PACKET_LENGTH_TOO_LONG when Node loops back through nginx).
+    const [rawAgents, solPrice] = await Promise.all([
+      findAllAgents(),
       fetchSolPrice(),
     ]);
 
-    if (!baseRes.ok) {
-      throw new Error('Failed to fetch agents');
-    }
-
-    const baseData = (await baseRes.json()) as { agents: SerializedDiscoveredAgent[]; total: number };
-    const agents = baseData.agents;
+    // Deduplicate by PDA (parity with /api/sap/agents) and cap at 100.
+    const seen = new Set<string>();
+    const unique = rawAgents.filter((a) => {
+      const key = a.pda.toBase58();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const agents: SerializedDiscoveredAgent[] = unique.slice(0, 100).map(serializeDiscoveredAgent);
 
     // Collect unique data to fetch
     const endpoints = agents.map((a) => a.identity?.x402Endpoint);
@@ -340,18 +347,18 @@ async function fetchEnrichedAgents(req: Request): Promise<EnrichedAgentsResponse
     return response;
 }
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const cacheKey = 'agents:enriched';
     const cached = peek<EnrichedAgentsResponse>(cacheKey);
     if (cached) {
-      swr(cacheKey, () => fetchEnrichedAgents(req), { ttl: 30_000, swr: 180_000 }).catch(() => {});
+      swr(cacheKey, () => fetchEnrichedAgents(), { ttl: 30_000, swr: 180_000 }).catch(() => {});
       return NextResponse.json(cached, {
         headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=180' },
       });
     }
 
-    const data = await swr(cacheKey, () => fetchEnrichedAgents(req), { ttl: 30_000, swr: 180_000 });
+    const data = await swr(cacheKey, () => fetchEnrichedAgents(), { ttl: 30_000, swr: 180_000 });
     return NextResponse.json(data, {
       headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=180' },
     });
