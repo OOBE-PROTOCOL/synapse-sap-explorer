@@ -368,23 +368,23 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
 
   return (
     <Card className={cn(
-      'group transition-all duration-300 bg-neutral-900 border-neutral-700',
-      status === 'closed' ? 'opacity-60' : 'hover:border-neutral-600',
+      'group transition-all duration-300 bg-card border-border',
+      status === 'closed' ? 'opacity-60' : 'hover:border-border/80',
     )}>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between gap-4">
+      <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           {/* Left */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 mb-2">
+            <div className="flex items-start gap-2.5 mb-2">
               <div className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-lg shrink-0',
-                status === 'closed' ? 'bg-neutral-800' : 'bg-primary/10',
+                status === 'closed' ? 'bg-muted' : 'bg-primary/10',
               )}>
-                <CreditCard className={cn('h-4 w-4', status === 'closed' ? 'text-neutral-500' : 'text-primary')} />
+                <CreditCard className={cn('h-4 w-4', status === 'closed' ? 'text-muted-foreground' : 'text-primary')} />
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-white">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-foreground truncate max-w-full">
                     {escrow.agentName ?? 'Unknown Agent'}
                   </span>
                   <Badge className={cn('text-[10px] gap-1', cfg.className)}>
@@ -397,15 +397,15 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-[10px] text-muted-foreground">Escrow PDA</span>
+                <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                  <span className="text-[10px] text-muted-foreground shrink-0">PDA</span>
                   <Address value={escrow.pda} copy />
                 </div>
               </div>
             </div>
 
             {/* Parties */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] mt-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] mt-1">
               <span className="text-muted-foreground">Agent</span>
               <Address value={escrow.agent} copy />
               <span className="text-muted-foreground">Depositor</span>
@@ -413,29 +413,29 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
             </div>
           </div>
 
-          {/* Right — stats */}
-          <div className="flex items-center gap-5 shrink-0">
+          {/* Right — stats: 3-col grid on mobile, flex-row on sm+ */}
+          <div className="grid grid-cols-3 sm:flex sm:items-center gap-3 sm:gap-5 sm:shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-border/40">
             {pricePerCall > 0 && (
-              <div className="text-right">
-                <p className="text-sm font-bold tabular-nums text-white">{formatAmount(pricePerCall)} <span className="text-[10px] font-normal text-neutral-500">{tokenLabel}</span></p>
-                <p className="text-[9px] text-neutral-500 uppercase tracking-[0.12em] font-semibold">Price/Call</p>
+              <div className="text-left sm:text-right min-w-0">
+                <p className="text-xs sm:text-sm font-bold tabular-nums text-foreground truncate">{formatAmount(pricePerCall)} <span className="text-[10px] font-normal text-muted-foreground">{tokenLabel}</span></p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-[0.12em] font-semibold">Price/Call</p>
               </div>
             )}
-            <div className="text-right">
-              <div className="flex items-center justify-end gap-1.5 mb-0.5">
+            <div className="text-left sm:text-right min-w-0">
+              <div className="flex items-center sm:justify-end gap-1.5 mb-0.5">
                 {tokenLogo && (
-                  <Image src={tokenLogo} alt={tokenLabel} width={16} height={16} className="rounded-full" unoptimized />
+                  <Image src={tokenLogo} alt={tokenLabel} width={14} height={14} className="rounded-full shrink-0" unoptimized />
                 )}
-                <p className={cn('text-lg font-bold tabular-nums font-mono',
-                  balance > 0 ? 'text-emerald-400' : 'text-neutral-500'
+                <p className={cn('text-sm sm:text-lg font-bold tabular-nums font-mono truncate',
+                  balance > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-muted-foreground'
                 )}>{formatAmount(balance)}</p>
-                <span className="text-xs font-normal text-neutral-500">{tokenLabel}</span>
+                <span className="text-[10px] sm:text-xs font-normal text-muted-foreground hidden sm:inline">{tokenLabel}</span>
               </div>
-              <p className="text-[9px] text-neutral-500 uppercase tracking-[0.12em] font-semibold">{tokenName}</p>
+              <p className="text-[9px] text-muted-foreground uppercase tracking-[0.12em] font-semibold truncate">{tokenName}</p>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-bold tabular-nums text-white font-mono">{callsSettled}{maxCalls > 0 ? `/${maxCalls}` : ''}</p>
-              <p className="text-[9px] text-neutral-500 uppercase tracking-[0.12em] font-semibold">Calls Settled</p>
+            <div className="text-left sm:text-right min-w-0">
+              <p className="text-xs sm:text-sm font-bold tabular-nums text-foreground font-mono truncate">{callsSettled}{maxCalls > 0 ? `/${maxCalls}` : ''}</p>
+              <p className="text-[9px] text-muted-foreground uppercase tracking-[0.12em] font-semibold">Calls</p>
             </div>
           </div>
         </div>
@@ -444,10 +444,10 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
         {(totalDeposited > 0 || maxCalls > 0) && (
           <div className="mt-3">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-neutral-500">
+              <span className="text-[10px] text-muted-foreground">
                 {maxCalls > 0 ? `Calls ${callsSettled}/${maxCalls}` : 'Funds Utilization'}
               </span>
-              <span className="text-[10px] tabular-nums text-neutral-400 font-mono">{utilization.toFixed(1)}%</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground font-mono">{utilization.toFixed(1)}%</span>
             </div>
             <div className="h-1 rounded-full bg-neutral-800 overflow-hidden">
               <div

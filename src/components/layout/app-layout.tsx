@@ -300,16 +300,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
           </button>
 
-          {/* Brand: shown when expanded (desktop or mobile drawer open) */}
-          {!effectiveCollapsed && (
+          {/* Brand text: desktop expanded only */}
+          {!effectiveCollapsed && !isMobile && (
             <Link href="/" className="truncate flex-1">
               <span className="text-sm font-bold text-foreground tracking-wide">SYNAPSE</span>
               <span className="ml-1.5 text-[10px] font-medium font-sans text-primary uppercase tracking-widest">EXPLORER</span>
             </Link>
           )}
-          {/* Logo: shown when collapsed on desktop only */}
-          {effectiveCollapsed && !isMobile && (
-            <Link href="/" className="flex items-center justify-center">
+          {/* Logo: mobile drawer expanded, or desktop collapsed */}
+          {((effectiveCollapsed && !isMobile) || (isMobile && mobileOpen)) && (
+            <Link href="/" className="flex items-center justify-center ml-1">
               <Image src="/explorer_logo.png" alt="Synapse Explorer" width={28} height={28} />
             </Link>
           )}

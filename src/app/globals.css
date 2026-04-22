@@ -546,55 +546,54 @@ html, body {
 
 /* ═══════════════════════════════════════════════════════════
  * RESPONSIVE OVERRIDES — Tame oversized utilities on small screens
- * Applies on phones (≤640px). Avoids hand-editing every page.
+ * Applies on phones (≤640px). Skipped on /docs (fumadocs has its own layout).
  * ═══════════════════════════════════════════════════════════ */
 @media (max-width: 640px) {
   /* Padding — shrink heroic dashboard padding */
-  .p-12 { padding: 1.25rem !important; }
-  .p-10 { padding: 1rem !important; }
-  .p-8  { padding: 1rem !important; }
-  .px-12 { padding-left: 1rem !important; padding-right: 1rem !important; }
-  .px-10 { padding-left: 1rem !important; padding-right: 1rem !important; }
-  .px-8  { padding-left: 1rem !important; padding-right: 1rem !important; }
-  .py-24 { padding-top: 2.5rem !important; padding-bottom: 2.5rem !important; }
-  .py-20 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
-  .py-16 { padding-top: 1.75rem !important; padding-bottom: 1.75rem !important; }
-  .py-12 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+  html:not(.docs-active) .p-12 { padding: 1.25rem !important; }
+  html:not(.docs-active) .p-10 { padding: 1rem !important; }
+  html:not(.docs-active) .p-8  { padding: 1rem !important; }
+  html:not(.docs-active) .px-12 { padding-left: 1rem !important; padding-right: 1rem !important; }
+  html:not(.docs-active) .px-10 { padding-left: 1rem !important; padding-right: 1rem !important; }
+  html:not(.docs-active) .px-8  { padding-left: 1rem !important; padding-right: 1rem !important; }
+  html:not(.docs-active) .py-24 { padding-top: 2.5rem !important; padding-bottom: 2.5rem !important; }
+  html:not(.docs-active) .py-20 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+  html:not(.docs-active) .py-16 { padding-top: 1.75rem !important; padding-bottom: 1.75rem !important; }
+  html:not(.docs-active) .py-12 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
 
   /* Display text — keep hierarchy but cap on phones */
-  .text-7xl { font-size: 2.5rem !important; line-height: 1.1 !important; }
-  .text-6xl { font-size: 2.25rem !important; line-height: 1.1 !important; }
-  .text-5xl { font-size: 1.875rem !important; line-height: 1.2 !important; }
-  .text-4xl { font-size: 1.5rem !important; line-height: 1.25 !important; }
-  .text-3xl { font-size: 1.375rem !important; line-height: 1.3 !important; }
+  html:not(.docs-active) .text-7xl { font-size: 2.5rem !important; line-height: 1.1 !important; }
+  html:not(.docs-active) .text-6xl { font-size: 2.25rem !important; line-height: 1.1 !important; }
+  html:not(.docs-active) .text-5xl { font-size: 1.875rem !important; line-height: 1.2 !important; }
+  html:not(.docs-active) .text-4xl { font-size: 1.5rem !important; line-height: 1.25 !important; }
+  html:not(.docs-active) .text-3xl { font-size: 1.375rem !important; line-height: 1.3 !important; }
 
-  /* Grids — collapse 3+ columns down to 2 by default. Pages that
-     declared explicit responsive grids (sm:grid-cols-N) override this. */
-  .grid-cols-6,
-  .grid-cols-5,
-  .grid-cols-4,
-  .grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  /* Grids — collapse 3+ columns down to 2 by default. */
+  html:not(.docs-active) .grid-cols-6,
+  html:not(.docs-active) .grid-cols-5,
+  html:not(.docs-active) .grid-cols-4,
+  html:not(.docs-active) .grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 
   /* Wide flex rows — wrap by default to avoid overflow */
-  .gap-12 { gap: 1rem !important; }
-  .gap-10 { gap: 1rem !important; }
-  .gap-8  { gap: 1rem !important; }
+  html:not(.docs-active) .gap-12 { gap: 1rem !important; }
+  html:not(.docs-active) .gap-10 { gap: 1rem !important; }
+  html:not(.docs-active) .gap-8  { gap: 1rem !important; }
 
   /* Fixed wide widths — let them shrink */
-  [class*='max-w-[1440px]'],
-  [class*='max-w-[1280px]'],
-  [class*='max-w-[1024px]'] { max-width: 100% !important; }
-  [class*='max-w-[400px]'] { max-width: 100% !important; }
+  html:not(.docs-active) [class*='max-w-[1440px]'],
+  html:not(.docs-active) [class*='max-w-[1280px]'],
+  html:not(.docs-active) [class*='max-w-[1024px]'] { max-width: 100% !important; }
+  html:not(.docs-active) [class*='max-w-[400px]'] { max-width: 100% !important; }
 }
 
 /* Tablet — keep single-row metrics readable */
 @media (min-width: 641px) and (max-width: 768px) {
-  .grid-cols-6,
-  .grid-cols-5 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  html:not(.docs-active) .grid-cols-6,
+  html:not(.docs-active) .grid-cols-5 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 }
 
 /* Tables inside cards — always horizontally scrollable on small screens */
 @media (max-width: 768px) {
-  table { min-width: max-content; }
+  html:not(.docs-active) table { min-width: max-content; }
 }
 
