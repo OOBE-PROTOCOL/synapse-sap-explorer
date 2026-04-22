@@ -193,14 +193,20 @@ function useBreadcrumbs(pathname: string) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const [mobileOpen, setMobileOpen] = useState(false);  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const breadcrumbs = useBreadcrumbs(pathname);
   useEffect(() => setMounted(true), []);
 
   // Close mobile sidebar on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  // Lock body scroll while mobile drawer is open
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('drawer-open', mobileOpen);
+    return () => document.body.classList.remove('drawer-open');
+  }, [mobileOpen]);
 
   function isNavActive(href: string): boolean {
     if (href === '/') return pathname === '/' || pathname === '/dashboard';
@@ -225,20 +231,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* ── Mobile overlay backdrop ──────────────── */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-[55] bg-black/70 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* ── Sidebar ─────────────────────────────── */}
       <aside
         className={cn(
-          'sidebar z-50 transition-all duration-300',
+          'sidebar transition-all duration-300',
           /* desktop */
           'hidden lg:flex',
           collapsed ? 'lg:w-[68px]' : 'lg:w-[260px]',
           /* mobile: fixed slide-in from left */
-          mobileOpen && '!flex fixed inset-y-0 left-0 w-[260px]',
+          mobileOpen && '!flex flex-col fixed inset-y-0 left-0 w-[280px] max-w-[85vw] z-[60] shadow-2xl',
         )}
       >
         {/* Collapse toggle (desktop only — overlaps drawer on mobile) */}

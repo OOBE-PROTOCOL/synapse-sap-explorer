@@ -272,13 +272,23 @@
  * ═══════════════════════════════════════════════════════════ */
 
 .sidebar {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  position: sticky;
-  top: 0;
   background: hsl(var(--sidebar-background));
   border-right: 1px solid hsl(var(--border));
+}
+
+@media (min-width: 1024px) {
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+}
+
+/* Lock body scroll when mobile drawer open */
+body.drawer-open {
+  overflow: hidden;
 }
 
 .sidebar-header {
