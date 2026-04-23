@@ -1,3 +1,15 @@
+# Synapse SAP Explorer — Skills Index
+
+## Copilot UI Skill
+
+| Skill | File | Use When |
+|-------|------|----------|
+| `shadcn-explorer` | `.github/skills/shadcn/SKILL.md` | Any UI work — pages, components, design tokens, shadcn primitives, glassmorphism, explorer page anatomy, checklist before shipping |
+
+> **Rule**: Load `.github/skills/shadcn/SKILL.md` FIRST before touching any file in `src/components/` or `src/app/`.
+
+---
+
 # Synapse Client SDK — Agent Skills Reference
 
 > **Package**: `@oobe-protocol-labs/synapse-client-sdk`  

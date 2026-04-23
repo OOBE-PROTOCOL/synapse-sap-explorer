@@ -1,10 +1,3 @@
-/* ──────────────────────────────────────────────
- * DB ↔ API Mappers
- *
- * Converts between DB row shapes and the API response
- * shapes the frontend expects.
- * ────────────────────────────────────────────── */
-
 import type { InferSelectModel } from 'drizzle-orm';
 import type {
   agents,
@@ -15,7 +8,20 @@ import type {
   feedbacks,
   vaults,
   transactions,
+  Capability,
+  PricingTier,
+  ActivePlugin,
 } from '~/db/schema';
+import type {
+  ApiAgentPayload,
+  ApiToolDescriptorPayload,
+  ApiEscrowPayload,
+  ApiAttestationPayload,
+  ApiFeedbackPayload,
+  ApiVaultPayload,
+  ApiTxPayload,
+} from '~/types/api';
+import type { SerializedDiscoveredAgent, SerializedDiscoveredTool, SerializedPluginRef } from '~/types/sap';
 
 /* ── Types ────────────────────────────────────── */
 type AgentRow = InferSelectModel<typeof agents>;
@@ -30,8 +36,8 @@ type TxRow = InferSelectModel<typeof transactions>;
 /* ── Agents ───────────────────────────────────── */
 
 export function dbAgentToApi(row: AgentRow) {
-  const capabilities = (row.capabilities ?? []) as any[];
-  const pricing = (row.pricing ?? []) as any[];
+  const capabilities = (row.capabilities ?? []) as Capability[];
+  const pricing = (row.pricing ?? []) as PricingTier[];
   const protocols = (row.protocols ?? []) as string[];
 
   return {
@@ -57,7 +63,7 @@ export function dbAgentToApi(row: AgentRow) {
       capabilities,
       pricing,
       protocols,
-      activePlugins: row.activePlugins ?? [],
+      activePlugins: (row.activePlugins ?? []) as unknown as SerializedPluginRef[],
     },
     stats: null,
     computed: {
@@ -73,7 +79,7 @@ export function dbAgentToApi(row: AgentRow) {
 }
 
 /** Convert serialized API agent to DB insert shape */
-export function apiAgentToDb(agent: any): {
+export function apiAgentToDb(agent: ApiAgentPayload | SerializedDiscoveredAgent): {
   pda: string;
   wallet: string;
   name: string;
@@ -90,10 +96,10 @@ export function apiAgentToDb(agent: any): {
   totalCallsServed: string;
   avgLatencyMs: number;
   uptimePercent: number;
-  capabilities: any[];
-  pricing: any[];
+  capabilities: Capability[];
+  pricing: PricingTier[];
   protocols: string[];
-  activePlugins: any[];
+  activePlugins: ActivePlugin[];
 } {
   const id = agent.identity ?? {};
   return {
@@ -113,10 +119,10 @@ export function apiAgentToDb(agent: any): {
     totalCallsServed: String(id.totalCallsServed ?? '0'),
     avgLatencyMs: id.avgLatencyMs ?? 0,
     uptimePercent: id.uptimePercent ?? 0,
-    capabilities: id.capabilities ?? [],
-    pricing: id.pricing ?? [],
+    capabilities: (id.capabilities ?? []) as unknown as Capability[],
+    pricing: (id.pricing ?? []) as unknown as PricingTier[],
     protocols: id.protocols ?? [],
-    activePlugins: id.activePlugins ?? [],
+    activePlugins: (id.activePlugins ?? []) as unknown as ActivePlugin[],
   };
 }
 
@@ -149,7 +155,7 @@ export function dbToolToApi(row: ToolRow) {
   };
 }
 
-export function apiToolToDb(tool: any) {
+export function apiToolToDb(tool: ApiToolDescriptorPayload | SerializedDiscoveredTool) {
   const d = tool.descriptor ?? {};
   return {
     pda: tool.pda,
@@ -208,7 +214,7 @@ export function dbEscrowToApi(row: EscrowRow) {
   };
 }
 
-export function apiEscrowToDb(e: any) {
+export function apiEscrowToDb(e: ApiEscrowPayload) {
   return {
     pda: e.pda,
     agentPda: e.agent ?? '',
@@ -267,7 +273,7 @@ export function dbAttestationToApi(row: AttestationRow) {
   };
 }
 
-export function apiAttestationToDb(a: any) {
+export function apiAttestationToDb(a: ApiAttestationPayload) {
   return {
     pda: a.pda,
     agentPda: a.agent ?? '',
@@ -296,7 +302,7 @@ export function dbFeedbackToApi(row: FeedbackRow) {
   };
 }
 
-export function apiFeedbackToDb(f: any) {
+export function apiFeedbackToDb(f: ApiFeedbackPayload) {
   return {
     pda: f.pda,
     agentPda: f.agent ?? '',
@@ -326,7 +332,7 @@ export function dbVaultToApi(row: VaultRow) {
   };
 }
 
-export function apiVaultToDb(v: any) {
+export function apiVaultToDb(v: ApiVaultPayload) {
   return {
     pda: v.pda,
     agentPda: v.agent ?? '',
@@ -342,7 +348,53 @@ export function apiVaultToDb(v: any) {
 
 /* ── Transactions ─────────────────────────────── */
 
-export function dbTxToApi(row: TxRow) {
+/* ── Well-known mints ── */
+const KNOWN_MINTS: Record<string, { symbol: string; decimals: number }> = {
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': { symbol: 'USDC', decimals: 6 },
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': { symbol: 'USDT', decimals: 6 },
+  'So11111111111111111111111111111111111111112':    { symbol: 'SOL',  decimals: 9 },
+};
+
+/** Derive the primary transfer value from balance changes */
+function computeTxValue(
+  tokenChanges: { account: string; mint: string; change: string }[] | null | undefined,
+  balanceChanges: { account: string; change: number }[] | null | undefined,
+  signerBalanceChange: number,
+  fee: number,
+): { amount: number; symbol: string } | null {
+  // 1. Token transfers (USDC, USDT, etc.) — take the positive (received) side
+  if (tokenChanges && tokenChanges.length > 0) {
+    // Find the largest positive token change (the "received" side)
+    let best: { amount: number; symbol: string } | null = null;
+    for (const tc of tokenChanges) {
+      const raw = parseFloat(tc.change);
+      if (isNaN(raw) || raw <= 0) continue;
+      const known = KNOWN_MINTS[tc.mint];
+      const symbol = known?.symbol ?? tc.mint.slice(0, 4) + '…';
+      if (!best || raw > best.amount) best = { amount: raw, symbol };
+    }
+    if (best) return best;
+  }
+  // 2. SOL balance changes — exclude fee, take largest absolute move
+  const solMove = Math.abs(signerBalanceChange + fee) / 1e9;
+  if (solMove > 0.000001) return { amount: solMove, symbol: 'SOL' };
+  return null;
+}
+
+export function dbTxToApi(row: TxRow & {
+  accountKeys?: { pubkey: string }[] | null;
+  tokenBalanceChanges?: { account: string; mint: string; change: string }[] | null;
+  balanceChanges?: { account: string; change: number }[] | null;
+}) {
+  const keys = (row.accountKeys ?? []).map((k) =>
+    typeof k === 'string' ? k : k.pubkey ?? String(k),
+  );
+  const value = computeTxValue(
+    row.tokenBalanceChanges,
+    row.balanceChanges,
+    row.signerBalanceChange,
+    row.fee,
+  );
   return {
     signature: row.signature,
     slot: row.slot,
@@ -354,26 +406,37 @@ export function dbTxToApi(row: TxRow) {
     feeSol: row.feeSol,
     programs: row.programs ?? [],
     sapInstructions: row.sapInstructions ?? [],
+    accountKeys: keys,
     instructionCount: row.instructionCount,
     innerInstructionCount: row.innerInstructionCount,
     computeUnitsConsumed: row.computeUnits,
     signerBalanceChange: row.signerBalanceChange,
     version: row.version,
+    value,
   };
 }
 
-export function apiTxToDb(tx: any) {
+export function apiTxToDb(tx: ApiTxPayload) {
+  const cleanText = (value: string | null | undefined): string | null => {
+    if (typeof value !== 'string') return null;
+    // Strip null bytes and control characters that can break Postgres text columns.
+    return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  };
+
   return {
     signature: tx.signature,
     slot: tx.slot,
     blockTime: tx.blockTime ? new Date(tx.blockTime * 1000) : null,
     err: tx.err ?? false,
-    memo: tx.memo ?? null,
+    memo: cleanText(tx.memo),
     signer: tx.signer ?? null,
     fee: tx.fee ?? 0,
     feeSol: tx.feeSol ?? 0,
-    programs: tx.programs ?? [],
-    sapInstructions: tx.sapInstructions ?? [],
+    programs: (tx.programs ?? []).map((p) => ({
+      id: p.id,
+      name: cleanText(p.name),
+    })),
+    sapInstructions: (tx.sapInstructions ?? []).map((ix) => cleanText(ix) ?? ''),
     instructionCount: tx.instructionCount ?? 0,
     innerInstructionCount: tx.innerInstructionCount ?? 0,
     computeUnits: tx.computeUnitsConsumed ?? null,

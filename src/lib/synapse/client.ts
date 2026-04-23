@@ -1,9 +1,3 @@
-/* ──────────────────────────────────────────────────────────
- * Synapse SDK v2.0.5 — Server-side singleton (Next.js provider)
- *
- * Uses createSynapseProvider() from the ./next module for
- * HMR-safe singleton management in development.
- * ────────────────────────────────────────────────────────── */
 
 import {
   createSynapseProvider,
@@ -43,7 +37,6 @@ function resolveRegion(): SynapseRegion {
   }
 }
 
-/* ── Singleton ────────────────────────────────────────── */
 
 const ep = resolveEndpoint(resolveNetwork(), resolveRegion());
 
@@ -54,6 +47,5 @@ export const getSynapseClient = createSynapseProvider({
   apiKey: env.SYNAPSE_API_KEY,
 });
 
-/* ── Re-exports ───────────────────────────────────────── */
 
 export { SynapseNetwork, SynapseRegion, synapseResponse, withSynapseError };

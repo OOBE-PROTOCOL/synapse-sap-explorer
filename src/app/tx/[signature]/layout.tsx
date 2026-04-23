@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       ? new Date(data.blockTime * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
       : '--';
     const programs = (data.instructions ?? [])
-      .map((ix: any) => ix.program ?? ix.programId)
+      .map((ix: { program?: string; programId?: string }) => ix.program ?? ix.programId)
       .filter(Boolean)
       .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
       .join(', ') || '--';

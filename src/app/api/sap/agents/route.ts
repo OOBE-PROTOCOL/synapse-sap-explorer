@@ -1,16 +1,5 @@
 export const dynamic = 'force-dynamic';
 
-/* ──────────────────────────────────────────────
- * GET /api/sap/agents — Discover agents on-chain
- *
- * Query params:
- *   capability  — filter by capability id
- *   protocol    — filter by protocol
- *   limit       — max results (default 50)
- *
- * Data flow: SWR cache → DB → RPC → write-back
- * ────────────────────────────────────────────── */
-
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
 import type { DiscoveredAgent } from '~/lib/sap/discovery';
 import {
@@ -20,8 +9,10 @@ import {
   serializeDiscoveredAgent,
 } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
-import { selectAllAgents, upsertAgents } from '~/lib/db/queries';
+import { selectAllAgents, upsertAgents, getAgentSettlementMap } from '~/lib/db/queries';
+import { isDbDown, markDbDown } from '~/db';
 import { dbAgentToApi, apiAgentToDb } from '~/lib/db/mappers';
+import type { ApiAgent } from '~/types';
 
 /** Fetch agents from RPC (source of truth), write to DB, return serialized */
 async function rpcFetchAgents(
@@ -49,6 +40,23 @@ async function rpcFetchAgents(
   const limited = unique.slice(0, limit);
   const serialized = limited.map(serializeDiscoveredAgent);
 
+  // Merge settlement stats from escrows (data unification)
+  try {
+    const settlementMap = await getAgentSettlementMap();
+    for (const agent of serialized) {
+      const stats = settlementMap[agent.pda];
+      if (stats) {
+        (agent as ApiAgent).settlementStats = {
+          totalSettled: stats.totalSettled,
+          totalCalls: stats.totalCalls,
+          totalDeposited: stats.totalDeposited,
+          escrowCount: stats.escrowCount,
+          activeEscrows: stats.activeEscrows,
+        };
+      }
+    }
+  } catch (e) { console.warn('[agents] settlement enrichment failed:', (e as Error).message); }
+
   // Write to DB (non-blocking)
   upsertAgents(serialized.map(apiAgentToDb)).catch((e) =>
     console.warn('[agents] DB write failed:', (e as Error).message),
@@ -67,7 +75,7 @@ export const GET = withSynapseError(async (req: Request) => {
   const cacheKey = `agents:${capability ?? ''}:${protocol ?? ''}:${limit}`;
 
   // ── Step 1: Synchronous cache peek (0ms) ──
-  const cached = peek<{ agents: any[]; total: number }>(cacheKey);
+  const cached = peek<{ agents: ApiAgent[]; total: number }>(cacheKey);
   if (cached && cached.agents?.length > 0) {
     // Return instantly, revalidate from RPC in background
     swr(cacheKey, () => rpcFetchAgents(capability, protocol, limit), {
@@ -77,18 +85,18 @@ export const GET = withSynapseError(async (req: Request) => {
   }
 
   // ── Step 2: DB read (~10ms) — fast initial response ──
-  try {
+  if (!isDbDown()) try {
     const dbRows = await selectAllAgents();
     if (dbRows.length > 0) {
       const mapped = dbRows.map(dbAgentToApi);
       let filtered = mapped;
       if (capability) {
-        filtered = mapped.filter((a: any) =>
-          a.identity?.capabilities?.some((c: any) => c.id === capability),
+        filtered = mapped.filter((a) =>
+          (a as ApiAgent).identity?.capabilities?.some((c) => c.id === capability),
         );
       } else if (protocol) {
-        filtered = mapped.filter((a: any) =>
-          a.identity?.protocols?.includes(protocol),
+        filtered = mapped.filter((a) =>
+          (a as ApiAgent).identity?.protocols?.includes(protocol),
         );
       }
       const limited = filtered.slice(0, limit);
@@ -102,11 +110,11 @@ export const GET = withSynapseError(async (req: Request) => {
       return synapseResponse(result);
     }
   } catch (e) {
-    console.warn('[agents] DB read failed:', (e as Error).message, '| cause:', (e as any).cause?.message ?? 'none');
+    console.warn('[agents] DB read failed:', (e as Error).message);
+    markDbDown();
   }
 
-  // ── Step 3: Cold start — no cache, no DB. Must await RPC. ──
-  console.log('[agents] Cold start — fetching from RPC');
+  // ── Cold start — no cache, no DB. Must await RPC. ──
   const data = await rpcFetchAgents(capability, protocol, limit);
 
   // Seed the SWR cache

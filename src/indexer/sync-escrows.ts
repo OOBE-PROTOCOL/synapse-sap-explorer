@@ -19,7 +19,7 @@ export async function syncEscrows(): Promise<number> {
   let upserted = 0;
 
   for (const e of raw) {
-    const a = e.account;
+    const a = e.account as Record<string, unknown>;
     const row = {
       pda: pk(e.pda),
       agentPda: pk(a.agent),
@@ -33,7 +33,7 @@ export async function syncEscrows(): Promise<number> {
       maxCalls: bn(a.maxCalls),
       tokenMint: a.tokenMint ? pk(a.tokenMint) : null,
       tokenDecimals: num(a.tokenDecimals ?? 9),
-      volumeCurve: (a.volumeCurve ?? []).map((bp: any) => ({
+      volumeCurve: (a.volumeCurve as Array<Record<string, unknown>> ?? []).map((bp: Record<string, unknown>) => ({
         afterCalls: num(bp.afterCalls),
         pricePerCall: bn(bp.pricePerCall),
       })),
@@ -51,8 +51,8 @@ export async function syncEscrows(): Promise<number> {
         set: conflictUpdateSet(escrows, ['pda']),
       });
       upserted++;
-    } catch (e2: any) {
-      logErr('escrows', `Failed pda=${row.pda.slice(0, 8)}: ${e2.message}`);
+    } catch (e2: unknown) {
+      logErr('escrows', `Failed pda=${row.pda.slice(0, 8)}: ${(e2 as Error).message}`);
     }
   }
 

@@ -1,0 +1,12 @@
+SELECT 'sap_memory_vaults' as t, count(*) FROM sap_exp.sap_memory_vaults
+UNION ALL SELECT 'sap_sessions', count(*) FROM sap_exp.sap_sessions
+UNION ALL SELECT 'sap_epoch_pages', count(*) FROM sap_exp.sap_epoch_pages
+UNION ALL SELECT 'sap_memory_ledgers', count(*) FROM sap_exp.sap_memory_ledgers
+UNION ALL SELECT 'sap_ledger_pages', count(*) FROM sap_exp.sap_ledger_pages
+UNION ALL SELECT 'sap_vault_delegates', count(*) FROM sap_exp.sap_vault_delegates
+UNION ALL SELECT 'sap_checkpoints', count(*) FROM sap_exp.sap_checkpoints
+UNION ALL SELECT 'sap_events', count(*) FROM sap_exp.sap_events
+UNION ALL SELECT 'sap_memory_buffers', count(*) FROM sap_exp.sap_memory_buffers
+UNION ALL SELECT 'sap_memory_digests', count(*) FROM sap_exp.sap_memory_digests
+UNION ALL SELECT 'sap_memory_entries', count(*) FROM sap_exp.sap_memory_entries
+UNION ALL SELECT 'sap_memory_chunks', count(*) FROM sap_exp.sap_memory_chunks;

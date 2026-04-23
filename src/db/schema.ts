@@ -52,7 +52,7 @@ export type ActivePlugin = {
 
 export type TxProgram = {
     id: string;
-    name: string;
+    name: string | null;
 };
 
 export type AccountKey = {
@@ -328,5 +328,183 @@ export const syncCursors = sapExpSchema.table('sync_cursors', {
     lastSlot:       bigint('last_slot', { mode: 'number' }),
     lastSignature:  text('last_signature'),
     lastSyncedAt:   timestamp('last_synced_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * settlement_ledger (per-event settlement audit log)
+ * Each row = one decoded payment/batch-settle event
+ * uniquely identified by (signature, event_type)
+ * ═══════════════════════════════════════════════ */
+
+export const settlementLedger = sapExpSchema.table('settlement_ledger', {
+    id:             serial('id').primaryKey(),
+    signature:      text('signature').notNull(),
+    eventType:      text('event_type').notNull(),   // 'PaymentSettledEvent' | 'BatchSettledEvent'
+    amountLamports: numeric('amount_lamports').notNull().default('0'),
+    callsSettled:   numeric('calls_settled').notNull().default('0'),
+    agentPda:       text('agent_pda').notNull(),
+    depositor:      text('depositor').notNull(),
+    escrowPda:      text('escrow_pda').notNull(),
+    blockTime:      timestamp('block_time', { withTimezone: true }),
+    slot:           bigint('slot', { mode: 'number' }).notNull().default(0),
+    indexedAt:      timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * x402_direct_payments
+ * Direct USDC SPL token transfers to agent ATA
+ * (bypasses escrow — detected by scanning agent ATA)
+ * ═══════════════════════════════════════════════ */
+
+export const x402DirectPayments = sapExpSchema.table('x402_direct_payments', {
+    id:             serial('id').primaryKey(),
+    signature:      text('signature').notNull().unique(),
+    agentWallet:    text('agent_wallet').notNull(),
+    agentAta:       text('agent_ata').notNull(),
+    payerWallet:    text('payer_wallet').notNull(),
+    payerAta:       text('payer_ata').notNull(),
+    amount:         numeric('amount').notNull(),              // human-readable (e.g. "1.50")
+    amountRaw:      numeric('amount_raw').notNull(),          // raw lamports/smallest unit
+    mint:           text('mint').notNull(),                   // SPL token mint
+    decimals:       smallint('decimals').notNull().default(6),
+    memo:           text('memo'),                             // x402:... prefix or null
+    hasX402Memo:    boolean('has_x402_memo').notNull().default(false),
+    settlementData: jsonb('settlement_data'),                 // PAYMENT-RESPONSE blob if found
+    slot:           bigint('slot', { mode: 'number' }).notNull(),
+    blockTime:      timestamp('block_time', { withTimezone: true }),
+    indexedAt:      timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * tool_events (lifecycle audit trail)
+ * ═══════════════════════════════════════════════ */
+
+export type ToolEventType =
+    | 'ToolPublished'
+    | 'ToolUpdated'
+    | 'ToolDeactivated'
+    | 'ToolReactivated'
+    | 'ToolClosed'
+    | 'ToolSchemaInscribed'
+    | 'ToolInvocationReported';
+
+export const toolEvents = sapExpSchema.table('tool_events', {
+    id:                serial('id').primaryKey(),
+    toolPda:           text('tool_pda').notNull().references(() => tools.pda, { onDelete: 'cascade' }),
+    agentPda:          text('agent_pda').notNull(),
+    txSignature:       text('tx_signature').notNull(),
+    eventType:         text('event_type').$type<ToolEventType>().notNull(),
+    slot:              bigint('slot', { mode: 'number' }).notNull(),
+    blockTime:         timestamp('block_time', { withTimezone: true }),
+    toolName:          text('tool_name'),
+    oldVersion:        smallint('old_version'),
+    newVersion:        smallint('new_version'),
+    invocations:       numeric('invocations'),
+    totalInvocations:  numeric('total_invocations'),
+    schemaType:        smallint('schema_type'),
+    extra:             jsonb('extra'),
+    indexedAt:         timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * tool_schemas (cached decoded schemas from TX logs)
+ * ═══════════════════════════════════════════════ */
+
+export const toolSchemas = sapExpSchema.table('tool_schemas', {
+    id:              serial('id').primaryKey(),
+    toolPda:         text('tool_pda').notNull().references(() => tools.pda, { onDelete: 'cascade' }),
+    agentPda:        text('agent_pda').notNull(),
+    txSignature:     text('tx_signature').notNull(),
+    schemaType:      smallint('schema_type').notNull(),
+    schemaTypeLabel: text('schema_type_label').notNull(),
+    schemaData:      text('schema_data').notNull(),
+    schemaJson:      jsonb('schema_json'),
+    schemaHash:      text('schema_hash').notNull(),
+    computedHash:    text('computed_hash').notNull(),
+    verified:        boolean('verified').notNull().default(false),
+    compression:     smallint('compression').notNull().default(0),
+    version:         smallint('version').notNull().default(0),
+    toolName:        text('tool_name'),
+    blockTime:       timestamp('block_time', { withTimezone: true }),
+    indexedAt:       timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * receipt_batches (v0.7 — trustless dispute evidence)
+ * PDA seeds: ["sap_receipt", escrow_pda, batch_index_u32_le]
+ * ═══════════════════════════════════════════════ */
+
+export const receiptBatches = sapExpSchema.table('receipt_batches', {
+    pda:             text('pda').primaryKey(),
+    escrowPda:       text('escrow_pda').notNull().references(() => escrows.pda, { onDelete: 'cascade' }),
+    batchIndex:      integer('batch_index').notNull(),
+    callsMerkleRoot: text('calls_merkle_root').notNull(),
+    callCount:       integer('call_count').notNull().default(0),
+    totalAmount:     numeric('total_amount').notNull().default('0'),
+    reporter:        text('reporter').notNull(),
+    txSignature:     text('tx_signature'),
+    slot:            bigint('slot', { mode: 'number' }),
+    blockTime:       timestamp('block_time', { withTimezone: true }),
+    createdAt:       timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    indexedAt:       timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * disputes (v0.7 — multi-layer dispute records)
+ * ═══════════════════════════════════════════════ */
+
+export type DisputeType = 'NonDelivery' | 'PartialDelivery' | 'Overcharge' | 'Quality';
+export type ResolutionLayer = 'Pending' | 'Auto' | 'Governance';
+export type DisputeOutcome = 'Pending' | 'Upheld' | 'Rejected' | 'PartialRefund' | 'Split' | 'Expired';
+
+export const disputes = sapExpSchema.table('disputes', {
+    pda:              text('pda').primaryKey(),
+    escrowPda:        text('escrow_pda').notNull().references(() => escrows.pda, { onDelete: 'cascade' }),
+    disputant:        text('disputant').notNull(),
+    agentPda:         text('agent_pda').notNull(),
+    disputeType:      text('dispute_type').$type<DisputeType>().notNull(),
+    resolutionLayer:  text('resolution_layer').$type<ResolutionLayer>().notNull().default('Pending'),
+    outcome:          text('outcome').$type<DisputeOutcome>().notNull().default('Pending'),
+    disputeBond:      numeric('dispute_bond').notNull().default('0'),
+    provenCalls:      integer('proven_calls').notNull().default(0),
+    claimedCalls:     integer('claimed_calls').notNull().default(0),
+    proofDeadline:    bigint('proof_deadline', { mode: 'number' }),
+    reason:           text('reason'),
+    txSignature:      text('tx_signature'),
+    resolvedAt:       timestamp('resolved_at', { withTimezone: true }),
+    createdAt:        timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    indexedAt:        timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * pending_settlements (v0.7 — batch settlement with merkle proof)
+ * ═══════════════════════════════════════════════ */
+
+export const pendingSettlements = sapExpSchema.table('pending_settlements', {
+    pda:                text('pda').primaryKey(),
+    escrowPda:          text('escrow_pda').notNull().references(() => escrows.pda, { onDelete: 'cascade' }),
+    agentPda:           text('agent_pda').notNull(),
+    amount:             numeric('amount').notNull().default('0'),
+    callsCount:         integer('calls_count').notNull().default(0),
+    receiptMerkleRoot:  text('receipt_merkle_root'),
+    status:             text('status').notNull().default('pending'),  // pending | settled | disputed | expired
+    txSignature:        text('tx_signature'),
+    createdAt:          timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    settledAt:          timestamp('settled_at', { withTimezone: true }),
+    indexedAt:          timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
+ * token_metadata — Persistent cache for SPL token metadata
+ * ═══════════════════════════════════════════════ */
+
+export const tokenMetadata = sapExpSchema.table('token_metadata', {
+    mint:       text('mint').primaryKey(),
+    symbol:     text('symbol').notNull(),
+    name:       text('name').notNull(),
+    logo:       text('logo'),
+    uri:        text('uri'),
+    source:     text('source').notNull().default('onchain'), // onchain | metaplex | known | fallback
+    updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

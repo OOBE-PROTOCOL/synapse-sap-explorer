@@ -19,13 +19,13 @@ export async function syncFeedbacks(): Promise<number> {
   let upserted = 0;
 
   for (const f of raw) {
-    const d = f.account;
+    const d = f.account as Record<string, unknown>;
     const row = {
       pda: pk(f.pda),
       agentPda: pk(d.agent),
       reviewer: pk(d.reviewer),
       score: num(d.score),
-      tag: d.tag ?? '',
+      tag: String(d.tag ?? ''),
       isRevoked: Boolean(d.isRevoked),
       commentHash: d.commentHash ? (typeof d.commentHash === 'string' ? d.commentHash : hashToHex(d.commentHash)) : null,
       createdAt: bnToDate(d.createdAt) ?? new Date(),
@@ -39,8 +39,8 @@ export async function syncFeedbacks(): Promise<number> {
         set: conflictUpdateSet(feedbacks, ['pda']),
       });
       upserted++;
-    } catch (e: any) {
-      logErr('feedbacks', `Failed pda=${row.pda.slice(0, 8)}: ${e.message}`);
+    } catch (e: unknown) {
+      logErr('feedbacks', `Failed pda=${row.pda.slice(0, 8)}: ${(e as Error).message}`);
     }
   }
 

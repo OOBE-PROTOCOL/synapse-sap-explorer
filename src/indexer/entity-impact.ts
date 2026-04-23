@@ -18,12 +18,12 @@ export function inferTouchedEntities(sapInstructions: string[]): Set<EntityGroup
   for (const raw of sapInstructions) {
     const ix = raw.toLowerCase();
 
-    if (ix.includes('tool')) touched.add('tools');
-    if (ix.includes('escrow') || ix.includes('settle') || ix.includes('deposit')) touched.add('escrows');
+    if (ix.includes('tool') || ix.includes('schema') || ix.includes('inscribe')) touched.add('tools');
+    if (ix.includes('escrow') || ix.includes('settle') || ix.includes('deposit') || ix.includes('dispute') || ix.includes('subscription') || ix.includes('stake')) touched.add('escrows');
     if (ix.includes('attest')) touched.add('attestations');
     if (ix.includes('feedback') || ix.includes('review') || ix.includes('reputation')) touched.add('feedbacks');
-    if (ix.includes('vault') || ix.includes('memory') || ix.includes('inscription')) touched.add('vaults');
-    if (ix.includes('agent') || ix.includes('register') || ix.includes('profile') || ix.includes('stats')) touched.add('agents');
+    if (ix.includes('vault') || ix.includes('memory') || ix.includes('inscription') || ix.includes('ledger') || ix.includes('session') || ix.includes('checkpoint')) touched.add('vaults');
+    if (ix.includes('agent') || ix.includes('register') || ix.includes('profile') || ix.includes('stats') || ix.includes('capability') || ix.includes('protocol') || ix.includes('index') || ix.includes('update')) touched.add('agents');
   }
 
   // If we only see generic SAP calls, refresh at least agents (most central relation root).

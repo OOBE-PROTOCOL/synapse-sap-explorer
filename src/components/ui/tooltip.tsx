@@ -1,30 +1,74 @@
 'use client'
 
 import * as React from 'react'
-import * as TooltipPrimitive from '@radix-ui/react-tooltip'
+import { Tooltip as FlowbiteTooltip } from 'flowbite-react'
 
-import { cn } from '~/lib/utils'
+/* ── TooltipProvider (no-op for compat) ── */
+function TooltipProvider({ children }: { children: React.ReactNode; delayDuration?: number }) {
+  return <>{children}</>
+}
 
-const TooltipProvider = TooltipPrimitive.Provider
+/* ── Tooltip (wrapper) ── */
+const TooltipContext = React.createContext<{
+  content: React.ReactNode
+  setContent: (c: React.ReactNode) => void
+  className: string
+  setClassName: (c: string) => void
+}>({ content: null, setContent: () => {}, className: '', setClassName: () => {} })
 
-const Tooltip = TooltipPrimitive.Root
+function Tooltip({ children }: { children: React.ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; delayDuration?: number }) {
+  const [content, setContent] = React.useState<React.ReactNode>(null)
+  const [className, setClassName] = React.useState('')
 
-const TooltipTrigger = TooltipPrimitive.Trigger
+  return (
+    <TooltipContext.Provider value={{ content, setContent, className, setClassName }}>
+      {children}
+    </TooltipContext.Provider>
+  )
+}
 
-const TooltipContent = React.forwardRef<
-  React.ElementRef<typeof TooltipPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <TooltipPrimitive.Content
-    ref={ref}
-    sideOffset={sideOffset}
-    className={cn(
-      'z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-      className,
-    )}
-    {...props}
-  />
-))
-TooltipContent.displayName = TooltipPrimitive.Content.displayName
+/* ── TooltipTrigger ── */
+function TooltipTrigger({
+  children,
+  asChild,
+  className: triggerClassName,
+  ...props
+}: React.HTMLAttributes<HTMLElement> & { asChild?: boolean }) {
+  const { content, className } = React.useContext(TooltipContext)
+
+  return (
+    <FlowbiteTooltip
+      content={content ?? ''}
+      placement="top"
+      theme={{ target: triggerClassName ?? 'w-fit' }}
+      className={`z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md ${className}`}
+    >
+      {asChild && React.isValidElement(children) ? (
+        children
+      ) : (
+        <span {...props}>{children}</span>
+      )}
+    </FlowbiteTooltip>
+  )
+}
+
+/* ── TooltipContent ── */
+function TooltipContent({
+  children,
+  className,
+}: React.HTMLAttributes<HTMLDivElement> & { sideOffset?: number; side?: 'top' | 'right' | 'bottom' | 'left'; className?: string }) {
+  const { setContent, setClassName } = React.useContext(TooltipContext)
+
+  React.useEffect(() => {
+    setContent(children)
+  }, [children, setContent])
+
+  React.useEffect(() => {
+    setClassName(className ?? '')
+  }, [className, setClassName])
+
+  // Content is rendered by FlowbiteTooltip, not here
+  return null
+}
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }

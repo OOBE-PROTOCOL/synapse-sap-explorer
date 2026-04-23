@@ -70,7 +70,7 @@ export default function NodeDetailModal({ node, onClose }: Props) {
       onClick={handleBackdrop}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <Card className="relative w-[420px] max-w-[90vw] max-h-[80vh] overflow-y-auto shadow-2xl" style={{ scrollbarWidth: 'none' }}>
+        <Card className="relative w-full max-w-md max-h-[80vh] overflow-y-auto shadow-2xl" style={{ scrollbarWidth: 'none' }}>
         {/* ── Close button ──────────────────────── */}
         <Button
           variant="ghost"
@@ -91,7 +91,7 @@ export default function NodeDetailModal({ node, onClose }: Props) {
             />
             <div className="min-w-0 flex-1">
               <h2 className="text-base font-bold truncate">{node.name}</h2>
-              <p className="text-[10px] uppercase tracking-[0.2em] font-medium mt-0.5" style={{ color: color.dot }}>
+              <p className="text-micro uppercase tracking-[0.2em] font-medium mt-0.5" style={{ color: color.dot }}>
                 {color.label}
               </p>
             </div>
@@ -164,7 +164,7 @@ function AgentDetail({ node }: { node: SimNode }) {
         <Section title={`Capabilities (${capabilities.length})`}>
           <div className="flex flex-wrap gap-1.5">
             {capabilities.map((c) => (
-              <Badge key={c} variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-600/20 dark:border-amber-400/20 text-[10px]">
+              <Badge key={c} variant="outline" className="text-[hsl(var(--neon-amber))] border-[hsl(var(--neon-amber)/0.2)] text-micro">
                 {c}
               </Badge>
             ))}
@@ -180,7 +180,7 @@ function AgentDetail({ node }: { node: SimNode }) {
 
       {m.x402 && (
         <Section title="x402 Endpoint">
-          <span className="font-mono text-[10px] text-cyan-600 dark:text-cyan-400 break-all">{String(m.x402)}</span>
+          <span className="font-mono text-micro text-[hsl(var(--neon-orange))] break-all">{String(m.x402)}</span>
         </Section>
       )}
 
@@ -206,7 +206,7 @@ function ToolDetail({ node }: { node: SimNode }) {
       </Section>
       <Section title="Specification">
         <Row label="Category" value={String(m.category ?? '—')} />
-        <Row label="HTTP Method" value={<span className="font-mono text-xs text-cyan-600 dark:text-cyan-400">{String(m.method ?? '—')}</span>} />
+        <Row label="HTTP Method" value={<span className="font-mono text-xs text-primary dark:text-primary">{String(m.method ?? '—')}</span>} />
         <Row label="Required Params" value={String(m.requiredParams ?? 0)} />
         <Row label="Total Params" value={String(m.paramsCount ?? 0)} />
         <Row label="Compound" value={m.isCompound ? 'Yes' : 'No'} />
@@ -233,7 +233,7 @@ function ProtocolDetail({ node }: { node: SimNode }) {
   return (
     <>
       <Section title="Protocol">
-        <Row label="Protocol ID" value={<span className="font-mono text-xs text-cyan-600 dark:text-cyan-400">{String(m.protocolId ?? node.name)}</span>} />
+        <Row label="Protocol ID" value={<span className="font-mono text-xs text-primary dark:text-primary">{String(m.protocolId ?? node.name)}</span>} />
         <Row label="Agents" value={String(m.agentCount ?? agents.length)} />
       </Section>
       {agents.length > 0 && (
@@ -269,7 +269,7 @@ function CapabilityDetail({ node }: { node: SimNode }) {
             {owners.map((o) => <Address key={o} value={o} copy className="block" />)}
           </div>
         ) : (
-          <p className="text-[10px] text-muted-foreground">No owner information available</p>
+          <p className="text-micro text-muted-foreground">No owner information available</p>
         )}
       </Section>
     </>
@@ -280,7 +280,7 @@ function CapabilityDetail({ node }: { node: SimNode }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-2">{title}</p>
+      <p className="text-hud font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-2">{title}</p>
       <div className="space-y-1.5">{children}</div>
     </div>
   );

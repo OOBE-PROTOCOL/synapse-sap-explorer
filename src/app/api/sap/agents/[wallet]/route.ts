@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
  * 2) DB first → RPC fallback → DB write-back
  * ────────────────────────────────────────────── */
 
-import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
+import { synapseResponse } from '~/lib/synapse/client';
 import {
   getAgentProfile,
   serializeAgentProfile,
@@ -16,41 +16,48 @@ import { swr } from '~/lib/cache';
 import { selectAgentByWallet, upsertAgent } from '~/lib/db/queries';
 import { dbAgentToApi, apiAgentToDb } from '~/lib/db/mappers';
 
-export const GET = withSynapseError(async (
+export async function GET(
   _req: Request,
-  ...args: unknown[]
-) => {
-  const { params: paramsPromise } = args[0] as { params: Promise<{ wallet: string }> };
-  const { wallet } = await paramsPromise;
+  { params }: { params: Promise<{ wallet: string }> },
+) {
+  try {
+    const { wallet } = await params;
 
-  const profile = await swr(`agent:${wallet}`, async () => {
-    // --- DB first ---
-    try {
-      const row = await selectAgentByWallet(wallet);
-      if (row) return { source: 'db' as const, profile: dbAgentToApi(row) };
-    } catch { /* DB unavailable — fall through */ }
+    const profile = await swr(`agent:${wallet}`, async () => {
+      // --- DB first ---
+      try {
+        const row = await selectAgentByWallet(wallet);
+        if (row) return { source: 'db' as const, profile: dbAgentToApi(row) };
+      } catch (e) { console.warn(`[agent/${wallet}] DB read failed:`, (e as Error).message); /* fall through to RPC */ }
 
-    // --- RPC fallback ---
-    const rpcProfile = await getAgentProfile(wallet);
-    if (!rpcProfile) return null;
+      // --- RPC fallback ---
+      const rpcProfile = await getAgentProfile(wallet);
+      if (!rpcProfile) return null;
 
-    const serialized = serializeAgentProfile(rpcProfile);
+      const serialized = serializeAgentProfile(rpcProfile);
 
-    // Write-back to DB (non-blocking)
-    try {
-      const dbRow = apiAgentToDb(serialized);
-      upsertAgent(dbRow).catch(() => {});
-    } catch { /* ignore */ }
+      // Write-back to DB (non-blocking)
+      try {
+        const dbRow = apiAgentToDb(serialized);
+        upsertAgent(dbRow).catch(() => {});
+      } catch (e) { console.warn(`[agent/${wallet}] DB write-back failed:`, (e as Error).message); }
 
-    return { source: 'rpc' as const, profile: serialized };
-  }, { ttl: 60_000, swr: 300_000 });
+      return { source: 'rpc' as const, profile: serialized };
+    }, { ttl: 60_000, swr: 300_000 });
 
-  if (!profile) {
+    if (!profile) {
+      return synapseResponse(
+        { error: 'Agent not found' },
+        { status: 404 },
+      );
+    }
+
+    return synapseResponse({ profile: profile.profile });
+  } catch (err: unknown) {
+    console.error('[agent/wallet]', err);
     return synapseResponse(
-      { error: 'Agent not found' },
-      { status: 404 },
+      { error: (err as Error).message ?? 'Failed to fetch agent' },
+      { status: 500 },
     );
   }
-
-  return synapseResponse({ profile: profile.profile });
-});
+}
