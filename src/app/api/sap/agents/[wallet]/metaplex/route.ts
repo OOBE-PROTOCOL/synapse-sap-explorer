@@ -17,38 +17,21 @@ export const dynamic = 'force-dynamic';
  * no link is detected.
  * ────────────────────────────────────────────── */
 
-import { PublicKey } from '@solana/web3.js';
 import { synapseResponse } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
 import { getMetaplexLinkSnapshot } from '~/lib/sap/metaplex-link';
-import { getSapClient } from '~/lib/sap/discovery';
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ wallet: string }> },
 ) {
   try {
-    const { wallet: agentPdaStr } = await params;
-    const agentPda = new PublicKey(agentPdaStr);
+    const { wallet } = await params;
 
-    // Read the AgentAccount to get the owner wallet
-    const agent = await swr(
-      `agent:${agentPdaStr}:account`,
-      () => getSapClient().agent.fetch(agentPda),
-      { ttl: 300_000, swr: 600_000 }, // 5min fresh / 10min stale
-    );
-
-    if (!agent) {
-      return synapseResponse(
-        { linked: false, asset: null, expectedUrl: '', sapAgentPda: agentPdaStr, agentIdentityUri: null, registration: null, error: 'Agent not found on-chain' },
-        { status: 404 },
-      );
-    }
-
-    // Now resolve the Metaplex link using the owner wallet
+    // Route param already is the owner wallet.
     const snapshot = await swr(
-      `agent:${agentPdaStr}:metaplex`,
-      () => getMetaplexLinkSnapshot(agent.wallet.toBase58()),
+      `agent:${wallet}:metaplex`,
+      () => getMetaplexLinkSnapshot(wallet),
       { ttl: 60_000, swr: 300_000 },
     );
 

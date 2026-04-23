@@ -116,10 +116,10 @@ export default function OverviewPage() {
   const [copiedSnippet, setCopiedSnippet] = useState<'remote' | 'local' | null>(null);
 
   const remoteSkillCommand = `curl -fsSL https://synapse.oobeprotocol.ai/skills.md \\
-  -o ./skills/synapse-skills-0.9.1.md`;
-  const localSkillCommand = `pnpm add -D @oobe-protocol-labs/synapse-sap-sdk@0.9.1
+  -o ./skills/synapse-skills-0.9.2.md`;
+  const localSkillCommand = `pnpm add -D @oobe-protocol-labs/synapse-sap-sdk@0.9.2
 cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
-  ./skills/synapse-skills-0.9.1.md`;
+  ./skills/synapse-skills-0.9.2.md`;
 
   const copySnippet = useCallback(async (which: 'remote' | 'local') => {
     const value = which === 'remote' ? remoteSkillCommand : localSkillCommand;
@@ -355,7 +355,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
             <h2 className="text-sm font-semibold text-foreground">Initialize your agent context with Synapse skills</h2>
             </div>
             <p className="text-xs text-muted-foreground max-w-3xl">
-              Use one of the following CLI paths to load the official skill pack and keep your agent aligned with Synapse SAP SDK version 0.9.1.
+              Use one of the following CLI paths to load the official skill pack and keep your agent aligned with Synapse SAP SDK version 0.9.2.
             </p>
           </div>
 

@@ -917,7 +917,7 @@ function ArchitectureOverview() {
 
   return (
     <Card className="bg-card/50 backdrop-blur-lg border-border/30">
-      <CardContent className="p-6">
+      <CardContent className="p-6 sm:pt-6">
         <h3 className="text-base font-semibold gradient-text mb-5 flex items-center gap-2">
           <Network className="h-4 w-4" />
           Architecture Stack
@@ -1019,7 +1019,7 @@ function PdaRelationshipMap() {
 
   return (
     <Card className="bg-card/50 backdrop-blur-lg border-border/30">
-      <CardContent className="p-6">
+      <CardContent className="p-6 sm:pt-6">
         <h3 className="text-base font-semibold gradient-text mb-5 flex items-center gap-2">
           <Hash className="h-4 w-4" />
           PDA Authority Chain
@@ -1094,7 +1094,7 @@ function DataSourcesPanel() {
 
   return (
     <Card className="bg-card/50 backdrop-blur-lg border-border/30">
-      <CardContent className="p-6">
+      <CardContent className="p-6 sm:pt-6">
         <h3 className="text-base font-semibold gradient-text mb-5 flex items-center gap-2">
           <Database className="h-4 w-4" />
           Data Source Architecture
@@ -1225,7 +1225,7 @@ export default function ProtocolFlowPage() {
 
             {/* Detail panel */}
             <Card className="bg-card/50 backdrop-blur-lg border-border/30">
-              <CardContent className="p-6">
+              <CardContent className="p-6 sm:pt-6">
                 <StageDetail stage={FLOW_STAGES[selectedStage]} />
               </CardContent>
             </Card>
@@ -1255,7 +1255,7 @@ export default function ProtocolFlowPage() {
                   {selectedStage === i && (
                     <div className="ml-14 mb-6">
                       <Card className="bg-card/50 backdrop-blur-lg border-border/30">
-                        <CardContent className="p-4">
+                        <CardContent className="p-4 sm:pt-4">
                           <StageDetail stage={stage} />
                         </CardContent>
                       </Card>
