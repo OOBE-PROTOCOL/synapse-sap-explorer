@@ -18,7 +18,7 @@
 
 import { PublicKey } from '@solana/web3.js';
 import { deriveAgent } from '@oobe-protocol-labs/synapse-sap-sdk/pda';
-import { getSapClient, getRpcConfig } from './discovery';
+import { getRpcConfig } from './discovery';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -191,20 +191,16 @@ export async function getMetaplexLinkSnapshot(
     };
   }
 
-  // 3. Use the bridge to verify + hydrate the registration JSON.
+  // 3. Hydrate registration JSON directly from the AgentIdentity URI.
   try {
-    const { url } = getRpcConfig();
-    const profile = await getSapClient().metaplex.getUnifiedProfile({
-      asset: new PublicKey(pickedAsset),
-      rpcUrl: url,
-    });
+    const registration = await fetchMetadataJson(pickedUri);
     return {
       sapAgentPda,
       asset: pickedAsset,
       expectedUrl,
-      linked: profile.linked,
-      agentIdentityUri: profile.mpl?.agentIdentityUri ?? pickedUri,
-      registration: profile.mpl?.registration ?? null,
+      linked: true,
+      agentIdentityUri: pickedUri,
+      registration,
       error: null,
     };
   } catch (e) {
