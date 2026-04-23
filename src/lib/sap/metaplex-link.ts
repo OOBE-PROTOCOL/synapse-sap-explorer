@@ -251,7 +251,7 @@ export type MetaplexAssetsResponse = {
 async function fetchMetadataJson(uri: string | null): Promise<{ description?: string; image?: string } | null> {
   if (!uri) return null;
   try {
-    const res = await fetch(uri, { timeout: 5000 });
+    const res = await fetch(uri, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
     const json = await res.json();
     return { description: json.description ?? null, image: json.image ?? null };
@@ -312,7 +312,8 @@ export async function getMetaplexAssetsForWallet(
   const items: MetaplexNftItem[] = await Promise.all(assets.map(async (a) => {
     const uri = extractAgentIdentityUri(a);
     const linkedToThisAgent = !!uri && uri.endsWith(expectedSuffix);
-    const updateAuthority = (a as any).authorities?.[0]?.address ?? null;
+    const updateAuthority = (a as unknown as { authorities?: Array<{ address?: string | null }> })
+      .authorities?.[0]?.address ?? null;
     
     // Fetch metadata JSON to get description
     let description: string | null = null;
