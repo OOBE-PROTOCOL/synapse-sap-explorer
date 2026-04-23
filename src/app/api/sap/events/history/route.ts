@@ -14,7 +14,8 @@
  * ────────────────────────────────────────────── */
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
+import { getSharedPool } from '~/db';
 import type { StreamEvent } from '~/types';
 
 export const runtime = 'nodejs';
@@ -22,17 +23,8 @@ export const dynamic = 'force-dynamic';
 
 /* ── DB pool (shared with stream route) ────── */
 
-const _g = globalThis as unknown as { __sseHistoryPool?: InstanceType<typeof Pool> };
 function getPool(): Pool {
-  if (!_g.__sseHistoryPool) {
-    _g.__sseHistoryPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 3,
-      connectionTimeoutMillis: 5000,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
-  }
-  return _g.__sseHistoryPool;
+  return getSharedPool();
 }
 
 export async function GET(req: NextRequest) {

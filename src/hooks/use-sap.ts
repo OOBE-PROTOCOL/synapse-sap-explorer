@@ -114,7 +114,7 @@ export function useAgents(params?: Record<string, string>) {
   return useFetch<AgentsResponse>(`/api/sap/agents${qs}`, { pollInterval: POLL.agents, keepStale: true });
 }
 
-export type { EnrichedAgentsResponse, EnrichedAgent, TokenBalance, AgentBalanceSummary, AgentMetadata, AgentStakeSummary } from '~/app/api/sap/agents/enriched/route';
+export type { EnrichedAgentsResponse, EnrichedAgent, TokenBalance, AgentBalanceSummary, AgentMetadata, AgentStakeSummary, AgentMetaplexBadge } from '~/app/api/sap/agents/enriched/route';
 
 type EnrichedAgentsRes = import('~/app/api/sap/agents/enriched/route').EnrichedAgentsResponse;
 
@@ -139,6 +139,68 @@ type WalletBalancesRes = import('~/app/api/sap/agents/[wallet]/balances/route').
 export function useAgentBalances(wallet: string | null) {
   const url = wallet ? `/api/sap/agents/${wallet}/balances` : null;
   return useFetch<WalletBalancesRes>(url, { pollInterval: 30_000, keepStale: true });
+}
+
+/* ── Metaplex Core link (SDK 0.9.0 — AgentIdentity + EIP-8004) ── */
+
+export type AgentMetaplexLink = {
+  sapAgentPda: string;
+  asset: string | null;
+  expectedUrl: string;
+  linked: boolean;
+  agentIdentityUri: string | null;
+  registration: {
+    schema?: string;
+    synapseAgent?: string;
+    owner?: string;
+    name?: string;
+    description?: string;
+    capabilities?: string[];
+    executives?: Array<{ address: string; permissions?: number; expiresAt?: number | null }>;
+    services?: Array<{ id: string; type: string; url?: string }>;
+    issuedAt?: number;
+    version?: string;
+  } | null;
+  error: string | null;
+};
+
+/**
+ * Resolve the SAP × Metaplex Core link for an agent wallet.
+ * Returns `linked: false` and `asset: null` when no MPL Core asset
+ * carries an AgentIdentity URI pointing at this SAP agent's PDA.
+ */
+export function useAgentMetaplex(wallet: string | null) {
+  const url = wallet ? `/api/sap/agents/${wallet}/metaplex` : null;
+  return useFetch<AgentMetaplexLink>(url, { keepStale: true });
+}
+
+/* ── MPL Core / EIP-8004 NFT inventory ───────────────────── */
+
+export type AgentNftItem = {
+  asset: string;
+  name: string | null;
+  description: string | null;
+  image: string | null;
+  updateAuthority: string | null;
+  agentIdentityUri: string | null;
+  linkedToThisAgent: boolean;
+  hasAgentIdentity: boolean;
+};
+
+export type AgentNftsResponse = {
+  sapAgentPda: string;
+  expectedUrl: string;
+  total: number;
+  withAgentIdentity: number;
+  linkedToThisAgent: number;
+  items: AgentNftItem[];
+  error: string | null;
+};
+
+/** All MPL Core NFTs owned by the wallet, with EIP-8004 AgentIdentity flags. */
+export function useAgentNfts(wallet: string | null) {
+  const url = wallet ? `/api/sap/agents/${wallet}/nfts` : null;
+  return useFetch<AgentNftsResponse>(url, { keepStale: true });
 }
 
 /* ── Token metadata (shared, DB-cached) ───────────────── */

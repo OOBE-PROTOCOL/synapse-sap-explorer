@@ -9,7 +9,11 @@ import * as relations from './relations';
  * and go straight to RPC. Recheck every 2min.
  * Persisted on globalThis to survive HMR reloads in dev.
  */
-const _g = globalThis as unknown as { __dbDown?: boolean; __dbDownSince?: number };
+const _g = globalThis as unknown as {
+  __dbDown?: boolean;
+  __dbDownSince?: number;
+  __sapSharedPool?: Pool;
+};
 const DB_RECHECK_MS = 120_000;
 
 export function isDbDown(): boolean {
@@ -30,12 +34,30 @@ export function markDbUp(): void {
   _g.__dbDown = false;
 }
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 20,
-    connectionTimeoutMillis: 3000,  // fail fast: 3s instead of default 30s
-    ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-});
+/**
+ * Single shared pg.Pool for the entire app. Cached on globalThis so HMR
+ * reloads in dev don't leak connections (Next.js re-evaluates modules on
+ * every save). All raw-pg consumers MUST import this via getSharedPool()
+ * — never instantiate `new Pool()` elsewhere.
+ */
+function makePool(): Pool {
+    return new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 10,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 3000,
+        ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+    });
+}
+
+export function getSharedPool(): Pool {
+    if (!_g.__sapSharedPool) {
+        _g.__sapSharedPool = makePool();
+    }
+    return _g.__sapSharedPool;
+}
+
+const pool = getSharedPool();
 
 // Start with circuit breaker TRIPPED so no route wastes 3s on a doomed
 // connection.  A background probe flips it open only if DB is reachable.

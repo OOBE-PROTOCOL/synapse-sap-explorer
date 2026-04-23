@@ -1,12 +1,11 @@
 /* x402 direct payment scan every 60s (agent ATA polling) */
 
-import { Pool } from 'pg';
 import {
   SapPostgres,
   SapSyncEngine,
 } from '@oobe-protocol-labs/synapse-sap-sdk';
 import { getSapClient } from './discovery';
-import { markDbUp } from '~/db';
+import { markDbUp, getSharedPool } from '~/db';
 import { syncAllX402DirectPayments, reclassifyX402Payments } from './x402-scanner';
 import { backfillEventsFromLogs } from '~/indexer/event-extractor';
 
@@ -38,12 +37,7 @@ function warnDedup(key: string, msg: string, cooldownMs = 5 * 60_000) {
  */
 function getSapPg(): SapPostgres {
   if (!_g.__sapPg) {
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 5,
-      connectionTimeoutMillis: 5000,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
+    const pool = getSharedPool();
     const client = getSapClient();
     _g.__sapPg = new SapPostgres(pool, client, false);
   }

@@ -10,23 +10,14 @@ import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
 import { findAllVaults, serialize } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
 import { selectAllVaults, upsertVaults } from '~/lib/db/queries';
-import { isDbDown, markDbDown } from '~/db';
+import { isDbDown, markDbDown, getSharedPool } from '~/db';
 import { dbVaultToApi, apiVaultToDb } from '~/lib/db/mappers';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 
 /* ── DB pool for sap_* queries ── */
 
-const _g = globalThis as unknown as { __vaultsPool?: InstanceType<typeof Pool> };
 function getPool(): Pool {
-  if (!_g.__vaultsPool) {
-    _g.__vaultsPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 3,
-      connectionTimeoutMillis: 5000,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
-  }
-  return _g.__vaultsPool;
+  return getSharedPool();
 }
 
 export type EnrichedVault = {

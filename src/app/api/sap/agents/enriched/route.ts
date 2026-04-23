@@ -11,6 +11,7 @@ import {
 } from '~/lib/sap/discovery';
 import { fetchAgentWellKnownBatch, type AgentWellKnown } from '~/lib/sap/well-known';
 import { resolveTokens } from '~/lib/sap/token-metadata';
+import { getMetaplexLinkSnapshot } from '~/lib/sap/metaplex-link';
 import { swr, peek } from '~/lib/cache';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
 
@@ -65,6 +66,14 @@ export interface EnrichedAgent {
   deployedTokenCount: number;
   /** Agent staking collateral (null if no stake account) */
   staking: AgentStakeSummary | null;
+  /** Metaplex Core link snapshot (SDK 0.9.0). Null when discovery fails. */
+  metaplex: AgentMetaplexBadge | null;
+}
+
+/** Compact MPL Core link summary for list/card surfaces. */
+export interface AgentMetaplexBadge {
+  asset: string | null;
+  linked: boolean;
 }
 
 export interface EnrichedAgentsResponse {
@@ -230,7 +239,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     const wallets = agents.map((a) => a.identity?.wallet).filter(Boolean) as string[];
 
     // Fetch well-known, metadata, raw balances, on-chain tools, and staking in parallel
-    const [wellKnownMap, allTools, stakingResults, ...rest] = await Promise.all([
+    const [wellKnownMap, allTools, stakingResults, metaplexResults, ...rest] = await Promise.all([
       fetchAgentWellKnownBatch(endpoints),
       findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
       // Batch fetch staking for all agents
@@ -255,6 +264,13 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
             return null;
           }
         }),
+      ),
+      // Batch resolve Metaplex Core link via DAS — one call per wallet,
+      // never throws (metaplex-link helper captures errors).
+      Promise.all(
+        wallets.map((w) =>
+          getMetaplexLinkSnapshot(w).catch(() => null),
+        ),
       ),
       ...agentUris.map((uri) => fetchAgentMetadata(uri)),
       ...wallets.map((w) => fetchRawBalances(w)),
@@ -335,6 +351,11 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
         onChainToolCount: toolCountByAgent.get(agent.pda) ?? 0,
         deployedTokenCount: wallet ? (deployerCountMap.get(wallet) ?? 0) : 0,
         staking: (stakingResults as (AgentStakeSummary | null)[])[agentIdx] ?? null,
+        metaplex: ((): AgentMetaplexBadge | null => {
+          const snap = (metaplexResults as Array<Awaited<ReturnType<typeof getMetaplexLinkSnapshot>> | null>)[agentIdx];
+          if (!snap) return null;
+          return { asset: snap.asset, linked: snap.linked };
+        })(),
       };
     });
 

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Bot } from 'lucide-react';
 import { cn } from '~/lib/utils';
+import Image from 'next/image';
 
 type AgentAvatarProps = {
   name: string;
@@ -45,21 +46,16 @@ export function AgentAvatar({ name, endpoint, logo, size = 48, className }: Agen
   return (
     <div
       className={cn(
-        'relative shrink-0 rounded-3xl overflow-hidden border border-neutral-800',
+        'relative shrink-0 rounded-3xl overflow-hidden border border-transparent',
         className,
       )}
       style={{ width: size, height: size }}
     >
       {showImg ? (
-        <img
-          src={logoUrl || faviconUrl!}
-          alt={`${name} avatar`}
-          className="h-full w-full object-contain bg-neutral-900 p-1"
-          onError={() => {
-            if (logoUrl) setLogoError(true);
-            else setFaviconError(true);
-          }}
-        />
+        <Image src={logoUrl || faviconUrl!} alt={`${name} avatar`} fill className="object-contain bg-neutral-900 p-1" onError={() => {
+          if (logoUrl) setLogoError(true);
+          else setFaviconError(true);
+        }} />
       ) : (
         <div
           className="h-full w-full flex items-center justify-center"

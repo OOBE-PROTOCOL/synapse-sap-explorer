@@ -1,9 +1,10 @@
 
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { EventParser } from '@oobe-protocol-labs/synapse-sap-sdk/events';
 import { getSapClient } from '~/lib/sap/discovery';
+import { getSharedPool } from '~/db';
 
-const _g = globalThis as unknown as { __evtParser?: EventParser; __evtPool?: Pool };
+const _g = globalThis as unknown as { __evtParser?: EventParser };
 
 function getEventParser(): EventParser {
   if (!_g.__evtParser) {
@@ -14,15 +15,7 @@ function getEventParser(): EventParser {
 }
 
 function getEvtPool(): Pool {
-  if (!_g.__evtPool) {
-    _g.__evtPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 2,
-      connectionTimeoutMillis: 5000,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
-  }
-  return _g.__evtPool;
+  return getSharedPool();
 }
 
 /**

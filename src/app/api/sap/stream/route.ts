@@ -16,7 +16,8 @@
  * ────────────────────────────────────────────── */
 
 import { type NextRequest } from 'next/server';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
+import { getSharedPool } from '~/db';
 import type { StreamEvent } from '~/types';
 
 export const runtime = 'nodejs';
@@ -29,17 +30,8 @@ const MAX_BACKOFF   = 30_000;   // max backoff on consecutive DB errors
 
 /* ── DB pool ──────────────────────────────────────────── */
 
-const _g = globalThis as unknown as { __sseStreamPool?: InstanceType<typeof Pool> };
 function getPool(): Pool {
-  if (!_g.__sseStreamPool) {
-    _g.__sseStreamPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 3,
-      connectionTimeoutMillis: 5000,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
-  }
-  return _g.__sseStreamPool;
+  return getSharedPool();
 }
 
 /* ── Queries ──────────────────────────────────────────── */

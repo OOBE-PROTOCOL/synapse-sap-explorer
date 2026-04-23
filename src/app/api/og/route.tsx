@@ -4,6 +4,8 @@
  * Modes:
  *   ?type=tx&sig=...&status=...&block=...&time=...&fee=...&programs=...
  *   ?type=agent&name=...&score=...&calls=...&tools=...&status=...
+ *   ?type=entity&kind=...&title=...&id=...&desc=...&m1=...&v1=...&m2=...&v2=...&m3=...&v3=...
+ *   ?type=docs&title=...&desc=...&section=...
  *   ?type=page&title=...&desc=...
  *   (default) — branded homepage card
  *
@@ -25,6 +27,8 @@ export async function GET(req: NextRequest) {
 
   if (type === 'tx') return renderTxOG(searchParams);
   if (type === 'agent') return renderAgentOG(searchParams);
+  if (type === 'entity') return renderEntityOG(searchParams);
+  if (type === 'docs') return renderDocsOG(searchParams);
   if (type === 'page') return renderPageOG(searchParams);
   return renderDefaultOG();
 }
@@ -46,46 +50,83 @@ function renderTxOG(p: URLSearchParams) {
   const fee = p.get('fee') ?? '--';
   const programs = p.get('programs') ?? '--';
   const isSuccess = status === 'success';
+  const shortSig = sig.length > 28 ? `${sig.slice(0, 18)}...${sig.slice(-8)}` : sig;
 
   return new ImageResponse(
     (
       <div
         style={{
-          width: '1200px', height: '630px', display: 'flex', flexDirection: 'column',
-          background: 'linear-gradient(135deg, #0e0b16 0%, #1a1230 50%, #0e0b16 100%)',
-          fontFamily: 'monospace', padding: '60px',
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          background: 'linear-gradient(135deg, #081523 0%, #0b1e31 52%, #081523 100%)',
+          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          padding: '52px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
-          <Logo />
-          <span style={{ color: '#a1a1aa', fontSize: '20px', letterSpacing: '0.2em' }}>SYNAPSE EXPLORER</span>
-          <span style={{ color: '#52525b', fontSize: '18px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-          <span style={{ color: '#e4e4e7', fontSize: '28px', fontWeight: 600 }}>Transaction</span>
-          <div style={{
-            padding: '4px 16px', borderRadius: '9999px',
-            background: isSuccess ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-            color: isSuccess ? '#34d399' : '#f87171', fontSize: '18px', fontWeight: 600,
-          }}>
-            {isSuccess ? 'Success' : 'Failed'}
-          </div>
-        </div>
-        <div style={{ display: 'flex', marginBottom: '40px', maxWidth: '1080px' }}>
-          <span style={{ color: '#a78bfa', fontSize: '18px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{sig}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '40px', marginTop: 'auto' }}>
-          {[
-            { label: 'Block', value: block },
-            { label: 'Timestamp', value: time },
-            { label: 'Fee', value: fee },
-            { label: 'Programs', value: programs },
-          ].map((item) => (
-            <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ color: '#71717a', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{item.label}</span>
-              <span style={{ color: '#e4e4e7', fontSize: '22px', fontWeight: 600 }}>{item.value}</span>
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <Logo size={34} />
+              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
+                Synapse Explorer
+              </span>
+              <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
             </div>
-          ))}
+
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: '48px', gap: '14px' }}>
+              <span style={{ color: '#e2e8f0', fontSize: '56px', fontWeight: 800, lineHeight: 1 }}>Transaction</span>
+              <span style={{ color: '#9fb6cf', fontSize: '28px' }}>Real-time on-chain details</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
+                <div
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '9999px',
+                    background: isSuccess ? 'rgba(16, 185, 129, 0.16)' : 'rgba(239, 68, 68, 0.18)',
+                    color: isSuccess ? '#34d399' : '#f87171',
+                    fontSize: '16px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {isSuccess ? 'Success' : 'Failed'}
+                </div>
+                <span style={{ color: '#64748b', fontSize: '14px' }}>Block {block}</span>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ color: '#64748b', fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Signature</span>
+              <span style={{ color: '#c4b5fd', fontSize: '20px', fontFamily: 'ui-monospace, Menlo, Monaco, monospace' }}>{shortSig}</span>
+            </div>
+          </div>
+
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[
+              { label: 'Timestamp', value: time },
+              { label: 'Fee', value: fee },
+              { label: 'Programs', value: programs },
+              { label: 'Network', value: 'Solana Mainnet' },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(71, 85, 105, 0.42)',
+                  background: 'rgba(7, 18, 34, 0.75)',
+                  padding: '14px 16px',
+                }}
+              >
+                <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{item.label}</span>
+                <span style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 700 }}>{item.value}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 'auto', color: '#334155', fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              tx/{shortSig}
+            </div>
+          </div>
         </div>
       </div>
     ),
@@ -96,47 +137,235 @@ function renderTxOG(p: URLSearchParams) {
 /* ── Agent OG ── */
 function renderAgentOG(p: URLSearchParams) {
   const name = p.get('name') ?? 'Unknown Agent';
+  const wallet = p.get('wallet') ?? '--';
   const score = p.get('score') ?? '0';
   const calls = p.get('calls') ?? '0';
   const tools = p.get('tools') ?? '0';
   const status = p.get('status') === 'active' ? 'Active' : 'Inactive';
   const isActive = status === 'Active';
+  const shortWallet = wallet.length > 20 ? `${wallet.slice(0, 10)}...${wallet.slice(-8)}` : wallet;
 
   return new ImageResponse(
     (
       <div
         style={{
-          width: '1200px', height: '630px', display: 'flex', flexDirection: 'column',
-          background: 'linear-gradient(135deg, #0e0b16 0%, #1a1230 50%, #0e0b16 100%)',
-          fontFamily: 'monospace', padding: '60px',
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          background: 'linear-gradient(135deg, #071325 0%, #0f2137 52%, #071325 100%)',
+          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          padding: '52px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
-          <Logo />
-          <span style={{ color: '#a1a1aa', fontSize: '20px', letterSpacing: '0.2em' }}>SYNAPSE EXPLORER</span>
-          <span style={{ color: '#52525b', fontSize: '18px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-          <span style={{ color: '#e4e4e7', fontSize: '36px', fontWeight: 700 }}>{name}</span>
-          <div style={{
-            padding: '4px 16px', borderRadius: '9999px',
-            background: isActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(113, 113, 122, 0.15)',
-            color: isActive ? '#34d399' : '#71717a', fontSize: '18px', fontWeight: 600,
-          }}>
-            {status}
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <Logo size={34} />
+              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
+                Synapse Explorer
+              </span>
+              <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: '46px', gap: '14px', maxWidth: '730px' }}>
+              <span style={{ color: '#e2e8f0', fontSize: '52px', fontWeight: 800, lineHeight: 1.05 }}>{name}</span>
+              <span style={{ color: '#9fb6cf', fontSize: '26px' }}>SAP Agent Profile</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
+                <div
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '9999px',
+                    background: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(113, 113, 122, 0.2)',
+                    color: isActive ? '#34d399' : '#94a3b8',
+                    fontSize: '16px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {status}
+                </div>
+                <span style={{ color: '#64748b', fontSize: '14px' }}>Score {score}/100</span>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ color: '#64748b', fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Agent Wallet</span>
+              <span style={{ color: '#c4b5fd', fontSize: '20px', fontFamily: 'ui-monospace, Menlo, Monaco, monospace' }}>{shortWallet}</span>
+            </div>
+          </div>
+
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[
+              { label: 'Calls Served', value: calls },
+              { label: 'Capabilities', value: tools },
+              { label: 'Status', value: status },
+              { label: 'Network', value: 'Solana Mainnet' },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(71, 85, 105, 0.42)',
+                  background: 'rgba(7, 18, 34, 0.75)',
+                  padding: '14px 16px',
+                }}
+              >
+                <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{item.label}</span>
+                <span style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 700 }}>{item.value}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 'auto', color: '#334155', fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              agents/profile
+            </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '60px', marginTop: 'auto' }}>
-          {[
-            { label: 'Reputation', value: `${score}/100` },
-            { label: 'Calls Served', value: calls },
-            { label: 'Tools', value: tools },
-          ].map((item) => (
-            <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ color: '#71717a', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{item.label}</span>
-              <span style={{ color: '#e4e4e7', fontSize: '32px', fontWeight: 700 }}>{item.value}</span>
+      </div>
+    ),
+    { width: 1200, height: 630 },
+  );
+}
+
+/* ── Generic Entity OG (tools/escrows/attestations/etc.) ── */
+function renderEntityOG(p: URLSearchParams) {
+  const kind = p.get('kind') ?? 'Entity';
+  const title = p.get('title') ?? kind;
+  const id = p.get('id') ?? '--';
+  const desc = p.get('desc') ?? 'Synapse Agent Protocol detail page';
+  const m1 = p.get('m1') ?? 'Identifier';
+  const v1 = p.get('v1') ?? id;
+  const m2 = p.get('m2') ?? 'Network';
+  const v2 = p.get('v2') ?? 'Solana Mainnet';
+  const m3 = p.get('m3') ?? 'Source';
+  const v3 = p.get('v3') ?? 'Synapse Explorer';
+
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          background: 'linear-gradient(135deg, #071325 0%, #0f2137 52%, #071325 100%)',
+          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          padding: '52px',
+        }}
+      >
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <Logo size={34} />
+              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
+                Synapse Explorer
+              </span>
+              <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
             </div>
-          ))}
+
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: '46px', gap: '14px', maxWidth: '730px' }}>
+              <span style={{ color: '#9fb6cf', fontSize: '18px', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>{kind}</span>
+              <span style={{ color: '#e2e8f0', fontSize: '52px', fontWeight: 800, lineHeight: 1.05 }}>{title}</span>
+              <span style={{ color: '#9fb6cf', fontSize: '24px', lineHeight: 1.35 }}>{desc}</span>
+            </div>
+
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ color: '#64748b', fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Reference</span>
+              <span style={{ color: '#c4b5fd', fontSize: '20px', fontFamily: 'ui-monospace, Menlo, Monaco, monospace' }}>{id}</span>
+            </div>
+          </div>
+
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[
+              { label: m1, value: v1 },
+              { label: m2, value: v2 },
+              { label: m3, value: v3 },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(71, 85, 105, 0.42)',
+                  background: 'rgba(7, 18, 34, 0.75)',
+                  padding: '14px 16px',
+                }}
+              >
+                <span style={{ color: '#64748b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{item.label}</span>
+                <span style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 700 }}>{item.value}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 'auto', color: '#334155', fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              {kind.toLowerCase()} detail
+            </div>
+          </div>
+        </div>
+      </div>
+    ),
+    { width: 1200, height: 630 },
+  );
+}
+
+/* ── Docs OG ── */
+function renderDocsOG(p: URLSearchParams) {
+  const title = p.get('title') ?? 'Synapse Docs';
+  const desc = p.get('desc') ?? 'Technical documentation for the Synapse Agent Protocol.';
+  const section = p.get('section') ?? 'Overview';
+
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          background: 'linear-gradient(135deg, #06111f 0%, #0b1b2e 52%, #06111f 100%)',
+          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          padding: '52px',
+        }}
+      >
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <Logo size={34} />
+              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
+                Synapse Explorer Docs
+              </span>
+              <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai/docs</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: '46px', gap: '14px', maxWidth: '730px' }}>
+              <span style={{ color: '#e2e8f0', fontSize: '52px', fontWeight: 800, lineHeight: 1.06 }}>{title}</span>
+              <span style={{ color: '#9fb6cf', fontSize: '25px', lineHeight: 1.3 }}>{desc}</span>
+            </div>
+
+            <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ color: '#64748b', fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Section</span>
+              <span style={{ color: '#c4b5fd', fontSize: '20px', fontWeight: 700 }}>{section}</span>
+            </div>
+          </div>
+
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {['Architecture', 'Instructions', 'Accounts', 'Events', 'Security'].map((item) => (
+              <div
+                key={item}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(71, 85, 105, 0.42)',
+                  background: 'rgba(7, 18, 34, 0.75)',
+                  padding: '14px 16px',
+                  color: item === section ? '#e2e8f0' : '#94a3b8',
+                  fontSize: '18px',
+                  fontWeight: item === section ? 700 : 500,
+                }}
+              >
+                {item}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     ),

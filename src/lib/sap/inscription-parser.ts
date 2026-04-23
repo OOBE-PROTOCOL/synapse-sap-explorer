@@ -2,7 +2,8 @@
 import { PublicKey } from '@solana/web3.js';
 import { EventParser } from '@oobe-protocol-labs/synapse-sap-sdk';
 import { getSapClient, getSynapseConnection, getRpcConfig } from './discovery';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
+import { getSharedPool } from '~/db';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -49,17 +50,8 @@ export type SessionInscriptionResult = {
 
 /* ── DB pool (shared) ──────────────────────────────────── */
 
-const _g = globalThis as unknown as { __inscParserPool?: Pool };
 function getPool(): Pool {
-  if (!_g.__inscParserPool) {
-    _g.__inscParserPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 3,
-      connectionTimeoutMillis: 5000,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
-  }
-  return _g.__inscParserPool;
+  return getSharedPool();
 }
 
 /* ── Helpers ───────────────────────────────────────────── */

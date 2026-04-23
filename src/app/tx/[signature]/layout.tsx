@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       .join(', ') || '--';
     const programCount = programs === '--' ? '0' : String(programs.split(',').length);
 
-    const ogUrl = new URL(`${SITE_URL}/synapse-metadata-logo.png`);
+    const ogUrl = new URL(`${SITE_URL}/api/og`);
     ogUrl.searchParams.set('type', 'tx');
     ogUrl.searchParams.set('sig', sig);
     ogUrl.searchParams.set('status', status);

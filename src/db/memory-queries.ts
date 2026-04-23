@@ -1,18 +1,9 @@
 
-import { Pool } from 'pg';
-
-const _g = globalThis as unknown as { __memPool?: Pool };
+import type { Pool } from 'pg';
+import { getSharedPool } from './index';
 
 function getPool(): Pool {
-  if (!_g.__memPool) {
-    _g.__memPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 5,
-      connectionTimeoutMillis: 5000,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-    });
-  }
-  return _g.__memPool;
+  return getSharedPool();
 }
 
 /* ── Types ── */

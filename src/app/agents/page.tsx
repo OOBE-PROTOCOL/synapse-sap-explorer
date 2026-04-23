@@ -394,6 +394,46 @@ function AgentCard({ data }: { data: CardData }) {
                   <span className={cn('h-1 w-1 rounded-full', id.isActive ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground/30')} />
                   {id.isActive ? 'ONLINE' : 'OFFLINE'}
                 </span>
+                {/* Metaplex Core link badge (SDK 0.9.0) — always shown when data is present */}
+                {(data as CardData & { metaplex?: { linked: boolean; asset: string | null } | null }).metaplex && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const m = (data as CardData & { metaplex?: { linked: boolean; asset: string | null } | null }).metaplex;
+                            if (m?.linked && m.asset) {
+                              window.open(`${SOLSCAN}/token/${m.asset}`, '_blank', 'noopener');
+                            }
+                          }}
+                          className={cn(
+                            'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[9px] font-semibold tracking-wide shrink-0 border transition-colors',
+                            (data as CardData & { metaplex?: { linked: boolean } | null }).metaplex?.linked
+                              ? 'text-pink-400 bg-pink-500/10 border-pink-500/20 hover:bg-pink-500/20'
+                              : 'text-neutral-500 bg-muted/15 border-border/30 hover:bg-muted/25',
+                          )}
+                        >
+                          <span className={cn(
+                            'h-1 w-1 rounded-full',
+                            (data as CardData & { metaplex?: { linked: boolean } | null }).metaplex?.linked
+                              ? 'bg-pink-400'
+                              : 'bg-neutral-500',
+                          )} />
+                          MPL
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <span className="text-[11px]">
+                          {(data as CardData & { metaplex?: { linked: boolean } | null }).metaplex?.linked
+                            ? 'Linked to a Metaplex Core asset (AgentIdentity + EIP-8004)'
+                            : 'No Metaplex Core asset linked yet'}
+                        </span>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </div>
 
               {/* Address with copy */}
@@ -653,6 +693,21 @@ function AgentListRow({ data, index }: { data: CardData; index: number }) {
                 {id.x402Endpoint && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-primary/70">
                     <Wallet className="h-2.5 w-2.5" /> x402
+                  </span>
+                )}
+                {(data as CardData & { metaplex?: { linked: boolean } | null }).metaplex && (
+                  <span className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 border',
+                    (data as CardData & { metaplex?: { linked: boolean } | null }).metaplex?.linked
+                      ? 'bg-pink-500/10 border-pink-500/20 text-pink-400'
+                      : 'bg-muted/15 border-border/30 text-neutral-500',
+                  )}>
+                    <span className={cn(
+                      'h-1 w-1 rounded-full',
+                      (data as CardData & { metaplex?: { linked: boolean } | null }).metaplex?.linked
+                        ? 'bg-pink-400'
+                        : 'bg-neutral-500',
+                    )} /> MPL
                   </span>
                 )}
               </div>

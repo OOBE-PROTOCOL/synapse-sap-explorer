@@ -243,14 +243,28 @@ export function Tabs({ tabs, active, onChange, className }: {
   return (
     <ShadTabs value={active} onValueChange={onChange} className={className}>
       <TabsList>
-        {tabs.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value}>
-            {tab.label}
-            {tab.count !== undefined && (
-              <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{tab.count}</span>
-            )}
-          </TabsTrigger>
-        ))}
+        {tabs.map((tab) => {
+          const isMetaplex = tab.value === 'metaplex';
+          const isActive = active === tab.value;
+          const metaplexClass = isMetaplex && isActive
+            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 shadow-[0_0_12px_-3px_rgba(251,191,36,0.2)]'
+            : isMetaplex
+              ? 'text-amber-300 hover:bg-amber-500/10'
+              : '';
+          
+          return (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className={metaplexClass}
+            >
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{tab.count}</span>
+              )}
+            </TabsTrigger>
+          );
+        })}
       </TabsList>
     </ShadTabs>
   );

@@ -8,7 +8,7 @@ import {
   Bot, Network, ArrowLeftRight, Wrench, Layers,
   Wallet, ShieldCheck, Trophy, ArrowRight, Server, TrendingUp,
   Activity, CircleDot, Zap, Coins, Radio, Users, Cpu, BarChart3,
-  BotIcon,
+  BotIcon, Copy, Check,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip,
@@ -113,6 +113,24 @@ export default function OverviewPage() {
   const [txs, setTxs] = useState<SapTx[]>([]);
   const [txLoading, setTxLoading] = useState(true);
   const [txTick, setTxTick] = useState(0);
+  const [copiedSnippet, setCopiedSnippet] = useState<'remote' | 'local' | null>(null);
+
+  const remoteSkillCommand = `curl -fsSL https://synapse.oobeprotocol.ai/skills.md \\
+  -o ./skills/synapse-skills-0.9.1.md`;
+  const localSkillCommand = `pnpm add -D @oobe-protocol-labs/synapse-sap-sdk@0.9.1
+cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
+  ./skills/synapse-skills-0.9.1.md`;
+
+  const copySnippet = useCallback(async (which: 'remote' | 'local') => {
+    const value = which === 'remote' ? remoteSkillCommand : localSkillCommand;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedSnippet(which);
+      setTimeout(() => setCopiedSnippet(null), 1200);
+    } catch {
+      // no-op in case clipboard is blocked
+    }
+  }, [localSkillCommand, remoteSkillCommand]);
 
   const fetchTxs = useCallback(async () => {
     try {
@@ -328,8 +346,72 @@ export default function OverviewPage() {
 
       <SectionDivider />
 
+      <ArenaCard glow="primary" className="border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-neutral-900 to-neutral-900">
+        <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Zap className="h-4 w-4 text-amber-300" />
+             
+
+            <h2 className="text-sm font-semibold text-foreground">Initialize your agent context with Synapse skills</h2>
+            </div>
+            <p className="text-xs text-neutral-400 max-w-3xl">
+              Use one of the following CLI paths to load the official skill pack and keep your agent aligned with Synapse SAP SDK version 0.9.1.
+            </p>
+          </div>
+
+          <Link
+            href="https://synapse.oobeprotocol.ai/skills.md"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-auto py-1.5 w-full sm:w-auto sm:min-w-[220px] md:min-w-[260px] justify-center items-center gap-1 rounded-md border border-amber-400/30 bg-amber-500/15 px-5 text-xs font-medium text-amber-200 hover:bg-amber-500/20 transition-colors"
+          >
+            Open skills.md
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="mt-4 grid gap-3 p-4 md:grid-cols-2">
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950/70 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-wider text-neutral-500">Option A · Remote source</p>
+              <button
+                type="button"
+                onClick={() => copySnippet('remote')}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900/60 text-neutral-400 hover:text-amber-200 hover:border-amber-400/40 transition-colors"
+                aria-label="Copy remote command"
+                title="Copy command"
+              >
+                {copiedSnippet === 'remote' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap sm:whitespace-pre text-[11px] leading-relaxed text-neutral-300 font-mono">
+{remoteSkillCommand}
+            </pre>
+          </div>
+
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950/70 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-wider text-neutral-500">Option B · SDK local package</p>
+              <button
+                type="button"
+                onClick={() => copySnippet('local')}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900/60 text-neutral-400 hover:text-amber-200 hover:border-amber-400/40 transition-colors"
+                aria-label="Copy local command"
+                title="Copy command"
+              >
+                {copiedSnippet === 'local' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap sm:whitespace-pre text-[11px] leading-relaxed text-neutral-300 font-mono">
+{localSkillCommand}
+            </pre>
+          </div>
+        </div>
+      </ArenaCard>
+
       {/* ═══════════════════════════════════════════════════════════
-         ROW 1 — Live Feed (left 3/5) + Charts (right 2/5)
+         ROW 1 — Live Feed (left 3/ 5) + Charts (right 2/5)
          ═══════════════════════════════════════════════════════════ */}
       <div className="grid gap-5 lg:grid-cols-5">
 
