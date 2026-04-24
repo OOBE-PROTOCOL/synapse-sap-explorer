@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, Package } from 'lucide-react';
@@ -44,6 +44,38 @@ export default function AgentDetailPage() {
   const { data: nftsData } = useAgentNfts(wallet);
   const [activeTab, setActiveTab] = useState('overview');
   const [copied, setCopied] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState(false);
+  const [resolveAttempted, setResolveAttempted] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tryResolve = async () => {
+      if (!wallet || loading || resolveAttempted) return;
+      if (data?.profile && !error) return;
+
+      setResolvingId(true);
+      try {
+        const res = await fetch(`/api/sap/agents/resolve/${wallet}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const nextWallet = json?.wallet as string | null;
+        if (!cancelled && nextWallet && nextWallet !== wallet) {
+          router.replace(`/agents/${nextWallet}`);
+          return;
+        }
+      } catch {
+        // no-op
+      } finally {
+        if (!cancelled) {
+          setResolvingId(false);
+          setResolveAttempted(true);
+        }
+      }
+    };
+
+    void tryResolve();
+    return () => { cancelled = true; };
+  }, [wallet, loading, data?.profile, error, resolveAttempted, router]);
 
   const copyAddr = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -61,6 +93,15 @@ export default function AgentDetailPage() {
           <Skeleton className="h-80 w-full" />
         </div>
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if ((error || !data?.profile) && resolvingId) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Resolving agent identifier...</p>
       </div>
     );
   }
