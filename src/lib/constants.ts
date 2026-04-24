@@ -18,6 +18,29 @@ export const PROGRAM_META: Record<string, { name: string; color: string }> = {
   metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s:        { name: 'Metaplex',       color: 'text-pink-400'    },
 };
 
+/**
+ * Solana cluster explorer URLs (used for tx/account links to explorer.solana.com).
+ */
+export const EXPLORER_URLS: Record<string, string> = {
+  mainnet: 'https://explorer.solana.com',
+  devnet: 'https://explorer.solana.com?cluster=devnet',
+  localnet: 'http://localhost:3000/explorer',
+};
+
+/**
+ * Canonical SAP Explorer host. This is the base URL used to:
+ *  - Render the EIP-8004 registration JSON endpoint
+ *    (`<base>/agents/<sapAgentPda>/eip-8004.json`) attached to MPL Core
+ *    `AgentIdentity` plugins.
+ *  - Build x402 service URLs included in the registration document.
+ *
+ * Override via `NEXT_PUBLIC_SAP_EXPLORER_BASE` for staging/preview deploys.
+ */
+export const SAP_EXPLORER_BASE_URL: string =
+  process.env.NEXT_PUBLIC_SAP_EXPLORER_BASE?.replace(/\/+$/, '') ??
+  process.env.SAP_EXPLORER_BASE?.replace(/\/+$/, '') ??
+  'https://explorer.oobeprotocol.ai';
+
 export const TAG_COLORS: Record<string, string> = {
   excellent:  'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   good:       'bg-blue-500/15 text-blue-300 border-blue-500/30',
