@@ -346,7 +346,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
 
       <SectionDivider />
 
-      <ArenaCard glow="primary" className="border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-background to-background">
+      <ArenaCard glow="primary" className="border-amber-500/25 bg-gradient-to-r from-amber-500/10 via-background to-transparent">
         <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
