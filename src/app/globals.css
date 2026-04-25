@@ -245,11 +245,11 @@
 
   /* ── Data badges ── */
   .data-source-onchain {
-    @apply text-[9px] font-semibold uppercase tracking-wider;
+    @apply text-xs font-semibold uppercase tracking-wider;
     color: hsl(var(--primary));
   }
   .data-source-offchain {
-    @apply text-[9px] font-semibold uppercase tracking-wider;
+    @apply text-xs font-semibold uppercase tracking-wider;
     color: hsl(var(--muted-foreground));
   }
 

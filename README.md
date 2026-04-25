@@ -127,7 +127,7 @@ Edit `.env`:
 ```env
 SYNAPSE_API_KEY=sk_live_your-synapse-api-key
 SYNAPSE_NETWORK=mainnet
-SYNAPSE_REGION=US
+SYNAPSE_REGION=US-1
 ```
 
 ### Development

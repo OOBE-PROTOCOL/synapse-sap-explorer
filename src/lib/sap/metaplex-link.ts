@@ -55,8 +55,25 @@ export type MetaplexLinkSnapshot = {
   agentIdentityUri: string | null;
   /** Decoded EIP-8004 registration JSON, or null. */
   registration: unknown | null;
+  /** Number of owned MPL Core assets carrying *any* AgentIdentity plugin
+   *  (SAP-bound + foreign). Cheap by-product of the same DAS scan. */
+  pluginCount: number;
   /** Last error encountered (debug only), or null. */
   error: string | null;
+};
+
+export type Eip8004RegistrationJson = {
+  schema?: string | null;
+  name?: string | null;
+  version?: string | null;
+  description?: string | null;
+  synapseAgent?: string | null;
+  owner?: string | null;
+  capabilities?: unknown;
+  services?: Array<{ id?: string; type?: string; url?: string }>;
+  issuedAt?: number | null;
+  /** Anything else the JSON carried (foreign hosts may use extra fields). */
+  [k: string]: unknown;
 };
 
 export type MetaplexNftItem = {
@@ -70,6 +87,10 @@ export type MetaplexNftItem = {
   linkedToThisAgent: boolean;
   /** True when the asset has any EIP-8004 AgentIdentity plugin (linked to any agent). */
   hasAgentIdentity: boolean;
+  /** Hostname of the AgentIdentity URI (e.g. 'api.metaplex.com', 'explorer.oobeprotocol.ai'). */
+  identityHost: string | null;
+  /** Best-effort decoded EIP-8004 / agent-card JSON fetched from agentIdentityUri. */
+  registration: Eip8004RegistrationJson | null;
 };
 
 export type MetaplexAssetsResponse = {
@@ -264,7 +285,10 @@ async function enumerateAssetsForWallet(
     diagnostics.push(`DAS lookup failed: ${(e as Error).message}`);
   }
 
-  // Tier 2 — direct on-chain enumeration.
+  // Tier 2 — direct on-chain enumeration (Synapse RPC only).
+  // We intentionally do NOT fall back to a public RPC here: `fetchAssetsByOwner`
+  // is a heavy `getProgramAccounts` scan that public endpoints (e.g.
+  // api.mainnet.solana.com) rate-limit aggressively (429 storms observed).
   try {
     const umi = getAuthenticatedUmi();
     const assets = await fetchAssetsByOwner(umi, umiPublicKey(wallet.toBase58()));
@@ -327,6 +351,34 @@ async function fetchAssetsViaDas(wallet: PublicKey): Promise<AssetV1[]> {
     .map((r) => r.value);
 }
 
+/**
+ * Best-effort fetch of an EIP-8004 / agent-card JSON from any AgentIdentity URI.
+ * Returns null on network/parse failure — never throws. Used for both the canonical
+ * SAP host AND foreign registries (e.g. api.metaplex.com) so the UI can render
+ * the agent card regardless of where the plugin URI points.
+ */
+async function fetchEip8004Json(uri: string | null): Promise<Eip8004RegistrationJson | null> {
+  if (!uri) return null;
+  try {
+    const res = await fetch(uri, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const parsed = await res.json();
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as Eip8004RegistrationJson;
+  } catch {
+    return null;
+  }
+}
+
+function hostnameOf(uri: string | null): string | null {
+  if (!uri) return null;
+  try {
+    return new URL(uri).hostname;
+  } catch {
+    return null;
+  }
+}
+
 async function toItem(asset: AssetV1, sapAgentPda: string | null): Promise<MetaplexNftItem> {
   const uri = readAgentIdentityUri(asset);
   const expectedSuffix = sapAgentPda ? `/agents/${sapAgentPda}/eip-8004.json` : null;
@@ -339,17 +391,23 @@ async function toItem(asset: AssetV1, sapAgentPda: string | null): Promise<Metap
     ? updateAuthorityField.address.toString()
     : null;
 
-  const meta = await fetchMetadataJson(asset.uri ?? null);
+  // Run NFT metadata + EIP-8004 registration fetches in parallel.
+  const [meta, registration] = await Promise.all([
+    fetchMetadataJson(asset.uri ?? null),
+    fetchEip8004Json(uri),
+  ]);
 
   return {
     asset: asset.publicKey.toString(),
     name: asset.name ?? meta?.name ?? null,
-    description: meta?.description ?? null,
+    description: meta?.description ?? registration?.description ?? null,
     image: meta?.image ?? null,
     updateAuthority,
     agentIdentityUri: uri,
     linkedToThisAgent,
     hasAgentIdentity: !!uri,
+    identityHost: hostnameOf(uri),
+    registration,
   };
 }
 
@@ -378,6 +436,7 @@ export async function getMetaplexLinkSnapshot(
       linked: false,
       agentIdentityUri: null,
       registration: null,
+      pluginCount: 0,
       error: 'Invalid wallet pubkey',
     };
   }
@@ -390,14 +449,24 @@ export async function getMetaplexLinkSnapshot(
   const enumeration = await enumerateAssetsForWallet(walletPk);
   const assets = enumeration.assets;
 
+  // First pass: count *every* AgentIdentity plugin owned by this wallet.
+  // This makes the snapshot useful for coordination UIs ("agent is on
+  // Metaplex even if the URI doesn't bind to our SAP host").
+  let pluginCount = 0;
+  let linkedHit: { asset: string; uri: string } | null = null;
   for (const a of assets) {
     const uri = readAgentIdentityUri(a);
     if (!uri) continue;
-    if (!uri.endsWith(expectedSuffix)) continue;
+    pluginCount += 1;
+    if (!linkedHit && uri.endsWith(expectedSuffix)) {
+      linkedHit = { asset: a.publicKey.toString(), uri };
+    }
+  }
 
+  if (linkedHit) {
     let registration: unknown = null;
     try {
-      const res = await fetch(uri, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(linkedHit.uri, { signal: AbortSignal.timeout(5000) });
       if (res.ok) registration = await res.json();
     } catch {
       // best-effort; link itself is verified
@@ -405,11 +474,12 @@ export async function getMetaplexLinkSnapshot(
 
     return {
       sapAgentPda,
-      asset: a.publicKey.toString(),
+      asset: linkedHit.asset,
       expectedUrl,
       linked: true,
-      agentIdentityUri: uri,
+      agentIdentityUri: linkedHit.uri,
       registration,
+      pluginCount,
       error: null,
     };
   }
@@ -421,6 +491,7 @@ export async function getMetaplexLinkSnapshot(
     linked: false,
     agentIdentityUri: null,
     registration: null,
+    pluginCount,
     error: null,
   };
 }

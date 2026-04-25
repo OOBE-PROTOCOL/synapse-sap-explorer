@@ -25,7 +25,7 @@ export const baseOptions: BaseLayoutProps = {
           <polyline points="9 22 9 12 15 12 15 22" />
         </svg>
         <span className="font-semibold text-sm">Synapse SAP Docs</span>
-        <span className="text-[10px] font-mono text-fd-muted-foreground/60 bg-fd-muted px-1.5 py-0.5 rounded">v0.7.0</span>
+        <span className="text-xs font-mono text-fd-muted-foreground/60 bg-fd-muted px-1.5 py-0.5 rounded">v0.7.0</span>
       </div>
     ),
     transparentMode: "top",

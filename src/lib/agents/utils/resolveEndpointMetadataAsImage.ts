@@ -2,7 +2,7 @@
 function sanitizeEndpoint(endpoint: string): string {
     try {
         const url = new URL(endpoint);
-        return url.origin;
+        return url.hostname;
     } catch {
         return endpoint;
     }
@@ -16,7 +16,18 @@ function sanitizeEndpoint(endpoint: string): string {
 export function resolveEndpointMetadataAsImage(endpoint: string): string | null {
     if (!endpoint) return null;
     try {
-        new URL(endpoint); // validate
+        const url = new URL(endpoint); // validate
+        const hostname = url.hostname.toLowerCase();
+        if (
+            hostname === 'localhost' ||
+            hostname.endsWith('.local') ||
+            hostname.startsWith('127.') ||
+            hostname === '::1' ||
+            hostname.startsWith('10.') ||
+            hostname.startsWith('192.168.')
+        ) {
+            return null;
+        }
         const domain = encodeURIComponent(sanitizeEndpoint(endpoint));
         return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
     } catch {

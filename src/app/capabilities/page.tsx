@@ -310,7 +310,7 @@ export default function CapabilitiesPage() {
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-white truncate max-w-[220px]">{cap.id}</p>
                           {cap.name !== cap.id && (
-                            <p className="text-[10px] text-neutral-500 truncate max-w-[220px]">{cap.name}</p>
+                            <p className="text-xs text-neutral-500 truncate max-w-[220px]">{cap.name}</p>
                           )}
                         </div>
                       </div>
@@ -324,7 +324,7 @@ export default function CapabilitiesPage() {
                     {/* Version */}
                     <TableCell>
                       {cap.version ? (
-                        <Badge variant="secondary" className="text-[10px] tabular-nums bg-neutral-800 text-neutral-300 border border-neutral-700">v{cap.version}</Badge>
+                        <Badge variant="secondary" className="text-xs tabular-nums bg-neutral-800 text-neutral-300 border border-neutral-700">v{cap.version}</Badge>
                       ) : (
                         <span className="text-neutral-600 text-xs">—</span>
                       )}
@@ -345,7 +345,7 @@ export default function CapabilitiesPage() {
                           <ScoreRing score={topAgent.reputationScore} size={24} />
                           <div className="min-w-0">
                             <p className="text-xs font-medium truncate max-w-[120px] text-neutral-200">{topAgent.name ?? 'Unknown'}</p>
-                            <p className="text-[10px] text-neutral-500 tabular-nums">
+                            <p className="text-xs text-neutral-500 tabular-nums">
                               {topAgent.totalCallsServed.toLocaleString()} calls
                             </p>
                           </div>

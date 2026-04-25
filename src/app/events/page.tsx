@@ -348,7 +348,7 @@ export default function EventsPage() {
                 key={id}
                 onClick={() => setCatFilter(id)}
                 className={cn(
-                  'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all',
+                  'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all',
                   catFilter === id
                     ? 'bg-primary/15 text-primary border border-primary/20'
                     : 'bg-muted/30 text-muted-foreground hover:text-foreground border border-transparent',
@@ -453,15 +453,15 @@ function EventCard({ event, agentMap }: { event: StreamEvent; agentMap: import('
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={cn('text-sm font-medium', meta.color)}>{meta.label}</span>
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-mono">
+              <Badge variant="outline" className="text-xs px-1.5 py-0 font-mono">
                 {meta.eventName}
               </Badge>
               {amount && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 tabular-nums">
+                <Badge variant="secondary" className="text-xs px-1.5 py-0 tabular-nums">
                   {amount.amount} {amount.symbol}
                 </Badge>
               )}
-              <span className="text-[10px] text-muted-foreground ml-auto tabular-nums flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground ml-auto tabular-nums flex items-center gap-1.5">
                 {slot && (
                   <>
                     <Hash className="h-2.5 w-2.5" />
@@ -481,10 +481,10 @@ function EventCard({ event, agentMap }: { event: StreamEvent; agentMap: import('
             {addresses.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {addresses.map(({ key, value, link }, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 text-[10px]">
+                  <span key={i} className="inline-flex items-center gap-1 text-xs">
                     <span className="text-muted-foreground">{key}:</span>
                     {AGENT_TAG_FIELDS.has(key) ? (
-                      <AgentTag address={value} agentMap={agentMap} className="text-[10px]" />
+                      <AgentTag address={value} agentMap={agentMap} className="text-xs" />
                     ) : link ? (
                       <Link
                         href={link}
@@ -504,13 +504,13 @@ function EventCard({ event, agentMap }: { event: StreamEvent; agentMap: import('
             {/* Expandable raw data */}
             <button
               onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-1 mt-2 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              className="flex items-center gap-1 mt-2 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
             >
               <ChevronDown className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')} />
               Raw data
             </button>
             {expanded && (
-              <pre className="mt-2 p-3 rounded-lg bg-muted/30 text-[10px] font-mono overflow-x-auto max-h-[200px] overflow-y-auto text-muted-foreground">
+              <pre className="mt-2 p-3 rounded-lg bg-muted/30 text-xs font-mono overflow-x-auto max-h-[200px] overflow-y-auto text-muted-foreground">
                 {JSON.stringify(event.payload, null, 2)}
               </pre>
             )}

@@ -12,6 +12,7 @@ import {
 import { fetchAgentWellKnownBatch, type AgentWellKnown } from '~/lib/sap/well-known';
 import { resolveTokens } from '~/lib/sap/token-metadata';
 import { getMetaplexLinkSnapshot } from '~/lib/sap/metaplex-link';
+import { listRegistryAgentsForWallet } from '~/lib/metaplex/registry';
 import { swr, peek } from '~/lib/cache';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
 
@@ -72,8 +73,14 @@ export interface EnrichedAgent {
 
 /** Compact MPL Core link summary for list/card surfaces. */
 export interface AgentMetaplexBadge {
+  /** SAP-bound MPL Core asset address (linked === true), or null. */
   asset: string | null;
+  /** True iff `AgentIdentity.uri` resolves to this SAP host's canonical URL. */
   linked: boolean;
+  /** Number of owned MPL Core assets carrying *any* AgentIdentity plugin. */
+  pluginCount: number;
+  /** Number of agents this wallet has on api.metaplex.com Agents Registry. */
+  registryCount: number;
 }
 
 export interface EnrichedAgentsResponse {
@@ -215,7 +222,7 @@ function finalizeBalances(
 
 /* ── Route handler ──────────────────────────────────────── */
 
-async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
+export async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     // Fetch agents directly in-process (avoid self-fetch over HTTPS which can
     // hit ERR_SSL_PACKET_LENGTH_TOO_LONG when Node loops back through nginx).
     const [rawAgents, solPrice] = await Promise.all([
@@ -239,7 +246,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     const wallets = agents.map((a) => a.identity?.wallet).filter(Boolean) as string[];
 
     // Fetch well-known, metadata, raw balances, on-chain tools, and staking in parallel
-    const [wellKnownMap, allTools, stakingResults, metaplexResults, ...rest] = await Promise.all([
+    const [wellKnownMap, allTools, stakingResults, metaplexResults, registryResults, ...rest] = await Promise.all([
       fetchAgentWellKnownBatch(endpoints),
       findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
       // Batch fetch staking for all agents
@@ -270,6 +277,13 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
       Promise.all(
         wallets.map((w) =>
           getMetaplexLinkSnapshot(w).catch(() => null),
+        ),
+      ),
+      // Batch resolve api.metaplex.com Agents Registry presence — one call
+      // per wallet, never throws (helper returns empty list on failure).
+      Promise.all(
+        wallets.map((w) =>
+          listRegistryAgentsForWallet(w).catch(() => null),
         ),
       ),
       ...agentUris.map((uri) => fetchAgentMetadata(uri)),
@@ -353,8 +367,16 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
         staking: (stakingResults as (AgentStakeSummary | null)[])[agentIdx] ?? null,
         metaplex: ((): AgentMetaplexBadge | null => {
           const snap = (metaplexResults as Array<Awaited<ReturnType<typeof getMetaplexLinkSnapshot>> | null>)[agentIdx];
-          if (!snap) return null;
-          return { asset: snap.asset, linked: snap.linked };
+          const reg = (registryResults as Array<Awaited<ReturnType<typeof listRegistryAgentsForWallet>> | null>)[agentIdx];
+          const pluginCount = snap?.pluginCount ?? 0;
+          const registryCount = reg?.agents.length ?? 0;
+          if (!snap && registryCount === 0) return null;
+          return {
+            asset: snap?.asset ?? null,
+            linked: !!snap?.linked,
+            pluginCount,
+            registryCount,
+          };
         })(),
       };
     });

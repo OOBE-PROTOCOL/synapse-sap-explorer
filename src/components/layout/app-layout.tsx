@@ -118,7 +118,7 @@ function NavScrollable({ collapsed, isNavActive, pathname }: { collapsed: boolea
           <div key={section.label}>
             {!collapsed ? (
               <div className={cn('flex items-center gap-2 mx-1', sIdx === 0 ? 'mt-2 mb-1.5' : 'mt-5 mb-1.5')}>
-                <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/80 shrink-0">{section.label}</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground/80 shrink-0">{section.label}</span>
                 <div className="flex-1 h-px bg-muted-foreground/50" />
               </div>
             ) : (
@@ -261,7 +261,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             ? 'fixed inset-y-0 left-0 w-[260px] max-w-[82vw] z-[60] shadow-2xl flex'
             : 'hidden',
           /* desktop: always visible, width depends on collapsed state */
-          collapsed ? 'lg:flex lg:w-[68px]' : 'lg:flex lg:w-[260px]',
+          collapsed ? 'lg:flex lg:w-[58px]' : 'lg:flex lg:w-[230px]',
         )}
       >
         {/* Collapse / expand toggle — visible everywhere */}
@@ -290,7 +290,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!effectiveCollapsed && !isMobile && (
             <Link href="/" className="truncate flex-1">
               <span className="text-sm font-bold text-foreground tracking-wide">SYNAPSE</span>
-              <span className="ml-1.5 text-[10px] font-medium font-sans text-primary uppercase tracking-widest">EXPLORER</span>
+              <span className="ml-1.5 text-xs font-medium font-sans text-primary uppercase tracking-widest">EXPLORER</span>
             </Link>
           )}
           {/* Logo: desktop collapsed */}
@@ -305,7 +305,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
                 <Image src="/explorer_logo.png" alt="Synapse Explorer" width={26} height={26} className="shrink-0" />
                 <span className="text-sm font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
-                <span className="text-[10px] font-medium text-primary uppercase tracking-widest">Explorer</span>
+                <span className="text-xs font-medium text-primary uppercase tracking-widest">Explorer</span>
               </Link>
               <button
                 onClick={() => setMobileOpen(false)}
@@ -377,11 +377,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex items-center gap-2 mb-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                 <span className="text-xs text-muted-foreground">SAP Program</span>
-                <span className="ml-auto text-[9px] font-mono text-muted-foreground/60">v0.7.0</span>
+                <span className="ml-auto text-xs font-mono text-muted-foreground/60">v0.7.0</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[9px] text-muted-foreground/60">SDK · Anchor 1.0.0</span>
-                <a href="https://synapse.oobeprotocol.ai/skills.md" target="_blank" rel="noopener noreferrer" className="text-[9px] font-medium text-primary hover:text-primary transition-colors">Skill</a>
+                <span className="text-xs text-muted-foreground/60">SDK · Anchor 1.0.0</span>
+                <a href="https://synapse.oobeprotocol.ai/skills.md" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-primary hover:text-primary transition-colors">Skill</a>
               </div>
             </div>
           ) : (
@@ -400,9 +400,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
             <Image src="/explorer_logo.png" alt="Synapse Explorer" width={26} height={26} className="shrink-0" />
             <span className="text-[13px] font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
-            <span className="text-[9px] font-medium text-primary uppercase tracking-widest hidden xs:inline">Explorer</span>
+            <span className="text-xs font-medium text-primary uppercase tracking-widest hidden xs:inline">Explorer</span>
           </Link>
-          <span className="flex items-center gap-1 text-[9px] text-foreground font-medium uppercase tracking-widest shrink-0">
+          <span className="flex items-center gap-1 text-xs text-foreground font-medium uppercase tracking-widest shrink-0">
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             Mainnet
           </span>
@@ -439,7 +439,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Network status */}
-          <div className="ml-auto flex items-center gap-3 text-[10px] shrink-0">
+          <div className="ml-auto flex items-center gap-3 text-xs shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-[data-tick_2s_ease-in-out_infinite]" />
               <span className="text-foreground font-medium uppercase tracking-widest">Mainnet</span>

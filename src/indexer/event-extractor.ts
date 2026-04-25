@@ -275,7 +275,7 @@ export async function backfillEventsFromLogs(): Promise<number> {
       `SELECT d.signature, d.logs, t.slot, t.block_time, t.signer
        FROM sap_exp.tx_details d
        JOIN sap_exp.transactions t ON t.signature = d.signature
-       WHERE d.logs IS NOT NULL AND jsonb_array_length(d.logs) > 0
+       WHERE d.logs IS NOT NULL AND cardinality(d.logs) > 0
        ORDER BY t.slot ASC`,
     );
 

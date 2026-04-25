@@ -104,8 +104,8 @@ export default function CapabilityDetailPage() {
       badges={
         <>
           {protocolId && <ProtocolBadge protocol={protocolId} />}
-          {version && <Badge variant="secondary" className="text-[10px]">v{version}</Badge>}
-          <Badge variant="outline" className="text-[10px] tabular-nums">{agents.length} agent{agents.length !== 1 ? 's' : ''}</Badge>
+          {version && <Badge variant="secondary" className="text-xs">v{version}</Badge>}
+          <Badge variant="outline" className="text-xs tabular-nums">{agents.length} agent{agents.length !== 1 ? 's' : ''}</Badge>
         </>
       }
       icon={
@@ -172,7 +172,7 @@ export default function CapabilityDetailPage() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] text-muted-foreground w-4 text-right tabular-nums">{i + 1}</span>
+                          <span className="text-xs text-muted-foreground w-4 text-right tabular-nums">{i + 1}</span>
                           <ScoreRing score={a.reputationScore} size={32} />
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground truncate max-w-[180px]">
@@ -197,7 +197,7 @@ export default function CapabilityDetailPage() {
                       <TableCell className="text-right hidden md:table-cell">
                         <span className="text-sm tabular-nums">{a.escrowCount}</span>
                         {a.totalSettled > 0 && (
-                          <p className="text-[10px] text-muted-foreground">{(a.totalSettled / 1e9).toFixed(4)} SOL</p>
+                          <p className="text-xs text-muted-foreground">{(a.totalSettled / 1e9).toFixed(4)} SOL</p>
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -222,7 +222,7 @@ export default function CapabilityDetailPage() {
                 <Shield className="h-4 w-4 text-chart-1" />
                 <div>
                   <p className="text-sm font-medium text-foreground">{protocolId}</p>
-                  <p className="text-[10px] text-muted-foreground">Parent protocol for this capability</p>
+                  <p className="text-xs text-muted-foreground">Parent protocol for this capability</p>
                 </div>
               </div>
               <Link

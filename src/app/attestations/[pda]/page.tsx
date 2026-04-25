@@ -155,12 +155,12 @@ export default function AttestationDetailPage() {
           <SectionHeader title="Timestamps" />
           <div className="space-y-3">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Created</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Created</span>
               <TimestampDisplay unixSeconds={attestation.createdAt} />
             </div>
             {attestation.expiresAt !== '0' && (
               <div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                   {isExpired ? 'Expired At' : 'Expires At'}
                 </span>
                 <TimestampDisplay unixSeconds={attestation.expiresAt} />

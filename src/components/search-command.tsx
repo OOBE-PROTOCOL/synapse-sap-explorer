@@ -60,7 +60,7 @@ export function SearchCommand() {
         className="relative flex w-full items-center gap-2 rounded-xl bg-muted/30 border border-border/40 px-3 h-9 text-xs text-muted-foreground/60 hover:border-primary/40 hover:shadow-[0_0_12px_-3px_hsl(var(--glow)/0.25)] transition-all duration-300"
       >
         <Search className="h-3.5 w-3.5 shrink-0" />
-        <span className='text-[10px]'>Search agents, PDAs...</span>
+        <span className='text-xs'>Search agents, PDAs...</span>
         <kbd className="ml-auto pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border/50 bg-muted/50 px-1.5 font-mono text-micro font-medium text-muted-foreground/70 sm:inline-flex">
           <span className="text-xs">⌘</span>K
         </kbd>
@@ -113,7 +113,7 @@ export function SearchCommand() {
                             <span className="text-sm font-medium truncate">
                               {r.name ?? short(r.pda, 8, 4)}
                             </span>
-                            <Badge variant="outline" className="text-[9px] shrink-0">
+                            <Badge variant="outline" className="text-xs shrink-0">
                               {r.type}
                             </Badge>
                           </div>

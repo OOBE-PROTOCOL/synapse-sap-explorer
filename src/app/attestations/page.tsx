@@ -148,13 +148,13 @@ export default function AttestationsPage() {
                   <TableRow key={a.pda} className="hover:bg-muted/50">
                     <TableCell>
                       <p className="text-sm font-medium text-foreground truncate">{a.agentName ?? 'Unknown'}</p>
-                      <Address value={a.agent} copy className="text-[10px]" />
+                      <Address value={a.agent} copy className="text-xs" />
                     </TableCell>
                     <TableCell>
                       <AgentTag address={a.attester} agentMap={walletAgentMap} className="text-xs" />
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-[10px]">{a.attestationType || 'unknown'}</Badge>
+                      <Badge variant="outline" className="text-xs">{a.attestationType || 'unknown'}</Badge>
                     </TableCell>
                     <TableCell>
                       <span className="text-xs text-muted-foreground">
@@ -163,7 +163,7 @@ export default function AttestationsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {isExpired ? (
-                        <Badge variant="destructive" className="text-[10px]">Expired</Badge>
+                        <Badge variant="destructive" className="text-xs">Expired</Badge>
                       ) : (
                         <StatusBadge active={a.isActive} size="xs" />
                       )}

@@ -95,10 +95,12 @@ function resolveNetwork(): SynapseNetwork {
 }
 
 function resolveRegion(): SynapseRegion {
-  switch (env.SYNAPSE_REGION) {
+  switch (env.SYNAPSE_REGION.toUpperCase()) {
     case 'EU':
+    case 'EU-1':
       return SynapseRegion.EU;
     case 'US':
+    case 'US-1':
     default:
       return SynapseRegion.US;
   }
@@ -106,6 +108,30 @@ function resolveRegion(): SynapseRegion {
 
 let _sap: SapClient | null = null;
 let _sapConnection: Connection | null = null;
+let _sapFallback: SapClient | null = null;
+let _sapFallbackConnection: Connection | null = null;
+
+/**
+ * Build a SapClient backed by the fallback RPC URL (e.g. Helius).
+ * Returns null if `SAP_FALLBACK_RPC_URL` is not configured.
+ *
+ * Used by sync layers when Synapse RPC fails on `getProgramAccounts`
+ * (observed during Metaplex upstream incidents — see Clawdmint integration notes).
+ */
+export function getFallbackSapClient(): SapClient | null {
+  if (!env.SAP_FALLBACK_RPC_URL) return null;
+  if (!_sapFallback) {
+    _sapFallbackConnection = new Connection(env.SAP_FALLBACK_RPC_URL, {
+      commitment: 'confirmed',
+    });
+    const wallet = makeReadOnlyWallet();
+    const provider = new AnchorProvider(_sapFallbackConnection, wallet, {
+      commitment: 'confirmed',
+    });
+    _sapFallback = SapClient.from(provider, SAP_PROGRAM_ID);
+  }
+  return _sapFallback;
+}
 
 function getSap(): SapClient {
   if (!_sap) {

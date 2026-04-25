@@ -23,7 +23,17 @@ export const env = {
     return optional('SYNAPSE_NETWORK', 'mainnet');
   },
   get SYNAPSE_REGION() {
-    return optional('SYNAPSE_REGION', 'US');
+    // Accept legacy "US" and explicit zone "US-1"; resolvers normalize both.
+    return optional('SYNAPSE_REGION', 'US-1');
+  },
+  /**
+   * Fallback Solana RPC URL used when Synapse RPC fails on heavy calls
+   * (notably `getProgramAccounts`, which has been returning 502 during
+   * Metaplex-related upstream incidents). Recommended: a Helius URL with
+   * `?api-key=…`. Leave empty to disable fallback.
+   */
+  get SAP_FALLBACK_RPC_URL() {
+    return optional('SAP_FALLBACK_RPC_URL', '');
   },
   /* Database */
   get DATABASE_URL() {

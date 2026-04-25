@@ -304,7 +304,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
       badge={
         <div className="flex items-center gap-2">
           <ExplorerLiveDot connected />
-          <Badge variant="hud" className="text-[9px]">MAINNET</Badge>
+          <Badge variant="hud" className="text-xs">MAINNET</Badge>
         </div>
       }
       actions={<SearchCommand />}
@@ -373,7 +373,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
         <div className="mt-4 grid gap-3 p-4 md:grid-cols-2">
           <div className="rounded-lg border border-border bg-card/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Option A · Remote source</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Option A · Remote source</p>
               <button
                 type="button"
                 onClick={() => copySnippet('remote')}
@@ -384,14 +384,14 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                 {copiedSnippet === 'remote' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
             </div>
-            <pre className="overflow-x-auto whitespace-pre-wrap sm:whitespace-pre text-[11px] leading-relaxed text-foreground/80 font-mono">
+            <pre className="overflow-x-auto whitespace-pre-wrap sm:whitespace-pre text-xs leading-relaxed text-foreground/80 font-mono">
 {remoteSkillCommand}
             </pre>
           </div>
 
           <div className="rounded-lg border border-border bg-card/70 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Option B · SDK local package</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Option B · SDK local package</p>
               <button
                 type="button"
                 onClick={() => copySnippet('local')}
@@ -402,7 +402,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                 {copiedSnippet === 'local' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
             </div>
-            <pre className="overflow-x-auto whitespace-pre-wrap sm:whitespace-pre text-[11px] leading-relaxed text-foreground/80 font-mono">
+            <pre className="overflow-x-auto whitespace-pre-wrap sm:whitespace-pre text-xs leading-relaxed text-foreground/80 font-mono">
 {localSkillCommand}
             </pre>
           </div>
@@ -430,7 +430,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                           <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-60 animate-ping" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
                     </span>
-                    <span className="text-[9px] font-mono text-white/70 uppercase tracking-wider">streaming</span>
+                    <span className="text-xs font-mono text-white/70 uppercase tracking-wider">streaming</span>
                   </span>
                 )}
                 <SectionLink href="/transactions" label="All" />
@@ -476,7 +476,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                       {/* Content */}
                       <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-2.5">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-mono text-[11px] sm:text-xs text-muted-foreground truncate group-hover:text-foreground transition-colors">
+                          <span className="font-mono text-xs sm:text-xs text-muted-foreground truncate group-hover:text-foreground transition-colors">
                             <span className="sm:hidden">{short(tx.signature, 8, 4)}</span>
                             <span className="hidden sm:inline">{short(tx.signature, 32, 8)}</span>
                           </span>
@@ -487,21 +487,21 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                         </div>
                         <div className="flex items-center gap-2 min-w-0">
                           <BotIcon className="h-3 w-3 text-primary/40 shrink-0" />
-                          <span className="text-[10px] sm:text-[12px] text-muted-foreground/70 font-mono truncate min-w-0">
+                          <span className="text-xs sm:text-[12px] text-muted-foreground/70 font-mono truncate min-w-0">
                             <span className="sm:hidden">{tx.signer ? short(tx.signer, 6, 4) : ''}</span>
                             <span className="hidden sm:inline">{tx.signer ?? ''}</span>
                           </span>
                           {tx.feeSol > 0 && (
                             <>
-                              <span className="text-[10px] text-muted-foreground/20 hidden sm:inline">·</span>
-                              <span className="text-[10px] text-muted-foreground/30 tabular-nums hidden sm:inline whitespace-nowrap">{tx.feeSol.toFixed(6)} SOL</span>
+                              <span className="text-xs text-muted-foreground/20 hidden sm:inline">·</span>
+                              <span className="text-xs text-muted-foreground/30 tabular-nums hidden sm:inline whitespace-nowrap">{tx.feeSol.toFixed(6)} SOL</span>
                             </>
                           )}
                         </div>
                       </div>
 
                       {/* Time */}
-                      <span className="text-[10px] text-muted-foreground/40 tabular-nums whitespace-nowrap shrink-0 group-hover:text-muted-foreground/60 transition-colors">
+                      <span className="text-xs text-muted-foreground/40 tabular-nums whitespace-nowrap shrink-0 group-hover:text-muted-foreground/60 transition-colors">
                         {tx.blockTime ? timeAgo(tx.blockTime) : '—'}
                       </span>
                     </Link>
@@ -538,30 +538,30 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                       <CircleDot className={cn('h-3.5 w-3.5 shrink-0', meta.color)} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <Badge variant="glass" className={cn('text-[9px] h-4 px-1.5 shrink-0', meta.color)}>
+                          <Badge variant="glass" className={cn('text-xs h-4 px-1.5 shrink-0', meta.color)}>
                             {meta.label}
                           </Badge>
                           {ev.amountChanged && Number(ev.amountChanged) > 0 && (
-                            <span className="text-[10px] font-mono tabular-nums text-foreground/60 truncate">{fmtUsdc(Number(ev.amountChanged), 4)}</span>
+                            <span className="text-xs font-mono tabular-nums text-foreground/60 truncate">{fmtUsdc(Number(ev.amountChanged), 4)}</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 min-w-0">
                           {ev.escrowPda && (
-                            <Link href={`/escrows/${ev.escrowPda}`} className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors shrink-0">
+                            <Link href={`/escrows/${ev.escrowPda}`} className="text-xs font-mono text-muted-foreground hover:text-primary transition-colors shrink-0">
                               {short(ev.escrowPda, 4, 4)}
                             </Link>
                           )}
                           {ev.txSignature && (
                             <>
-                              <span className="text-[10px] text-muted-foreground/20">·</span>
-                              <Link href={`/tx/${ev.txSignature}`} className="text-[10px] font-mono text-muted-foreground/40 hover:text-foreground transition-colors truncate">
+                              <span className="text-xs text-muted-foreground/20">·</span>
+                              <Link href={`/tx/${ev.txSignature}`} className="text-xs font-mono text-muted-foreground/40 hover:text-foreground transition-colors truncate">
                                 {short(ev.txSignature, 6, 4)}
                               </Link>
                             </>
                           )}
                         </div>
                       </div>
-                      <span className="text-[10px] text-muted-foreground/30 whitespace-nowrap shrink-0">
+                      <span className="text-xs text-muted-foreground/30 whitespace-nowrap shrink-0">
                         {ev.blockTime ? timeAgo(Number(ev.blockTime)) : '—'}
                       </span>
                     </div>
@@ -627,7 +627,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                 <>
                   <ScoreRing score={utilizationScore} size={56} />
                   <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Utilization</p>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Utilization</p>
                     <p className="text-lg font-bold tabular-nums text-foreground">{escrowStats?.utilization.toFixed(1) ?? '0'}%</p>
                   </div>
                 </>
@@ -659,7 +659,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                       <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mt-1">Escrow Status</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mt-1">Escrow Status</p>
                   <p className="text-xs tabular-nums text-foreground/80">{escrowData?.total ?? 0} total</p>
                 </>
               )}
@@ -697,8 +697,8 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                 ].map(({ label, value, color, text }) => (
                   <div key={label}>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className={cn('text-[10px] font-semibold uppercase tracking-wider', text)}>{label}</span>
-                      <span className="text-[10px] font-mono tabular-nums text-foreground/70">{fmtUsdc(value, 3)}</span>
+                      <span className={cn('text-xs font-semibold uppercase tracking-wider', text)}>{label}</span>
+                      <span className="text-xs font-mono tabular-nums text-foreground/70">{fmtUsdc(value, 3)}</span>
                     </div>
                     <MiniProgressBar value={value} max={Math.max(escrowStats.totalDeposited, 1)} color={color} />
                   </div>
@@ -707,11 +707,11 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                 {totalAgentSol !== null && (
                   <div className="mt-4 pt-3 border-t border-border/40">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70">Agent SOL</span>
-                      <span className="text-[10px] font-mono tabular-nums text-foreground/70">{totalAgentSol.toFixed(4)} SOL</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-primary/70">Agent SOL</span>
+                      <span className="text-xs font-mono tabular-nums text-foreground/70">{totalAgentSol.toFixed(4)} SOL</span>
                     </div>
                     <MiniProgressBar value={totalAgentSol} max={Math.max(totalAgentSol, 1)} color="bg-primary/60" className="mt-1.5" />
-                    <p className="text-[9px] text-muted-foreground/40 mt-1">Total SOL across {enrichedData?.agents?.length ?? 0} agent wallets</p>
+                    <p className="text-xs text-muted-foreground/40 mt-1">Total SOL across {enrichedData?.agents?.length ?? 0} agent wallets</p>
                   </div>
                 )}
               </div>
@@ -788,7 +788,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                   className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-muted/10 transition-colors"
                 >
                   <span className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold tabular-nums shrink-0',
+                    'flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold tabular-nums shrink-0',
                     i === 0 ? 'bg-primary/15 text-primary' :
                     i === 1 ? 'bg-neutral-800 text-white' :
                     i === 2 ? 'bg-neutral-800 text-neutral-300' :
@@ -797,14 +797,14 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                     {i + 1}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-mono text-neutral-400 truncate">{short(dep.depositor, 6, 4)}</p>
-                    <p className="text-[9px] text-muted-foreground/40 mt-0.5">
+                    <p className="text-xs font-mono text-neutral-400 truncate">{short(dep.depositor, 6, 4)}</p>
+                    <p className="text-xs text-muted-foreground/40 mt-0.5">
                       {dep.escrows} escrow{dep.escrows !== 1 ? 's' : ''} · {dep.agentCount} agent{dep.agentCount !== 1 ? 's' : ''}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[11px] font-semibold tabular-nums text-foreground/80">{fmtUsdc(dep.totalSpent)}</p>
-                    <p className="text-[9px] text-muted-foreground/40 tabular-nums">{fmtNum(dep.totalCalls)} calls</p>
+                    <p className="text-xs font-semibold tabular-nums text-foreground/80">{fmtUsdc(dep.totalSpent)}</p>
+                    <p className="text-xs text-muted-foreground/40 tabular-nums">{fmtNum(dep.totalCalls)} calls</p>
                   </div>
                 </div>
               ))}
@@ -845,7 +845,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xs font-bold tabular-nums">{tool.invocations.toLocaleString()}</p>
-                    <p className="text-[9px] text-muted-foreground/40">calls</p>
+                    <p className="text-xs text-muted-foreground/40">calls</p>
                   </div>
                 </Link>
               ))}
@@ -883,7 +883,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
               <ArenaCard key={label} glow={glow} className="text-center py-4">
                 <Icon className={cn('h-5 w-5 mx-auto mb-2', accent)} />
                 <p className="text-xl font-bold tabular-nums text-foreground">{fmtNum(value)}</p>
-                <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/50 mt-1">{label}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/50 mt-1">{label}</p>
               </ArenaCard>
             ))}
           </div>
@@ -896,7 +896,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
       <div>
         <div className="flex items-center gap-3 mb-5">
           <div className="h-px flex-1 bg-neutral-800" />
-          <Badge variant="hud" className="text-[9px]">EXPLORE</Badge>
+          <Badge variant="hud" className="text-xs">EXPLORE</Badge>
           <div className="h-px flex-1 bg-neutral-800" />
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 stagger-children">
@@ -917,7 +917,7 @@ cp node_modules/@oobe-protocol-labs/synapse-sap-sdk/skills/skills.md \\
                 'transition-all duration-300 hover:bg-neutral-800 hover:border-neutral-700',
               )}>
                 <Icon className="h-4 w-4 text-neutral-500 group-hover:text-primary transition-colors duration-300" />
-                <span className="text-[10px] font-semibold text-neutral-500 group-hover:text-white transition-colors">{label}</span>
+                <span className="text-xs font-semibold text-neutral-500 group-hover:text-white transition-colors">{label}</span>
               </div>
             </Link>
           ))}

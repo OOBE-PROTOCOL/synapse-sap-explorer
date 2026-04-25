@@ -54,7 +54,7 @@ export function ScoreRing({ score, size = 48, className }: { score: number; size
           style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', transition: 'stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)' }}
         />
       </svg>
-      {showLabel && <span className="absolute text-[11px] font-semibold text-white tabular-nums">{score}</span>}
+      {showLabel && <span className="absolute text-xs font-semibold text-white tabular-nums">{score}</span>}
     </div>
   );
 }
@@ -73,7 +73,7 @@ export function ReputationBar({ score, max = 10000, className }: { score: number
       <div className="flex-1 h-1.5 rounded-full bg-neutral-800 overflow-hidden min-w-[60px] max-w-[100px]">
         <div className={cn('h-full rounded-full transition-all duration-700', barColor)} style={{ width: `${Math.max(pct, 2)}%` }} />
       </div>
-      <span className="text-[10px] text-neutral-600 tabular-nums">/ {max.toLocaleString()}</span>
+      <span className="text-xs text-neutral-600 tabular-nums">/ {max.toLocaleString()}</span>
     </div>
   );
 }
@@ -120,7 +120,7 @@ export function ProtocolBadge({ protocol }: { protocol: string }) {
     das: 'border-primary/20 bg-primary/8 text-primary',
   };
   return (
-    <Badge variant="outline" className={cn('text-[10px] font-medium tracking-wide', colorMap[protocol] ?? 'border-border/40 bg-muted/20 text-muted-foreground')}>
+    <Badge variant="outline" className={cn('text-xs font-medium tracking-wide', colorMap[protocol] ?? 'border-border/40 bg-muted/20 text-muted-foreground')}>
       {protocol}
     </Badge>
   );
@@ -133,7 +133,7 @@ export function StatusBadge({ active, size = 'sm' }: { active: boolean; size?: '
       variant={active ? 'neon-emerald' : 'secondary'}
       className={cn(
         'gap-1.5',
-        size === 'xs' ? 'text-[10px] px-1.5 py-0' : '',
+        size === 'xs' ? 'text-xs px-1.5 py-0' : '',
       )}
     >
       <span className={cn('h-1.5 w-1.5 rounded-full', active ? 'bg-white' : 'bg-neutral-500')} />
@@ -153,7 +153,7 @@ export function CategoryBadge({ category }: { category: string }) {
     Social: 'border-neutral-600 bg-neutral-800 text-neutral-300',
     Custom: 'border-neutral-700 bg-neutral-800/50 text-neutral-400',
   };
-  return <Badge variant="outline" className={cn('text-[10px] font-medium', colorMap[category] ?? 'border-border/40 bg-muted/20 text-muted-foreground')}>{category}</Badge>;
+  return <Badge variant="outline" className={cn('text-xs font-medium', colorMap[category] ?? 'border-border/40 bg-muted/20 text-muted-foreground')}>{category}</Badge>;
 }
 
 /* ── HTTP Method Badge ───────────────────────── */
@@ -167,7 +167,7 @@ export function HttpMethodBadge({ method }: { method: string }) {
     PATCH: 'bg-primary/15 text-primary dark:text-primary border-primary/20',
   };
   return (
-    <Badge variant="outline" className={cn('text-[10px] font-mono font-semibold', colorMap[label.toUpperCase()] ?? '')}>
+    <Badge variant="outline" className={cn('text-xs font-mono font-semibold', colorMap[label.toUpperCase()] ?? '')}>
       {label.toUpperCase()}
     </Badge>
   );
@@ -242,7 +242,7 @@ export function Tabs({ tabs, active, onChange, className }: {
 }) {
   return (
     <ShadTabs value={active} onValueChange={onChange} className={className}>
-      <TabsList>
+      <TabsList className="rounded-b-none border-b-0 bg-card/60 overflow-x-auto max-w-full justify-start">
         {tabs.map((tab) => {
           const isMetaplex = tab.value === 'metaplex';
           const isActive = active === tab.value;
@@ -251,7 +251,7 @@ export function Tabs({ tabs, active, onChange, className }: {
             : isMetaplex
               ? 'text-amber-300 hover:bg-amber-500/10'
               : '';
-          
+
           return (
             <TabsTrigger
               key={tab.value}
@@ -260,7 +260,7 @@ export function Tabs({ tabs, active, onChange, className }: {
             >
               {tab.label}
               {tab.count !== undefined && (
-                <span className="ml-1.5 text-[10px] tabular-nums opacity-60">{tab.count}</span>
+                <span className="ml-1.5 text-xs tabular-nums opacity-60">{tab.count}</span>
               )}
             </TabsTrigger>
           );

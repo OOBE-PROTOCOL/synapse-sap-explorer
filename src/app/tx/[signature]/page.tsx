@@ -223,7 +223,7 @@ function Row({ label, tip, children }: {
 function AgentTag({ label, wallet }: { label: string; wallet: string }) {
   return (
     <Link href={`/agents/${wallet}`}
-          className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium hover:bg-primary/20 transition-colors">
+          className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors">
       {label}
     </Link>
   );
@@ -240,7 +240,7 @@ function Addr({ pubkey, labels, link = true }: {
       <Cp text={pubkey} className="text-xs" />
       {link && <SolLink path={`/account/${pubkey}`} />}
       {progLabel && (
-        <span className="text-[10px] text-muted-foreground/60">({progLabel})</span>
+        <span className="text-xs text-muted-foreground/60">({progLabel})</span>
       )}
       {agentLabel && <AgentTag label={agentLabel} wallet={pubkey} />}
     </span>
@@ -313,7 +313,7 @@ function Section({ title, count, open: initOpen = true, children }: {
               className="flex items-center gap-2.5 w-full px-5 py-3.5 hover:bg-muted/30 transition-colors text-left">
         <span className="text-sm font-semibold text-foreground/90 flex-1">{title}</span>
         {count !== undefined && (
-          <Badge variant="secondary" className="text-[10px] tabular-nums mr-1">{count}</Badge>
+          <Badge variant="secondary" className="text-xs tabular-nums mr-1">{count}</Badge>
         )}
         {open
           ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -373,7 +373,7 @@ function CUDistribution({ cuPerIx, total }: {
           {cuPerIx.map((cu, i) => (
             <div key={i} className="flex items-center gap-1.5">
               <span className={cn('h-2 w-2 rounded-full', DOT_COLORS[i % DOT_COLORS.length])} />
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 Instruction #{i + 1}:{' '}
                 <span className="font-mono tabular-nums text-foreground/70">{cu.toLocaleString()}</span>
               </span>
@@ -423,7 +423,7 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
 
         {/* CU chip */}
         {cuUsed !== undefined && cuUsed > 0 && depth === 0 && (
-          <span className="text-[9px] text-muted-foreground/50 font-mono tabular-nums shrink-0">
+          <span className="text-xs text-muted-foreground/50 font-mono tabular-nums shrink-0">
             {cuUsed.toLocaleString()} CU
           </span>
         )}
@@ -436,7 +436,7 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
         {/* Raw toggle */}
         {ix.data && depth === 0 && (
           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <span className="text-[10px] text-muted-foreground/50">Raw</span>
+            <span className="text-xs text-muted-foreground/50">Raw</span>
             <Switch checked={showRaw} onCheckedChange={setShowRaw} className="scale-75" />
           </div>
         )}
@@ -452,7 +452,7 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
       {/* ── raw data (inline below row, no expand needed) ── */}
       {showRaw && ix.data && (
         <div className="bg-muted/40 rounded-lg p-3 my-1 mx-8">
-          <pre className="text-[10px] font-mono text-muted-foreground/70 break-all whitespace-pre-wrap max-h-28 overflow-y-auto"
+          <pre className="text-xs font-mono text-muted-foreground/70 break-all whitespace-pre-wrap max-h-28 overflow-y-auto"
                style={{ scrollbarWidth: 'thin' }}>
             {ix.data}
           </pre>
@@ -463,7 +463,7 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
       {expanded && (
         <div className="pb-3 pl-10 space-y-3">
           {/* Program address */}
-          <div className="flex items-center gap-2 text-[10px]">
+          <div className="flex items-center gap-2 text-xs">
             <span className="text-muted-foreground/60 w-20 shrink-0">Program</span>
             <Addr pubkey={ix.programId} labels={labels} />
           </div>
@@ -475,12 +475,12 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
             const unsetEntries = entries.filter(([, v]) => v === null || v === undefined);
             return (
               <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70 block mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-primary/70 block mb-2">
                   Decoded Arguments
                 </span>
                 <div className="space-y-1">
                   {setEntries.map(([k, v]) => (
-                    <div key={k} className="flex items-start gap-3 text-[10px]">
+                    <div key={k} className="flex items-start gap-3 text-xs">
                       <span className="text-muted-foreground font-mono shrink-0 w-36">{k}</span>
                       <span className="text-foreground/80 font-mono break-all">
                         {typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)}
@@ -489,12 +489,12 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
                   ))}
                   {unsetEntries.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-primary/10">
-                      <span className="text-[9px] text-muted-foreground/50 uppercase tracking-wider block mb-1">
+                      <span className="text-xs text-muted-foreground/50 uppercase tracking-wider block mb-1">
                         Unchanged Fields ({unsetEntries.length})
                       </span>
                       <div className="flex flex-wrap gap-x-4 gap-y-0.5">
                         {unsetEntries.map(([k]) => (
-                          <span key={k} className="text-[10px] font-mono text-muted-foreground/40 italic">{k}</span>
+                          <span key={k} className="text-xs font-mono text-muted-foreground/40 italic">{k}</span>
                         ))}
                       </div>
                     </div>
@@ -507,10 +507,10 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
           {/* Parsed data (non-SAP native instructions) */}
           {ix.parsed && Object.keys(ix.parsed).length > 0 && !ix.decodedArgs && (
             <div className="rounded-lg bg-muted/50 p-3">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
                 Parsed Data
               </span>
-              <pre className="text-[10px] font-mono text-foreground/70 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap"
+              <pre className="text-xs font-mono text-foreground/70 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap"
                    style={{ scrollbarWidth: 'thin' }}>
                 {JSON.stringify(ix.parsed, null, 2)}
               </pre>
@@ -525,7 +525,7 @@ function IxRow({ ix, index, cuUsed, labels, depth = 0 }: {
           {/* Inner instructions (recursive) */}
           {(ix.innerInstructions?.length ?? 0) > 0 && (
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                 ↳ Inner Instructions ({ix.innerInstructions.length})
               </span>
               {ix.innerInstructions.map((inner, i) => (
@@ -545,14 +545,14 @@ function AccountList({ accounts, labels }: { accounts: string[]; labels: Address
   return (
     <div>
       <button onClick={() => setOpen(!open)}
-              className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+              className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         Account Inputs ({accounts.length})
       </button>
       {open && (
         <div className="mt-2 space-y-0.5 ml-1">
           {accounts.map((acc, i) => (
-            <div key={i} className="flex items-center gap-2 text-[10px]">
+            <div key={i} className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground/50 w-5 text-right tabular-nums">{i}</span>
               <Addr pubkey={acc} labels={labels} />
             </div>
@@ -668,13 +668,13 @@ export default function TransactionDetailPage() {
 
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-lg font-semibold text-foreground">Transaction Details</h1>
-          <Badge className={cn('gap-1 text-[9px] font-semibold uppercase tracking-wider',
+          <Badge className={cn('gap-1 text-xs font-semibold uppercase tracking-wider',
             ok ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
                : 'bg-red-500/15 text-red-400 border-red-500/20')}>
             <span className={cn('h-1.5 w-1.5 rounded-full', ok ? 'bg-emerald-500' : 'bg-red-500')} />
             {ok ? 'SUCCESS' : 'FAILED'}
           </Badge>
-          <Badge variant="outline" className="text-[9px] text-muted-foreground">Finalized</Badge>
+          <Badge variant="outline" className="text-xs text-muted-foreground">Finalized</Badge>
         </div>
 
         {/* Ribbon */}
@@ -701,14 +701,14 @@ export default function TransactionDetailPage() {
 
           <Row label="Result" tip="Whether the transaction executed successfully">
             <div className="flex items-center gap-2">
-              <Badge className={cn('gap-1 text-[9px] uppercase',
+              <Badge className={cn('gap-1 text-xs uppercase',
                 ok ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
                    : 'bg-red-500/15 text-red-400 border-red-500/20')}>
                 <span className={cn('h-1.5 w-1.5 rounded-full', ok ? 'bg-emerald-500' : 'bg-red-500')} />
                 {ok ? 'SUCCESS' : 'FAILED'}
               </Badge>
-              <span className="text-[10px] text-muted-foreground">Finalized (MAX Confirmations)</span>
-              {tx.error ? <span className="text-[10px] text-red-400/70 font-mono ml-2">{JSON.stringify(tx.error)}</span> : null}
+              <span className="text-xs text-muted-foreground">Finalized (MAX Confirmations)</span>
+              {tx.error ? <span className="text-xs text-red-400/70 font-mono ml-2">{JSON.stringify(tx.error)}</span> : null}
             </div>
           </Row>
 
@@ -801,13 +801,13 @@ export default function TransactionDetailPage() {
             {events.map((evt, i) => (
               <div key={i} className="rounded-lg bg-primary/5 border border-primary/10 p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] text-muted-foreground/50 font-mono">#{i + 1}</span>
-                  <Badge className="text-[9px] font-mono bg-primary/15 text-primary border-primary/20">{evt.name}</Badge>
+                  <span className="text-xs text-muted-foreground/50 font-mono">#{i + 1}</span>
+                  <Badge className="text-xs font-mono bg-primary/15 text-primary border-primary/20">{evt.name}</Badge>
                 </div>
                 {Object.keys(evt.data).length > 0 && (
                   <div className="space-y-1">
                     {Object.entries(evt.data).map(([k, v]) => (
-                      <div key={k} className="flex items-start gap-3 text-[10px]">
+                      <div key={k} className="flex items-start gap-3 text-xs">
                         <span className="text-muted-foreground font-mono shrink-0 w-36">{k}</span>
                         <span className="text-foreground/80 font-mono break-all">
                           {v === null || v === undefined
@@ -830,8 +830,8 @@ export default function TransactionDetailPage() {
           <div className="rounded-lg bg-muted/20 p-3 max-h-[500px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {logs.map((line, i) => (
               <div key={i} className="flex gap-3 py-0.5 hover:bg-muted/30 rounded px-1 transition-colors">
-                <span className="text-[9px] text-muted-foreground/30 font-mono tabular-nums shrink-0 w-6 text-right select-none">{i + 1}</span>
-                <span className={cn('text-[10px] font-mono break-all', logCls(line))}>{line}</span>
+                <span className="text-xs text-muted-foreground/30 font-mono tabular-nums shrink-0 w-6 text-right select-none">{i + 1}</span>
+                <span className={cn('text-xs font-mono break-all', logCls(line))}>{line}</span>
               </div>
             ))}
           </div>
@@ -844,16 +844,16 @@ export default function TransactionDetailPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-[10px] w-8">#</TableHead>
-                <TableHead className="text-[10px]">Address</TableHead>
-                <TableHead className="text-[10px] w-20 text-center">Signer</TableHead>
-                <TableHead className="text-[10px] w-20 text-center">Writable</TableHead>
+                <TableHead className="text-xs w-8">#</TableHead>
+                <TableHead className="text-xs">Address</TableHead>
+                <TableHead className="text-xs w-20 text-center">Signer</TableHead>
+                <TableHead className="text-xs w-20 text-center">Writable</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {accountKeys.map((acc, i) => (
                 <TableRow key={i} className="group">
-                  <TableCell className="text-[10px] text-muted-foreground tabular-nums">{i}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground tabular-nums">{i}</TableCell>
                   <TableCell>
                     <Addr pubkey={acc.pubkey} labels={labels} />
                   </TableCell>
@@ -881,10 +881,10 @@ export default function TransactionDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-[10px]">Address</TableHead>
-                  <TableHead className="text-[10px] text-right">Before (SOL)</TableHead>
-                  <TableHead className="text-[10px] text-right">After (SOL)</TableHead>
-                  <TableHead className="text-[10px] text-right">Change (SOL)</TableHead>
+                  <TableHead className="text-xs">Address</TableHead>
+                  <TableHead className="text-xs text-right">Before (SOL)</TableHead>
+                  <TableHead className="text-xs text-right">After (SOL)</TableHead>
+                  <TableHead className="text-xs text-right">Change (SOL)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -893,9 +893,9 @@ export default function TransactionDetailPage() {
                   return (
                     <TableRow key={i}>
                       <TableCell><Addr pubkey={b.account} labels={labels} /></TableCell>
-                      <TableCell className="text-right text-[10px] font-mono tabular-nums text-foreground/70">{(b.pre / 1e9).toFixed(9)}</TableCell>
-                      <TableCell className="text-right text-[10px] font-mono tabular-nums text-foreground/70">{(b.post / 1e9).toFixed(9)}</TableCell>
-                      <TableCell className={cn('text-right text-[10px] font-mono tabular-nums font-medium',
+                      <TableCell className="text-right text-xs font-mono tabular-nums text-foreground/70">{(b.pre / 1e9).toFixed(9)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono tabular-nums text-foreground/70">{(b.post / 1e9).toFixed(9)}</TableCell>
+                      <TableCell className={cn('text-right text-xs font-mono tabular-nums font-medium',
                         ch > 0 ? 'text-emerald-400' : ch < 0 ? 'text-red-400' : 'text-foreground/70')}>
                         {ch > 0 && '+'}{ch.toFixed(9)}
                       </TableCell>
@@ -915,12 +915,12 @@ export default function TransactionDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-[10px] w-8" />
-                  <TableHead className="text-[10px]">Account</TableHead>
-                  <TableHead className="text-[10px]">Token</TableHead>
-                  <TableHead className="text-[10px] text-right">Before</TableHead>
-                  <TableHead className="text-[10px] text-right">After</TableHead>
-                  <TableHead className="text-[10px] text-right">Change</TableHead>
+                  <TableHead className="text-xs w-8" />
+                  <TableHead className="text-xs">Account</TableHead>
+                  <TableHead className="text-xs">Token</TableHead>
+                  <TableHead className="text-xs text-right">Before</TableHead>
+                  <TableHead className="text-xs text-right">After</TableHead>
+                  <TableHead className="text-xs text-right">Change</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -936,13 +936,13 @@ export default function TransactionDetailPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           {tk
-                            ? <span className="text-[10px] font-medium text-foreground/80">{tk.symbol}</span>
-                            : <Cp text={t.mint} display={short(t.mint, 6, 6)} className="text-[10px]" />}
+                            ? <span className="text-xs font-medium text-foreground/80">{tk.symbol}</span>
+                            : <Cp text={t.mint} display={short(t.mint, 6, 6)} className="text-xs" />}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right text-[10px] font-mono tabular-nums text-foreground/70">{t.preAmount}</TableCell>
-                      <TableCell className="text-right text-[10px] font-mono tabular-nums text-foreground/70">{t.postAmount}</TableCell>
-                      <TableCell className={cn('text-right text-[10px] font-mono tabular-nums font-medium',
+                      <TableCell className="text-right text-xs font-mono tabular-nums text-foreground/70">{t.preAmount}</TableCell>
+                      <TableCell className="text-right text-xs font-mono tabular-nums text-foreground/70">{t.postAmount}</TableCell>
+                      <TableCell className={cn('text-right text-xs font-mono tabular-nums font-medium',
                         ch > 0 ? 'text-emerald-400' : ch < 0 ? 'text-red-400' : 'text-foreground/70')}>
                         {ch > 0 && '+'}{ch.toFixed(t.decimals)}
                       </TableCell>
