@@ -155,16 +155,23 @@ export async function listRegistryAgentsForWallet(
   let filtered = upstream.filter(matches);
   const clientSideFiltered = filtered.length !== upstream.length;
 
-  // If first page yielded no matches but upstream has many pages, scan AT
-  // MOST one extra page. We bail immediately on 429 to avoid amplifying
-  // rate-limit pressure (was causing 13-40s response times).
+  // The upstream `walletAddress=` filter is unreliable, so when page 1 yields
+  // no matches we walk subsequent pages up to MAX_PAGE_SCAN. We bail
+  // immediately on 429 to avoid amplifying rate-limit pressure.
   const totalPages = body.data.totalPages ?? 1;
+  const MAX_PAGE_SCAN = 10;
   if (filtered.length === 0 && totalPages > 1) {
-    const pageUrl = `${BASE_URL}/agents?walletAddress=${encodeURIComponent(wallet)}&network=${network}&pageSize=${PAGE_SIZE}&page=2`;
-    const pageRes = await timedFetch(pageUrl);
-    if (pageRes && pageRes.status === 429) {
-      rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
-    } else if (pageRes && pageRes.ok) {
+    const pagesToScan = Math.min(totalPages, MAX_PAGE_SCAN);
+    for (let page = 2; page <= pagesToScan; page++) {
+      if (Date.now() < rateLimitedUntil) break;
+      const pageUrl = `${BASE_URL}/agents?walletAddress=${encodeURIComponent(wallet)}&network=${network}&pageSize=${PAGE_SIZE}&page=${page}`;
+      const pageRes = await timedFetch(pageUrl);
+      if (!pageRes) break;
+      if (pageRes.status === 429) {
+        rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+        break;
+      }
+      if (!pageRes.ok) break;
       try {
         const pageJson = (await pageRes.json()) as {
           success?: boolean;
@@ -172,7 +179,10 @@ export async function listRegistryAgentsForWallet(
         };
         if (pageJson?.success && Array.isArray(pageJson.data?.agents)) {
           const pageAgents = (pageJson.data.agents as MetaplexRegistryAgent[]).filter(matches);
-          if (pageAgents.length > 0) filtered = filtered.concat(pageAgents);
+          if (pageAgents.length > 0) {
+            filtered = filtered.concat(pageAgents);
+            break; // Match found — stop scanning.
+          }
         }
       } catch {
         // Best effort only.
