@@ -28,10 +28,12 @@ function resolveNetwork(): SynapseNetwork {
 }
 
 function resolveRegion(): SynapseRegion {
-  switch (env.SYNAPSE_REGION) {
+  switch (env.SYNAPSE_REGION.toUpperCase()) {
     case 'EU':
+    case 'EU-1':
       return SynapseRegion.EU;
     case 'US':
+    case 'US-1':
     default:
       return SynapseRegion.US;
   }

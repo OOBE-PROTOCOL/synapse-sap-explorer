@@ -173,7 +173,7 @@ export function ExplorerMetric({
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="space-y-1 min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               {label}
             </p>
             <p className="text-lg sm:text-2xl font-bold tracking-tight text-foreground tabular-nums font-mono truncate">

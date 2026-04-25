@@ -3,17 +3,47 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, Package } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, Package, HelpCircle } from 'lucide-react';
 import { ReputationBar, StatusBadge, Address, ProtocolBadge, Skeleton, Tabs, EmptyState, AgentAvatar, ExplorerPagination, usePagination } from '~/components/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking, useAgentMetaplex, useAgentNfts } from '~/hooks/use-sap';
+import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking, useAgentMetaplex, useAgentNfts, useMetaplexRegistry } from '~/hooks/use-sap';
 import type { SapEvent, X402PaymentRow, X402Stats } from '~/hooks/use-sap';
 import { toast } from 'sonner';
 import { cn } from '~/lib/utils';
 
 const SOLSCAN = 'https://solscan.io';
+
+/* ── CAIP-10 chain decoder ─────────────────────────────────
+ * Decodes Metaplex / EIP-8004 cross-chain agent registry
+ * pointers like `solana:101:metaplex`, `eip155:8453:0x8004…`.
+ * Returns a friendly chain label + an explorer URL for the
+ * registry contract when known.
+ * ───────────────────────────────────────────────────────── */
+const EVM_REGISTRIES: Record<string, { name: string; explorer: string }> = {
+  '8453': { name: 'Base', explorer: 'https://basescan.org' },
+  '1': { name: 'Ethereum', explorer: 'https://etherscan.io' },
+  '10': { name: 'Optimism', explorer: 'https://optimistic.etherscan.io' },
+  '42161': { name: 'Arbitrum', explorer: 'https://arbiscan.io' },
+  '1187947933': { name: 'EVM Testnet', explorer: '' },
+};
+function decodeAgentRegistry(s: string): { chain: string; registryLabel: string; explorer: string | null } {
+  const parts = s.split(':');
+  if (parts[0] === 'solana') {
+    return { chain: 'Solana mainnet', registryLabel: parts[2] ?? 'registry', explorer: SOLSCAN };
+  }
+  if (parts[0] === 'eip155') {
+    const meta = EVM_REGISTRIES[parts[1] ?? ''];
+    const addr = parts[2] ?? '';
+    return {
+      chain: meta?.name ?? `EVM ${parts[1]}`,
+      registryLabel: addr ? `${addr.slice(0, 8)}…${addr.slice(-4)}` : 'registry',
+      explorer: meta?.explorer && addr ? `${meta.explorer}/address/${addr}` : null,
+    };
+  }
+  return { chain: parts[0] ?? 'unknown', registryLabel: parts.slice(1).join(':'), explorer: null };
+}
 
 function safeDateStr(raw: string | number | null | undefined): string {
   if (!raw) return '—';
@@ -42,6 +72,7 @@ export default function AgentDetailPage() {
   const { data: stakingData } = useAgentStaking(data?.profile?.pda ?? null);
   const { data: metaplexData, loading: metaplexLoading } = useAgentMetaplex(wallet);
   const { data: nftsData } = useAgentNfts(wallet);
+  const { data: registryData, loading: registryLoading } = useMetaplexRegistry(wallet);
   const [activeTab, setActiveTab] = useState('overview');
   const [copied, setCopied] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState(false);
@@ -144,6 +175,24 @@ export default function AgentDetailPage() {
   const totalCallsSettled = agentEscrows.reduce((s, e) => s + Number(e.totalCallsSettled), 0);
   const totalSolSettled = agentEscrows.reduce((s, e) => s + Number(e.totalSettled), 0);
 
+  // ── Registry coordination ────────────────────────────────────────────────
+  // Reaching this render means SAP registration is a given (we read the
+  // AgentAccount PDA above). The only question is whether Metaplex
+  // *also* knows about this agent — via any of three independent signals:
+  //   1. SAP-canonical URI binding   (metaplexData.linked)
+  //   2. On-chain AgentIdentity plugin on any owned MPL Core asset
+  //   3. Public Metaplex Agents Registry entry (api.metaplex.com)
+  // ANY signal proves dual registration. The URI-binding flag is a
+  // sub-fact ("coordinated" vs "parallel"), not the headline state.
+  const uriBound = !!metaplexData?.linked;
+  const hasOnChainPlugin =
+    !!nftsData && nftsData.items.some((n) => n.hasAgentIdentity);
+  const registryAgentCount = registryData?.agents.length ?? 0;
+  const onMetaplexRegistry = registryAgentCount > 0;
+  const onMetaplex = uriBound || hasOnChainPlugin || onMetaplexRegistry;
+  // Two-state primary: dual-registered or SAP-only.
+  const linkState: 'both' | 'sap-only' = onMetaplex ? 'both' : 'sap-only';
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* ── Back ── */}
@@ -153,58 +202,96 @@ export default function AgentDetailPage() {
 
       <Card className={cn(
         'overflow-hidden border transition-colors',
-        metaplexData?.linked
+        'pt-4',
+        linkState === 'both'
           ? 'bg-amber-500/10 border-amber-500/30 shadow-[0_0_22px_-12px_hsl(var(--neon-amber)/0.55)]'
           : 'bg-neutral-900 border-neutral-800',
       )}>
-        <CardContent className="px-4 sm:px-5 py-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Sparkles className={cn('h-4 w-4', metaplexData?.linked ? 'text-amber-300' : 'text-neutral-500')} />
-                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400">
-                  Metaplex Integration
-                </p>
-                {metaplexLoading ? (
-                  <Badge variant="secondary" className="text-xs">Syncing</Badge>
-                ) : (
-                  <Badge
-                    className={cn(
-                      'text-xs px-1.5 py-0 border',
-                      metaplexData?.linked
-                        ? 'bg-amber-500/15 text-amber-200 border-amber-400/30'
-                        : 'bg-neutral-800 text-neutral-400 border-neutral-700',
+        <CardContent className="px-4 sm:px-5 py-3.5">
+          {(() => {
+            const totalNfts = nftsData?.total ?? 0;
+            const pluginCount = nftsData?.withAgentIdentity ?? 0;
+            const registrySet = new Set((registryData?.agents ?? []).map((a) => a.mintAddress));
+            const verifiedBoth = (nftsData?.items ?? []).filter((n) => n.hasAgentIdentity && registrySet.has(n.asset)).length;
+            const isLoading = metaplexLoading || registryLoading;
+            return (
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0 flex-1">
+                  {/* Header row — single line */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Sparkles className={cn('h-3.5 w-3.5', linkState === 'both' ? 'text-amber-300' : 'text-neutral-500')} />
+                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400">Registry Coordination</p>
+                    <InfoTip label={"How this agent is recognized across the two registries that index Solana agents: SAP (canonical on-chain PDA) and Metaplex (MPL Core AgentIdentity plugin + the public api.metaplex.com index). Each row below tells you which signals are present."} />
+                    {isLoading ? (
+                      <Badge variant="secondary" className="text-xs">Syncing…</Badge>
+                    ) : (
+                      <Badge
+                        className={cn(
+                          'text-xs px-1.5 py-0 border',
+                          linkState === 'both'
+                            ? 'bg-amber-500/15 text-amber-200 border-amber-400/30'
+                            : 'bg-neutral-800 text-neutral-400 border-neutral-700',
+                        )}
+                      >
+                        {linkState === 'both' ? 'SAP + Metaplex' : 'SAP only'}
+                      </Badge>
                     )}
-                  >
-                    {metaplexData?.linked ? 'Linked' : 'Not linked'}
-                  </Badge>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-neutral-500">
-                {metaplexLoading
-                  ? 'Checking Metaplex Core registry mapping...'
-                  : metaplexData?.linked
-                    ? 'Agent identity is registered through Metaplex Core (EIP-8004).'
-                    : 'No active Metaplex Core mapping found for this wallet yet.'}
-              </p>
-            </div>
+                  </div>
 
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Button
-                type="button"
-                variant={metaplexData?.linked ? 'default' : 'outline'}
-                size="sm"
-                className={cn(
-                  'h-9 w-full md:w-auto',
-                  metaplexData?.linked && 'bg-amber-500/80 text-neutral-950 hover:bg-amber-400',
-                )}
-                onClick={() => setActiveTab('metaplex')}
-              >
+                  {/* Inline metric strip */}
+                  {!isLoading && (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-neutral-500">
+                      <span className="inline-flex items-center gap-1.5" title="SAP agent PDA exists on-chain on the Solana mainnet (SAPpUhsW… program). This is always true on this page.">
+                        <span className="text-neutral-600">SAP</span>
+                        <span className="text-emerald-400">●</span>
+                        <span className="text-neutral-300">on-chain</span>
+                      </span>
+                      <span className="text-neutral-700">·</span>
+                      <span className="inline-flex items-center gap-1.5" title="All MPL Core NFTs owned by this wallet — with or without an AgentIdentity plugin. Source: on-chain fetchAssetsByOwner.">
+                        <span className="text-neutral-600">MPL Core</span>
+                        <span className="font-mono tabular-nums text-neutral-300">{totalNfts}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5" title="How many of those MPL Core NFTs carry an EIP-8004 AgentIdentity external plugin. Each plugin URI points to one agent card — either on the SAP host or on api.metaplex.com.">
+                        <span className="text-neutral-600">EIP-8004 plugin</span>
+                        <span className={cn('font-mono tabular-nums', pluginCount > 0 ? 'text-amber-300' : 'text-neutral-500')}>{pluginCount}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5" title="Entries this wallet has on the public Metaplex Agents Registry. Independent peer-trust signal: a third-party indexer confirmed the agent exists. May differ from on-chain plugins (off-chain-only cards or unindexed plugins).">
+                        <span className="text-neutral-600">api.metaplex.com</span>
+                        <span className={cn('font-mono tabular-nums', registryAgentCount > 0 ? 'text-amber-300' : 'text-neutral-500')}>{registryAgentCount}</span>
+                      </span>
+                      {verifiedBoth > 0 && (
+                        <span className="inline-flex items-center gap-1.5" title="Strongest signal: NFTs that are both on-chain (AgentIdentity plugin) AND indexed by api.metaplex.com. Cryptographic proof + peer-trust attestation.">
+                          <span className="text-neutral-600">plugin ∩ registry</span>
+                          <span className="font-mono tabular-nums text-emerald-400">{verifiedBoth}</span>
+                        </span>
+                      )}
+                      {uriBound && (
+                        <span className="inline-flex items-center gap-1 text-emerald-400" title="At least one MPL Core NFT's AgentIdentity plugin URI resolves to this SAP host — making the NFT the canonical, transferable handle for this on-chain agent.">
+                          <span>✓</span><span>SAP-bound URI</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                  <Button
+                    type="button"
+                    variant={linkState === 'both' ? 'default' : 'outline'}
+                    size="sm"
+                    className={cn(
+                      'h-9 w-full md:w-auto',
+                      linkState === 'both' && 'bg-amber-500/80 text-neutral-950 hover:bg-amber-400',
+                    )}
+                    onClick={() => setActiveTab('metaplex')}
+                  >
                 Open Metaplex Panel
                 <ChevronRight className="ml-1 h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
@@ -524,7 +611,7 @@ export default function AgentDetailPage() {
                                   <div className="flex items-center gap-1.5">
                                     <p className="text-sm font-medium text-white truncate">{r.name}</p>
                                     {r.isDeployer && (
-                                      <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30 px-1 py-0 shrink-0"><Rocket className="h-2 w-2" /></Badge>
+                                      <Badge className="text-xs bg-primary/15 text-primary border-primary/30 px-1 py-0 shrink-0"><Rocket className="h-2 w-2" /></Badge>
                                     )}
                                   </div>
                                   <p className="text-xs text-neutral-500 truncate">
@@ -621,7 +708,7 @@ export default function AgentDetailPage() {
                                           )}
                                           {n.hasAgentIdentity && (
                                             <span className={cn(
-                                              'absolute top-1 right-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-bold tracking-wide backdrop-blur',
+                                              'absolute top-1 right-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-xs font-bold tracking-wide backdrop-blur',
                                               n.linkedToThisAgent ? 'bg-pink-500/80 text-white' : 'bg-pink-500/40 text-pink-100',
                                             )}>EIP-8004</span>
                                           )}
@@ -630,18 +717,18 @@ export default function AgentDetailPage() {
                                           <div className="flex items-center gap-1 flex-wrap">
                                             <p className="truncate text-xs font-medium text-white">{n.name ?? 'Unnamed NFT'}</p>
                                             {n.linkedToThisAgent && (
-                                              <Badge className="text-[10px] bg-pink-500/15 text-pink-300 border-pink-500/30 px-1 py-0 shrink-0">Agent</Badge>
+                                              <Badge className="text-xs bg-pink-500/15 text-pink-300 border-pink-500/30 px-1 py-0 shrink-0">Agent</Badge>
                                             )}
                                           </div>
                                           <div className="space-y-0.5">
-                                            <p className="text-[10px] text-neutral-500 truncate">Asset: {n.asset.slice(0, 8)}…{n.asset.slice(-4)}</p>
+                                            <p className="text-xs text-neutral-500 truncate">Asset: {n.asset.slice(0, 8)}…{n.asset.slice(-4)}</p>
                                             {n.description && (
-                                              <p className="text-[10px] text-neutral-400 line-clamp-2">{n.description}</p>
+                                              <p className="text-xs text-neutral-400 line-clamp-2">{n.description}</p>
                                             )}
                                           </div>
                                           {n.linkedToThisAgent && (
                                             <div className="pt-0.5 border-t border-pink-500/20 space-y-0.5">
-                                              <p className="text-[10px] text-pink-400/70 font-semibold">✓ Metaplex Core</p>
+                                              <p className="text-xs text-pink-400/70 font-semibold">✓ Metaplex Core</p>
                                             </div>
                                           )}
                                         </div>
@@ -694,7 +781,7 @@ export default function AgentDetailPage() {
                                           )}
                                           {n.hasAgentIdentity && (
                                             <span className={cn(
-                                              'absolute top-1 right-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-bold tracking-wide backdrop-blur',
+                                              'absolute top-1 right-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-xs font-bold tracking-wide backdrop-blur',
                                               n.linkedToThisAgent ? 'bg-pink-500/80 text-white' : 'bg-pink-500/40 text-pink-100',
                                             )}>EIP-8004</span>
                                           )}
@@ -703,18 +790,18 @@ export default function AgentDetailPage() {
                                           <div className="flex items-center gap-1 flex-wrap">
                                             <p className="truncate text-xs font-medium text-white">{n.name ?? 'Unnamed NFT'}</p>
                                             {n.linkedToThisAgent && (
-                                              <Badge className="text-[10px] bg-pink-500/15 text-pink-300 border-pink-500/30 px-1 py-0 shrink-0">Agent</Badge>
+                                              <Badge className="text-xs bg-pink-500/15 text-pink-300 border-pink-500/30 px-1 py-0 shrink-0">Agent</Badge>
                                             )}
                                           </div>
                                           <div className="space-y-0.5">
-                                            <p className="text-[10px] text-neutral-500 truncate">Asset: {n.asset.slice(0, 8)}…{n.asset.slice(-4)}</p>
+                                            <p className="text-xs text-neutral-500 truncate">Asset: {n.asset.slice(0, 8)}…{n.asset.slice(-4)}</p>
                                             {n.description && (
-                                              <p className="text-[10px] text-neutral-400 line-clamp-2">{n.description}</p>
+                                              <p className="text-xs text-neutral-400 line-clamp-2">{n.description}</p>
                                             )}
                                           </div>
                                           {n.linkedToThisAgent && (
                                             <div className="pt-0.5 border-t border-pink-500/20 space-y-0.5">
-                                              <p className="text-[10px] text-pink-400/70 font-semibold">✓ Metaplex Core Agent</p>
+                                              <p className="text-xs text-pink-400/70 font-semibold">✓ Metaplex Core Agent</p>
                                             </div>
                                           )}
                                         </div>
@@ -784,7 +871,7 @@ export default function AgentDetailPage() {
       </div>
 
       {/* ═══════════ TABS ═══════════ */}
-      <div className="space-y-6">
+      <div>
         <Tabs
           tabs={[
             { value: 'overview', label: 'Overview' },
@@ -802,6 +889,7 @@ export default function AgentDetailPage() {
           onChange={setActiveTab}
         />
 
+        <div className="rounded-lg rounded-tl-none border border-border/30 bg-card/60 p-4 sm:p-6 space-y-6 -mt-px">
         {/* Tab: Overview */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
@@ -1061,10 +1149,52 @@ export default function AgentDetailPage() {
             loading={metaplexLoading}
             onCopy={copyAddr}
             copied={copied}
+            nfts={nftsData?.items ?? null}
+            registry={registryData ?? null}
           />
         )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/* ── InfoTip ─────────────────────────────────────────────
+ * Small `(?)` icon button with a native title-attr tooltip.
+ * Use to attach concise explanations to labels and section
+ * headers without pulling in heavy popover machinery.
+ * ───────────────────────────────────────────────────── */
+function InfoTip({
+  label,
+  className,
+  side = 'top',
+}: {
+  label: string;
+  className?: string;
+  side?: 'top' | 'bottom';
+}) {
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      tabIndex={0}
+      className={cn('group/tip relative inline-flex shrink-0 cursor-help focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 rounded-full', className)}
+    >
+      <HelpCircle
+        aria-hidden="true"
+        className="size-3.5 text-neutral-500 transition-colors group-hover/tip:text-amber-300 group-focus-visible/tip:text-amber-300"
+      />
+      <span
+        role="tooltip"
+        className={cn(
+          'pointer-events-none absolute left-1/2 z-50 -translate-x-1/2 w-64 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs font-normal normal-case tracking-normal text-neutral-200 text-pretty shadow-md',
+          'opacity-0 transition-opacity duration-150 ease-out group-hover/tip:opacity-100 group-focus-visible/tip:opacity-100 motion-reduce:transition-none',
+          side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
+        )}
+      >
+        {label}
+      </span>
+    </span>
   );
 }
 
@@ -1619,18 +1749,22 @@ function AgentEventTimeline({
 
 /* ── Agent Metaplex Core Tab (SDK 0.9.0 bridge) ───────────── */
 
-import type { AgentMetaplexLink } from '~/hooks/use-sap';
+import type { AgentMetaplexLink, AgentNftItem, MetaplexRegistryResponse } from '~/hooks/use-sap';
 
 function AgentMetaplexTab({
   data,
   loading,
   onCopy,
   copied,
+  nfts,
+  registry,
 }: {
   data: AgentMetaplexLink | null;
   loading: boolean;
   onCopy: (text: string) => void;
   copied: string | null;
+  nfts: AgentNftItem[] | null;
+  registry: MetaplexRegistryResponse | null;
 }) {
   if (loading) {
     return (
@@ -1656,14 +1790,34 @@ function AgentMetaplexTab({
 
   const { linked, asset, agentIdentityUri, expectedUrl, sapAgentPda, registration, error } = data;
 
+  const identityNfts = (nfts ?? []).filter((n) => n.hasAgentIdentity);
+  const registryAgents = registry?.agents ?? [];
+  // O(1) mint-address lookup for registry membership — used to mark NFTs
+  // that are independently confirmed by api.metaplex.com (highest trust).
+  const registryMintSet = new Set(registryAgents.map((a) => a.mintAddress));
+  // SAP registration is a given on this page (we read the AgentAccount PDA).
+  // The only question is whether Metaplex *also* knows about the agent — via
+  // any of three independent signals (URI binding, on-chain plugin, registry).
+  // ANY signal proves dual registration.
+  const onMetaplex =
+    !!linked || identityNfts.length > 0 || registryAgents.length > 0;
+  const heroState: 'both' | 'sap-only' = onMetaplex ? 'both' : 'sap-only';
+
   return (
     <div className="space-y-6">
       {/* Status hero */}
-      <Card className={cn('overflow-hidden border', linked ? 'bg-pink-500/5 border-pink-500/20' : 'bg-neutral-900 border-neutral-800')}>
+      <Card className={cn(
+        'overflow-hidden border',
+        heroState === 'both'
+          ? 'bg-pink-500/5 border-pink-500/20'
+          : 'bg-neutral-900 border-neutral-800',
+      )}>
         <CardContent className="px-5 py-2 lg:mt-4 mt-2 flex items-center align-middle gap-4">
           <div className={cn(
             'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
-            linked ? 'bg-pink-500/15 text-pink-400' : 'bg-neutral-800 text-neutral-500',
+            heroState === 'both'
+              ? 'bg-pink-500/15 text-pink-400'
+              : 'bg-neutral-800 text-neutral-500',
           )}>
             <Globe className="h-5 w-5" />
           </div>
@@ -1672,19 +1826,30 @@ function AgentMetaplexTab({
               <h3 className="text-sm font-semibold text-foreground">Metaplex Core Bridge</h3>
               <Badge className={cn(
                 'text-xs px-2 py-1',
-                linked
+                heroState === 'both'
                   ? 'bg-pink-500/15 text-pink-400 border border-pink-500/20'
                   : 'bg-neutral-800 text-neutral-500 border border-neutral-700',
               )}>
-                {linked ? 'LINKED' : 'NOT LINKED'}
+                {heroState === 'both' ? 'SAP + METAPLEX' : 'SAP ONLY'}
               </Badge>
+              {linked && (
+                <Badge className="text-xs px-1.5 py-0 border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+                  URI-BOUND
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-neutral-500">
-              {linked
-                ? 'This agent owns a Metaplex Core asset whose AgentIdentity plugin points back to its SAP PDA via EIP-8004.'
+              {heroState === 'both'
+                ? (() => {
+                    const parts: string[] = [];
+                    if (linked) parts.push('AgentIdentity URI bound to SAP host');
+                    else if (identityNfts.length > 0) parts.push(`${identityNfts.length} on-chain AgentIdentity plugin${identityNfts.length === 1 ? '' : 's'}`);
+                    if (registryAgents.length > 0) parts.push(`${registryAgents.length} entry${registryAgents.length === 1 ? '' : 'ies'} on api.metaplex.com`);
+                    return `Registered on SAP (on-chain PDA) and on Metaplex · ${parts.join(' + ')}.`;
+                  })()
                 : error
                   ? `Discovery error: ${error}`
-                  : 'No matching Metaplex Core asset was found in this wallet. The expected AgentIdentity URI is shown below.'}
+                  : 'Registered on SAP only. No Metaplex AgentIdentity plugin or registry entry found for this wallet.'}
             </p>
           </div>
         </CardContent>
@@ -1714,7 +1879,7 @@ function AgentMetaplexTab({
             label="MPL Core Asset"
             value={
               asset ? (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 justify-end">
                   <Link
                     href={`${SOLSCAN}/token/${asset}`}
                     target="_blank"
@@ -1728,6 +1893,36 @@ function AgentMetaplexTab({
                     <Copy className="h-3 w-3" />
                   </button>
                   {copied === asset && <span className="text-xs text-emerald-400">✓</span>}
+                  <Badge className="text-xs px-1.5 py-0 border bg-pink-500/15 text-pink-300 border-pink-500/30 ml-1">
+                    SAP-BOUND
+                  </Badge>
+                </div>
+              ) : identityNfts.length > 0 ? (
+                <div className="flex items-center gap-1.5 justify-end min-w-0">
+                  <span
+                    className="inline-flex shrink-0 cursor-help"
+                    aria-label="Discovered MPL Core asset"
+                    title={
+                      identityNfts.length > 1
+                        ? `${identityNfts.length} MPL Core assets owned by this wallet carry an AgentIdentity plugin but none point to the SAP host — see NFT cards below for full details.`
+                        : `Discovered on ${identityNfts[0].identityHost ?? 'a foreign host'} — AgentIdentity plugin URI is not bound to the SAP host. See NFT cards below for full details.`
+                    }
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                  </span>
+                  <Link
+                    href={`${SOLSCAN}/token/${identityNfts[0].asset}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-xs text-amber-400 hover:underline truncate max-w-[16rem] inline-flex items-center gap-1"
+                  >
+                    {identityNfts[0].asset}
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                  <button onClick={() => onCopy(identityNfts[0].asset)} className="text-neutral-600 hover:text-neutral-300">
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  {copied === identityNfts[0].asset && <span className="text-xs text-emerald-400">✓</span>}
                 </div>
               ) : (
                 <span className="text-xs text-neutral-600 italic">none discovered</span>
@@ -1852,6 +2047,416 @@ function AgentMetaplexTab({
           </CardContent>
         </Card>
       )}
+
+      {/* Metaplex Registry (api.metaplex.com) — agents this wallet has minted on the public registry */}
+      {registry && (registryAgents.length > 0 || registry.error) && (
+        <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+          <CardHeader className="pb-3 px-5 pt-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2">
+              <Globe className="h-3.5 w-3.5 text-amber-400" />
+              Metaplex Registry
+              <span className="text-xs font-normal text-neutral-600 normal-case tracking-normal">api.metaplex.com</span>
+              <InfoTip label={"Public peer-trust index hosted by Metaplex. Lists every agent minted through MPL Core's AgentIdentity bridge — independent of the SAP host. An entry here proves a third party indexed this agent. Not all on-chain plugins end up here, and the registry can list off-chain-only cards."} />
+              <Badge variant="secondary" className="text-xs ml-auto tabular-nums">{registryAgents.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 pt-0 space-y-3">
+            {registry.error ? (
+              <p className="text-xs text-amber-400">Registry unreachable: {registry.error}</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {registryAgents.map((a) => {
+                    const hasToken = !!a.agentToken;
+                    return (
+                      <div
+                        key={a.id}
+                        className={cn(
+                          'relative rounded-lg border p-2.5 space-y-2 transition-colors',
+                          hasToken
+                            ? 'border-amber-400/40 bg-amber-500/5'
+                            : 'border-neutral-800 bg-neutral-950/50',
+                        )}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          {a.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={a.image}
+                              alt={a.name ?? 'agent'}
+                              className="size-10 rounded-md object-cover bg-neutral-900 shrink-0"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="size-10 rounded-md bg-neutral-900 shrink-0" />
+                          )}
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-xs font-medium text-white truncate">{a.name ?? 'Unnamed agent'}</p>
+                              {hasToken && (
+                                <Badge
+                                  className="text-xs px-1.5 py-0 border bg-amber-500/15 text-amber-200 border-amber-400/40 inline-flex items-center gap-1"
+                                  title="This agent has launched its own SPL token via the Metaplex Agent Token feature (typically a Meteora DBC bonding curve). The token is bound to the agent's MPL Core asset and tradeable."
+                                >
+                                  <Coins className="h-3 w-3" />
+                                  AGENT TOKEN
+                                </Badge>
+                              )}
+                            </div>
+                            {a.description && (
+                              <p className="text-xs text-neutral-500 line-clamp-2">{a.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-neutral-600">Mint ·</span>
+                            <Link
+                              href={`${SOLSCAN}/token/${a.mintAddress}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-neutral-400 hover:text-amber-300 truncate inline-flex items-center gap-1"
+                            >
+                              {a.mintAddress.slice(0, 10)}…{a.mintAddress.slice(-6)}
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                            <button onClick={() => onCopy(a.mintAddress)} className="text-neutral-600 hover:text-neutral-300">
+                              <Copy className="h-3 w-3" />
+                            </button>
+                            {copied === a.mintAddress && <span className="text-emerald-400">✓</span>}
+                          </div>
+                          {hasToken && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-amber-400/80 inline-flex items-center gap-1">
+                                <Coins className="h-3 w-3" />
+                                Token ·
+                              </span>
+                              <Link
+                                href={`${SOLSCAN}/token/${a.agentToken}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-mono text-amber-300 hover:underline truncate inline-flex items-center gap-1"
+                              >
+                                {a.agentToken!.slice(0, 10)}…{a.agentToken!.slice(-6)}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                              <button onClick={() => onCopy(a.agentToken!)} className="text-neutral-600 hover:text-neutral-300">
+                                <Copy className="h-3 w-3" />
+                              </button>
+                              {copied === a.agentToken && <span className="text-emerald-400">✓</span>}
+                            </div>
+                          )}
+                          <div>
+                            <Link
+                              href={a.agentMetadataUri}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-amber-400 hover:underline inline-flex items-center gap-1 break-all"
+                            >
+                              {a.agentMetadataUri}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Discovered AgentIdentity NFTs (foreign + canonical) */}
+      {identityNfts.length > 0 && (
+        <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+          <CardHeader className="pb-3 px-5 pt-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              Discovered AgentIdentity NFTs
+              <InfoTip label={"Direct on-chain proof. MPL Core assets owned by this wallet that carry the AgentIdentity external plugin (EIP-8004 agent-card extension). The plugin URI is the source of truth — pointing it at the SAP host (gold cards) means this NFT is the canonical, transferable handle for this agent."} />
+              <Badge variant="secondary" className="text-xs ml-auto tabular-nums">{identityNfts.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 pt-3 space-y-3">
+            {/* Compact one-line summary + legend */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <span className="inline-flex items-center gap-1.5 text-neutral-500">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+                  <span className="text-amber-300 font-medium">SAP × METAPLEX</span>
+                  <span className="text-neutral-600">URI bound to SAP host</span>
+                </span>
+                <span className="text-neutral-700">·</span>
+                <span className="inline-flex items-center gap-1.5 text-neutral-500">
+                  <span className="inline-block h-2 w-2 rounded-full bg-neutral-500" />
+                  <span className="text-neutral-300 font-medium">METAPLEX</span>
+                  <span className="text-neutral-600">peer registry only</span>
+                </span>
+                <span className="text-neutral-700">·</span>
+                <span className="inline-flex items-center gap-1.5 text-neutral-500">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                  <span className="text-emerald-300 font-medium">✓ REGISTRY</span>
+                  <span className="text-neutral-600">indexed on api.metaplex.com</span>
+                </span>
+              </div>
+              {registryAgents.length !== identityNfts.length && (
+                <details className="text-xs text-neutral-500">
+                  <summary className="cursor-pointer text-neutral-400 hover:text-neutral-200 select-none">
+                    Why on-chain plugins ({identityNfts.length}) and registry entries ({registryAgents.length}) differ
+                  </summary>
+                  <p className="mt-1.5 pl-4 leading-relaxed">
+                    {registryAgents.length > identityNfts.length
+                      ? 'Registry entries can exist without an on-chain plugin (off-chain card only) or be tied to mints not currently held by this wallet.'
+                      : 'On-chain plugins exist that have not been registered on api.metaplex.com — they remain valid identities, just not indexed by the public registry.'}
+                  </p>
+                </details>
+              )}
+            </div>
+            {identityNfts.map((n) => {
+              const isCanonical = n.linkedToThisAgent;
+              const inRegistry = registryMintSet.has(n.asset);
+              const reg = n.registration;
+              return (
+                <div
+                  key={n.asset}
+                  className={cn(
+                    'rounded-lg border p-3 space-y-2.5',
+                    isCanonical
+                      ? 'border-amber-400/40 bg-amber-500/5 shadow-[0_0_18px_-12px_hsl(var(--neon-amber)/0.6)]'
+                      : 'border-neutral-700 bg-neutral-950/40',
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    {n.image && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={n.image}
+                        alt={n.name ?? 'NFT'}
+                        className="h-12 w-12 rounded-md object-cover bg-neutral-950 shrink-0"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-white truncate">{n.name ?? reg?.name ?? 'Unnamed asset'}</p>
+                        <Badge className={cn(
+                          'text-xs px-1.5 py-0 border',
+                          isCanonical
+                            ? 'bg-amber-500/15 text-amber-200 border-amber-400/40'
+                            : 'bg-neutral-800 text-neutral-300 border-neutral-700',
+                        )}>
+                          {isCanonical ? 'SAP × METAPLEX' : `METAPLEX · ${n.identityHost ?? 'registry'}`}
+                        </Badge>
+                        {inRegistry && (
+                          <Badge
+                            className="text-xs px-1.5 py-0 border bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                            title="Mint listed on api.metaplex.com Agents Registry"
+                          >
+                            ✓ REGISTRY
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`${SOLSCAN}/token/${n.asset}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={cn(
+                            'font-mono text-xs truncate inline-flex items-center gap-1 hover:underline',
+                            isCanonical ? 'text-amber-300/80' : 'text-neutral-400',
+                          )}
+                        >
+                          {n.asset.slice(0, 12)}…{n.asset.slice(-6)}
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                        <button onClick={() => onCopy(n.asset)} className="text-neutral-600 hover:text-neutral-300">
+                          <Copy className="h-3 w-3" />
+                        </button>
+                        {copied === n.asset && <span className="text-xs text-emerald-400">✓</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {n.agentIdentityUri && (
+                    <div className="text-xs text-neutral-500">
+                      <span className="text-neutral-600">URI · </span>
+                      <Link
+                        href={n.agentIdentityUri}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(
+                          'hover:underline inline-flex items-center gap-1 max-w-full break-all',
+                          isCanonical ? 'text-amber-400' : 'text-neutral-400',
+                        )}
+                      >
+                        {n.agentIdentityUri}
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* EIP-8004 JSON content (foreign or canonical) */}
+                  {reg ? (() => {
+                    const regOwner = reg.owner ?? reg.authority ?? null;
+                    const services = Array.isArray(reg.services) ? reg.services : [];
+                    const registrations = Array.isArray(reg.registrations) ? reg.registrations : [];
+                    const trust = Array.isArray(reg.supportedTrust) ? reg.supportedTrust : [];
+                    return (
+                      <div className={cn(
+                        'rounded-md border p-3 space-y-2.5',
+                        isCanonical
+                          ? 'border-amber-500/25 bg-amber-500/[0.04]'
+                          : 'border-neutral-800 bg-neutral-950/50',
+                      )}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className={cn(
+                            'text-xs uppercase tracking-wider font-semibold inline-flex items-center gap-1.5',
+                            isCanonical ? 'text-amber-300' : 'text-neutral-400',
+                          )}>
+                            <Sparkles className="h-3 w-3" />
+                            EIP-8004 Card
+                          </p>
+                          {reg.active && (
+                            <Badge className="text-xs px-1.5 py-0 border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">● ACTIVE</Badge>
+                          )}
+                          {reg.x402Support && (
+                            <Badge className="text-xs px-1.5 py-0 border bg-sky-500/10 text-sky-300 border-sky-500/30">x402</Badge>
+                          )}
+                          {trust.map((t) => (
+                            <Badge key={String(t)} className="text-xs px-1.5 py-0 border bg-neutral-800 text-neutral-300 border-neutral-700">
+                              trust · {String(t)}
+                            </Badge>
+                          ))}
+                        </div>
+
+                        {reg.description && (
+                          <p className="text-xs text-neutral-300 leading-relaxed text-pretty">{reg.description}</p>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                          {reg.name && (
+                            <div className="truncate"><span className="text-neutral-600">Name · </span><span className="text-neutral-200">{reg.name}</span></div>
+                          )}
+                          {reg.version && (
+                            <div className="truncate"><span className="text-neutral-600">Version · </span><span className="text-neutral-300 font-mono">{reg.version}</span></div>
+                          )}
+                          {regOwner && (
+                            <div className="sm:col-span-2 flex items-center gap-1.5">
+                              <span className="text-neutral-600">Owner · </span>
+                              <Link
+                                href={`/agents/${regOwner}`}
+                                className="font-mono text-neutral-300 hover:text-amber-300 truncate"
+                              >
+                                {regOwner.slice(0, 12)}…{regOwner.slice(-6)}
+                              </Link>
+                              <button onClick={() => onCopy(regOwner)} className="text-neutral-600 hover:text-neutral-300">
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                          {reg.issuedAt && (
+                            <div><span className="text-neutral-600">Issued · </span><span className="text-neutral-300">{safeDateStr(reg.issuedAt)}</span></div>
+                          )}
+                          {reg.synapseAgent && (
+                            <div className="sm:col-span-2 truncate"><span className="text-neutral-600">Synapse · </span><span className="text-neutral-300 font-mono">{String(reg.synapseAgent)}</span></div>
+                          )}
+                        </div>
+
+                        {services.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-wider text-neutral-600">Services</p>
+                            <div className="rounded-md border border-neutral-800/80 divide-y divide-neutral-800/80">
+                              {services.map((svc, i) => {
+                                const label = svc.name ?? svc.type ?? svc.id ?? `service-${i + 1}`;
+                                const endpoint = svc.endpoint ?? svc.url ?? null;
+                                return (
+                                  <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <Badge className={cn(
+                                        'text-xs px-1.5 py-0 border shrink-0',
+                                        isCanonical
+                                          ? 'bg-amber-500/10 text-amber-200 border-amber-500/25'
+                                          : 'bg-neutral-800 text-neutral-300 border-neutral-700',
+                                      )}>
+                                        {label}
+                                      </Badge>
+                                      {svc.version && (
+                                        <span className="text-xs text-neutral-600 font-mono">v{svc.version}</span>
+                                      )}
+                                    </div>
+                                    {endpoint && (
+                                      <Link
+                                        href={endpoint}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-xs text-neutral-400 hover:text-amber-300 truncate inline-flex items-center gap-1 min-w-0"
+                                      >
+                                        <span className="truncate">{endpoint}</span>
+                                        <ExternalLink className="h-3 w-3 shrink-0" />
+                                      </Link>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {registrations.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-wider text-neutral-600 inline-flex items-center gap-1.5">
+                              Cross-chain identity
+                              <InfoTip label={"This same agent is registered across multiple chains and registries (CAIP-10 format). Other apps can resolve this identity from any of these networks — making the agent portable, multi-chain discoverable, and decoupled from any single registry."} />
+                            </p>
+                            <div className="space-y-1">
+                              {registrations.map((r, i) => {
+                                const decoded = decodeAgentRegistry(r.agentRegistry);
+                                return (
+                                  <div key={i} className="flex items-center justify-between gap-2 text-xs rounded border border-neutral-800/80 bg-neutral-950/40 px-2 py-1.5">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <Badge className="text-xs px-1.5 py-0 border bg-neutral-800 text-neutral-300 border-neutral-700 shrink-0">
+                                        {decoded.chain}
+                                      </Badge>
+                                      {decoded.explorer ? (
+                                        <Link
+                                          href={decoded.explorer}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="font-mono text-neutral-500 hover:text-amber-300 truncate inline-flex items-center gap-1"
+                                        >
+                                          {decoded.registryLabel}
+                                          <ExternalLink className="h-3 w-3 shrink-0" />
+                                        </Link>
+                                      ) : (
+                                        <span className="font-mono text-neutral-500 truncate">{decoded.registryLabel}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <span className="text-neutral-600">id ·</span>
+                                      <span className="font-mono text-neutral-300">{r.agentId}</span>
+                                      <button onClick={() => onCopy(r.agentId)} className="text-neutral-600 hover:text-neutral-300">
+                                        <Copy className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })() : n.agentIdentityUri ? (
+                    <p className="text-xs text-neutral-600 italic">EIP-8004 JSON unreachable or invalid.</p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1860,6 +2465,36 @@ function AgentMetaplexTab({
  * Caps a list to ~`maxVisible` rows and scrolls the rest.
  * Shows a 3-chevron-down animated indicator when overflowing.
  * ──────────────────────────────────────────────────────── */
+
+/* ── StatPill ─────────────────────────────────────────────
+ * Compact "label · value" badge used in the registry-coordination banner
+ * to surface concrete numeric facts (NFT counts, registry hits, etc).
+ * ──────────────────────────────────────────────────────── */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _StatPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  tone: 'neutral' | 'pink' | 'emerald' | 'amber';
+}) {
+  const cls =
+    tone === 'pink'
+      ? 'bg-pink-500/10 text-pink-200 border-pink-500/30'
+      : tone === 'emerald'
+        ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/30'
+        : tone === 'amber'
+          ? 'bg-amber-500/10 text-amber-200 border-amber-500/30'
+          : 'bg-neutral-800/60 text-neutral-300 border-neutral-700';
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs tabular-nums', cls)}>
+      <span className="font-bold">{value}</span>
+      <span className="text-xs opacity-80">{label}</span>
+    </span>
+  );
+}
 
 function ScrollableList({
   itemCount,

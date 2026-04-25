@@ -96,7 +96,7 @@ export default function ToolDetailPage() {
           <HttpMethodBadge method={method} />
           <CategoryBadge category={category} />
           <StatusBadge active={d.isActive} />
-          {d.isCompound && <Badge variant="destructive" className="text-[10px]">Compound</Badge>}
+          {d.isCompound && <Badge variant="destructive" className="text-xs">Compound</Badge>}
         </>
       }
       icon={
@@ -162,7 +162,7 @@ export default function ToolDetailPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-foreground tracking-tight">Schema Hashes</h3>
-              <p className="text-[10px] text-muted-foreground/60">SHA-256 digests stored on the tool PDA</p>
+              <p className="text-xs text-muted-foreground/60">SHA-256 digests stored on the tool PDA</p>
             </div>
           </div>
           <div className="space-y-1">
@@ -173,11 +173,11 @@ export default function ToolDetailPage() {
               { label: 'Protocol', tag: 'PROTO', has: true, hash: d.protocolHash, style: 'text-muted-foreground bg-muted/30 ring-border/30' },
             ].map(({ label: hashLabel, tag, has, hash, style }) => (
               <div key={tag} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-muted/15 transition-colors group/hash">
-                <span className={`inline-flex items-center justify-center w-10 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ${style}`}>
+                <span className={`inline-flex items-center justify-center w-10 px-1.5 py-0.5 rounded-md text-xs font-bold ring-1 ${style}`}>
                   {tag}
                 </span>
-                <span className="text-[11px] text-muted-foreground/70 min-w-[100px]">{hashLabel}</span>
-                <span className="flex-1 text-[10px] font-mono text-foreground/50 truncate text-right select-all">
+                <span className="text-xs text-muted-foreground/70 min-w-[100px]">{hashLabel}</span>
+                <span className="flex-1 text-xs font-mono text-foreground/50 truncate text-right select-all">
                   {has ? hashToHex(hash) : <span className="italic text-muted-foreground/30">Not inscribed</span>}
                 </span>
                 {has && (
@@ -214,20 +214,20 @@ export default function ToolDetailPage() {
                     <p className="text-sm font-semibold text-foreground truncate group-hover/creator:text-primary transition-colors">{ownerAgent.identity.name}</p>
                     <StatusBadge active={ownerAgent.identity.isActive} size="xs" />
                   </div>
-                  <p className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">{ownerAgent.identity.wallet}</p>
+                  <p className="text-xs font-mono text-muted-foreground/60 mt-0.5">{ownerAgent.identity.wallet}</p>
                 </div>
                 <div className="hidden sm:flex items-center gap-6 shrink-0 text-right">
                   <div>
                     <p className="text-xs font-bold tabular-nums">{Number(ownerAgent.identity.totalCallsServed ?? 0).toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">calls</p>
+                    <p className="text-xs text-muted-foreground">calls</p>
                   </div>
                   <div>
                     <p className="text-xs font-bold tabular-nums">{ownerAgent.identity.avgLatencyMs ?? 0}ms</p>
-                    <p className="text-[10px] text-muted-foreground">latency</p>
+                    <p className="text-xs text-muted-foreground">latency</p>
                   </div>
                   <div>
                     <p className="text-xs font-bold tabular-nums">{ownerAgent.identity.uptimePercent ?? 0}%</p>
-                    <p className="text-[10px] text-muted-foreground">uptime</p>
+                    <p className="text-xs text-muted-foreground">uptime</p>
                   </div>
                 </div>
                 <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -249,19 +249,19 @@ export default function ToolDetailPage() {
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mt-3">
               <div className="text-center p-3 bg-muted/30 rounded-lg">
                 <p className="text-lg font-bold tabular-nums">{escrowStats.count}</p>
-                <p className="text-[10px] text-muted-foreground">Active Escrows</p>
+                <p className="text-xs text-muted-foreground">Active Escrows</p>
               </div>
               <div className="text-center p-3 bg-muted/30 rounded-lg">
                 <p className="text-lg font-bold tabular-nums">{formatLamports(escrowStats.totalSettled)}</p>
-                <p className="text-[10px] text-muted-foreground">Total Settled</p>
+                <p className="text-xs text-muted-foreground">Total Settled</p>
               </div>
               <div className="text-center p-3 bg-muted/30 rounded-lg">
                 <p className="text-lg font-bold tabular-nums">{escrowStats.totalCallsSettled.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground">Calls Settled</p>
+                <p className="text-xs text-muted-foreground">Calls Settled</p>
               </div>
               <div className="text-center p-3 bg-muted/30 rounded-lg">
                 <p className="text-lg font-bold tabular-nums">{formatLamports(escrowStats.avgPrice)}</p>
-                <p className="text-[10px] text-muted-foreground">Avg Price/Call</p>
+                <p className="text-xs text-muted-foreground">Avg Price/Call</p>
               </div>
             </div>
           </CardContent>
@@ -286,14 +286,14 @@ export default function ToolDetailPage() {
             <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
               <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Created</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Created</p>
                 <TimestampDisplay unixSeconds={d.createdAt} />
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
               <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Last Updated</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Updated</p>
                 <TimestampDisplay unixSeconds={d.updatedAt} />
               </div>
             </div>
@@ -314,13 +314,13 @@ export default function ToolDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <SectionHeader title="Full Deserialized Descriptor" />
-          <p className="text-[10px] text-muted-foreground -mt-2 mb-4">
+          <p className="text-xs text-muted-foreground -mt-2 mb-4">
             Every field from the on-chain PDA account, decoded and human-readable.
           </p>
 
           {/* Account Meta */}
           <div className="mb-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Account Meta</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Account Meta</p>
             <div className="rounded-lg border border-border/50 divide-y divide-border/50">
               <DescriptorRow label="bump" value={String(d.bump)} />
               <DescriptorRow label="version" value={String(d.version)} />
@@ -331,7 +331,7 @@ export default function ToolDetailPage() {
 
           {/* Identity */}
           <div className="mb-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Identity</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Identity</p>
             <div className="rounded-lg border border-border/50 divide-y divide-border/50">
               <DescriptorRow label="toolName" value={d.toolName} />
               <DescriptorRow label="agent" value={d.agent} mono copyable />
@@ -342,7 +342,7 @@ export default function ToolDetailPage() {
 
           {/* Parameters */}
           <div className="mb-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Parameters</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Parameters</p>
             <div className="rounded-lg border border-border/50 divide-y divide-border/50">
               <DescriptorRow label="paramsCount" value={String(d.paramsCount)} />
               <DescriptorRow label="requiredParams" value={String(d.requiredParams)} />
@@ -352,7 +352,7 @@ export default function ToolDetailPage() {
 
           {/* Schema Hashes (full hex) */}
           <div className="mb-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Schema Hashes (SHA-256)</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Schema Hashes (SHA-256)</p>
             <div className="rounded-lg border border-border/50 divide-y divide-border/50">
               <DescriptorHashRow label="toolNameHash" arr={d.toolNameHash} />
               <DescriptorHashRow label="protocolHash" arr={d.protocolHash} />
@@ -364,7 +364,7 @@ export default function ToolDetailPage() {
 
           {/* Versioning */}
           <div className="mb-5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Versioning</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Versioning</p>
             <div className="rounded-lg border border-border/50 divide-y divide-border/50">
               <DescriptorRow
                 label="previousVersion"
@@ -377,7 +377,7 @@ export default function ToolDetailPage() {
 
           {/* Timestamps */}
           <div className="mb-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Timestamps</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Timestamps</p>
             <div className="rounded-lg border border-border/50 divide-y divide-border/50">
               <DescriptorRow label="createdAt" value={formatTimestamp(d.createdAt)} raw={d.createdAt} />
               <DescriptorRow label="updatedAt" value={formatTimestamp(d.updatedAt)} raw={d.updatedAt} />
@@ -410,19 +410,19 @@ function DescriptorRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 px-3 py-2 group">
-      <span className="text-[10px] font-mono text-chart-2 shrink-0 min-w-[150px]">{label}</span>
+      <span className="text-xs font-mono text-chart-2 shrink-0 min-w-[150px]">{label}</span>
       <div className="flex items-center gap-2 min-w-0 justify-end">
         {badge === 'active' && (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-500/10 text-emerald-500">Active</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-500">Active</span>
         )}
         {badge === 'inactive' && (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-red-500/10 text-red-500">Inactive</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-500/10 text-red-500">Inactive</span>
         )}
         {badge === 'compound' && (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-primary/10 text-primary">Compound</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">Compound</span>
         )}
         {raw && raw !== value && (
-          <span className="text-[9px] text-muted-foreground/50 hidden sm:inline">({raw})</span>
+          <span className="text-xs text-muted-foreground/50 hidden sm:inline">({raw})</span>
         )}
         <span className={`text-xs truncate max-w-[400px] ${mono ? 'font-mono' : ''} text-foreground/90`}>
           {value}
@@ -451,13 +451,13 @@ function DescriptorHashRow({ label, arr }: { label: string; arr: number[] }) {
 
   return (
     <div className="flex items-start justify-between gap-4 px-3 py-2 group">
-      <span className="text-[10px] font-mono text-chart-2 shrink-0 min-w-[150px] pt-0.5">{label}</span>
+      <span className="text-xs font-mono text-chart-2 shrink-0 min-w-[150px] pt-0.5">{label}</span>
       <div className="min-w-0 text-right">
         {isEmpty ? (
-          <span className="text-[10px] italic text-muted-foreground">Empty (all zeros)</span>
+          <span className="text-xs italic text-muted-foreground">Empty (all zeros)</span>
         ) : (
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-mono text-foreground/80 break-all leading-relaxed select-all">{hex}</span>
+            <span className="text-xs font-mono text-foreground/80 break-all leading-relaxed select-all">{hex}</span>
             <button
               onClick={() => navigator.clipboard.writeText(hex)}
               className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
@@ -470,7 +470,7 @@ function DescriptorHashRow({ label, arr }: { label: string; arr: number[] }) {
             </button>
           </div>
         )}
-        <span className="text-[9px] text-muted-foreground/50">{arr?.length ?? 0} bytes</span>
+        <span className="text-xs text-muted-foreground/50">{arr?.length ?? 0} bytes</span>
       </div>
     </div>
   );
@@ -537,13 +537,13 @@ function InscribedSchemasSection({
             </div>
             <div>
               <h3 className="text-sm font-semibold text-foreground tracking-tight">Inscribed Schemas</h3>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+              <p className="text-xs text-muted-foreground/70 mt-0.5">
                 Deserialized from on-chain TX log events
               </p>
             </div>
           </div>
           {deduped.length > 0 && (
-            <span className="text-[10px] font-medium tabular-nums text-muted-foreground bg-muted/40 px-2 py-1 rounded-md">
+            <span className="text-xs font-medium tabular-nums text-muted-foreground bg-muted/40 px-2 py-1 rounded-md">
               {deduped.length} schema{deduped.length !== 1 ? 's' : ''}
             </span>
           )}
@@ -554,7 +554,7 @@ function InscribedSchemasSection({
           <div className="flex items-center gap-2.5 mb-5 px-3 py-2.5 rounded-lg bg-muted/20 ring-1 ring-border/30">
             <AgentAvatar name={agentName} endpoint={agentEndpoint} size={28} />
             <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground/60 leading-none mb-0.5">Inscribed by</p>
+              <p className="text-xs text-muted-foreground/60 leading-none mb-0.5">Inscribed by</p>
               <Link
                 href={`/agents/${ownerAgent.identity?.wallet}`}
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors truncate block"
@@ -564,7 +564,7 @@ function InscribedSchemasSection({
             </div>
             <div className="ml-auto flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-              <span className="text-[9px] font-medium text-emerald-400">Verified Owner</span>
+              <span className="text-xs font-medium text-emerald-400">Verified Owner</span>
             </div>
           </div>
         )}
@@ -580,8 +580,8 @@ function InscribedSchemasSection({
               <BookOpen className="h-5 w-5 text-muted-foreground/30" />
             </div>
             <p className="text-xs font-medium text-muted-foreground/60">No schemas inscribed yet</p>
-            <p className="text-[10px] text-muted-foreground/40 mt-1 max-w-[280px] mx-auto">
-              Tool schemas are inscribed via <code className="text-[10px] font-semibold">inscribeSchema()</code> and emitted as Anchor events in TX logs.
+            <p className="text-xs text-muted-foreground/40 mt-1 max-w-[280px] mx-auto">
+              Tool schemas are inscribed via <code className="text-xs font-semibold">inscribeSchema()</code> and emitted as Anchor events in TX logs.
             </p>
           </div>
         ) : (
@@ -613,10 +613,10 @@ function InscribedSchemasSection({
                       <div className="flex items-center gap-2">
                         <p className="text-[13px] font-semibold text-foreground/90 tracking-tight">{label}</p>
                         {schema.version > 0 && (
-                          <span className="text-[9px] font-mono text-muted-foreground/50 bg-muted/30 px-1.5 py-0.5 rounded">v{schema.version}</span>
+                          <span className="text-xs font-mono text-muted-foreground/50 bg-muted/30 px-1.5 py-0.5 rounded">v{schema.version}</span>
                         )}
                       </div>
-                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                      <p className="text-xs text-muted-foreground/50 mt-0.5">
                         {schema.blockTime ? formatTimestamp(schema.blockTime) : `TX ${schema.txSignature.slice(0, 12)}…`}
                       </p>
                     </div>
@@ -624,15 +624,15 @@ function InscribedSchemasSection({
                     {/* Verification badges */}
                     <div className="flex items-center gap-2 shrink-0">
                       {bothVerified ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/8 ring-1 ring-emerald-500/15 text-[9px] font-semibold text-emerald-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/8 ring-1 ring-emerald-500/15 text-xs font-semibold text-emerald-400">
                           <CheckCircle2 className="h-3 w-3" /> Verified
                         </span>
                       ) : schema.integrityVerified ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/8 ring-1 ring-amber-500/15 text-[9px] font-semibold text-amber-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/8 ring-1 ring-amber-500/15 text-xs font-semibold text-amber-400">
                           <AlertCircle className="h-3 w-3" /> Outdated
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-500/8 ring-1 ring-red-500/15 text-[9px] font-semibold text-red-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-500/8 ring-1 ring-red-500/15 text-xs font-semibold text-red-400">
                           <AlertCircle className="h-3 w-3" /> Mismatch
                         </span>
                       )}
@@ -657,7 +657,7 @@ function InscribedSchemasSection({
                         ].map(({ label: hashLabel, value, ok }) => (
                           <div key={hashLabel} className="px-4 py-2.5 bg-background">
                             <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50 mb-1">{hashLabel}</p>
-                            <p className={`text-[10px] font-mono break-all select-all leading-relaxed ${ok ? 'text-foreground/60' : 'text-red-400/70'}`}>
+                            <p className={`text-xs font-mono break-all select-all leading-relaxed ${ok ? 'text-foreground/60' : 'text-red-400/70'}`}>
                               {value || '—'}
                             </p>
                           </div>
@@ -669,7 +669,7 @@ function InscribedSchemasSection({
                         <div className="flex items-center justify-between mb-2.5">
                           <div className="flex items-center gap-2">
                             <FileJson className="h-3.5 w-3.5 text-muted-foreground/40" />
-                            <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                            <p className="text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
                               {schema.schemaJson ? 'JSON Schema' : 'Raw Content'}
                             </p>
                           </div>
@@ -679,7 +679,7 @@ function InscribedSchemasSection({
                               const text = schema.schemaJson ? JSON.stringify(schema.schemaJson, null, 2) : schema.schemaData;
                               navigator.clipboard.writeText(text);
                             }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
                           >
                             <Copy className="h-3 w-3" /> Copy
                           </button>
@@ -688,14 +688,14 @@ function InscribedSchemasSection({
                         {schema.schemaJson ? (
                           <SchemaJsonView data={schema.schemaJson} />
                         ) : (
-                          <pre className="text-[11px] font-mono text-foreground/60 bg-muted/20 rounded-lg p-4 overflow-x-auto max-h-[420px] overflow-y-auto leading-relaxed ring-1 ring-border/20" style={{ scrollbarWidth: 'thin' }}>
+                          <pre className="text-xs font-mono text-foreground/60 bg-muted/20 rounded-lg p-4 overflow-x-auto max-h-[420px] overflow-y-auto leading-relaxed ring-1 ring-border/20" style={{ scrollbarWidth: 'thin' }}>
                             {schema.schemaData}
                           </pre>
                         )}
                       </div>
 
                       {/* Meta strip */}
-                      <div className="flex items-center gap-3 px-4 py-2.5 border-t border-border/10 text-[10px] text-muted-foreground/50">
+                      <div className="flex items-center gap-3 px-4 py-2.5 border-t border-border/10 text-xs text-muted-foreground/50">
                         <span>{schema.compression === 0 ? 'Uncompressed' : schema.compression === 1 ? 'Deflate' : `Compression ${schema.compression}`}</span>
                         <span className="text-muted-foreground/20">·</span>
                         <span>{schema.schemaData.length.toLocaleString()} bytes</span>
@@ -716,7 +716,7 @@ function InscribedSchemasSection({
             })}
 
             {schemas.length > deduped.length && (
-              <p className="text-[10px] text-muted-foreground/40 text-center pt-1">
+              <p className="text-xs text-muted-foreground/40 text-center pt-1">
                 {schemas.length} total inscriptions found — showing latest per type
               </p>
             )}
@@ -739,7 +739,7 @@ function SchemaJsonView({ data }: { data: Record<string, unknown> }) {
   if (!properties || typeof properties !== 'object') {
     // Fallback to formatted JSON
     return (
-      <pre className="text-[11px] font-mono text-foreground/60 bg-muted/20 rounded-lg p-4 overflow-x-auto max-h-[420px] overflow-y-auto leading-relaxed ring-1 ring-border/20" style={{ scrollbarWidth: 'thin' }}>
+      <pre className="text-xs font-mono text-foreground/60 bg-muted/20 rounded-lg p-4 overflow-x-auto max-h-[420px] overflow-y-auto leading-relaxed ring-1 ring-border/20" style={{ scrollbarWidth: 'thin' }}>
         {JSON.stringify(data, null, 2)}
       </pre>
     );
@@ -756,8 +756,8 @@ function SchemaJsonView({ data }: { data: Record<string, unknown> }) {
       {(titleStr || descStr || typeStr) && (
         <div className="px-4 py-3 bg-muted/15 border-b border-border/15">
           {titleStr && <p className="text-xs font-semibold text-foreground/80">{titleStr}</p>}
-          {descStr && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{descStr}</p>}
-          {typeStr && <span className="inline-block mt-1.5 text-[9px] font-mono text-primary/60 bg-primary/5 px-1.5 py-0.5 rounded">{typeStr}</span>}
+          {descStr && <p className="text-xs text-muted-foreground/60 mt-0.5">{descStr}</p>}
+          {typeStr && <span className="inline-block mt-1.5 text-xs font-mono text-primary/60 bg-primary/5 px-1.5 py-0.5 rounded">{typeStr}</span>}
         </div>
       )}
 
@@ -774,26 +774,26 @@ function SchemaJsonView({ data }: { data: Record<string, unknown> }) {
             <div key={key} className="flex items-start gap-3 px-4 py-2.5 group/prop hover:bg-muted/10 transition-colors">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono font-semibold text-foreground/80">{key}</span>
+                  <span className="text-xs font-mono font-semibold text-foreground/80">{key}</span>
                   {propType && (
-                    <span className="text-[9px] font-mono text-muted-foreground/50 bg-muted/30 px-1 py-0.5 rounded">{propType}</span>
+                    <span className="text-xs font-mono text-muted-foreground/50 bg-muted/30 px-1 py-0.5 rounded">{propType}</span>
                   )}
                   {isRequired && (
                     <span className="text-[8px] font-bold uppercase tracking-wider text-amber-400/70">required</span>
                   )}
                 </div>
                 {propDesc && (
-                  <p className="text-[10px] text-muted-foreground/50 mt-0.5 leading-relaxed">{propDesc}</p>
+                  <p className="text-xs text-muted-foreground/50 mt-0.5 leading-relaxed">{propDesc}</p>
                 )}
                 {propEnum && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {propEnum.map((v) => (
-                      <span key={v} className="text-[9px] font-mono text-primary/70 bg-primary/5 px-1.5 py-0.5 rounded ring-1 ring-primary/10">{String(v)}</span>
+                      <span key={v} className="text-xs font-mono text-primary/70 bg-primary/5 px-1.5 py-0.5 rounded ring-1 ring-primary/10">{String(v)}</span>
                     ))}
                   </div>
                 )}
                 {propDefault !== undefined && (
-                  <p className="text-[9px] font-mono text-muted-foreground/40 mt-0.5">default: {JSON.stringify(propDefault)}</p>
+                  <p className="text-xs font-mono text-muted-foreground/40 mt-0.5">default: {JSON.stringify(propDefault)}</p>
                 )}
               </div>
             </div>
@@ -803,10 +803,10 @@ function SchemaJsonView({ data }: { data: Record<string, unknown> }) {
 
       {/* Raw JSON toggle */}
       <details className="border-t border-border/10">
-        <summary className="px-4 py-2 text-[10px] text-muted-foreground/40 cursor-pointer hover:text-muted-foreground/60 transition-colors select-none">
+        <summary className="px-4 py-2 text-xs text-muted-foreground/40 cursor-pointer hover:text-muted-foreground/60 transition-colors select-none">
           View raw JSON
         </summary>
-        <pre className="text-[10px] font-mono text-foreground/50 bg-muted/10 px-4 py-3 overflow-x-auto max-h-[300px] overflow-y-auto leading-relaxed" style={{ scrollbarWidth: 'thin' }}>
+        <pre className="text-xs font-mono text-foreground/50 bg-muted/10 px-4 py-3 overflow-x-auto max-h-[300px] overflow-y-auto leading-relaxed" style={{ scrollbarWidth: 'thin' }}>
           {JSON.stringify(data, null, 2)}
         </pre>
       </details>
@@ -857,7 +857,7 @@ function ToolLifecycleTimeline({
     <Card>
       <CardContent className="pt-6">
         <SectionHeader title="Tool Lifecycle Events" count={filtered.length}>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {events.length} total event{events.length !== 1 ? 's' : ''} from DB
           </span>
         </SectionHeader>
@@ -867,7 +867,7 @@ function ToolLifecycleTimeline({
           <div className="flex flex-wrap gap-1.5 mb-3">
             <button
               onClick={() => setFilterType(null)}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+              className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
                 !filterType ? 'bg-foreground/10 text-foreground border-foreground/20' : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
               }`}
             >
@@ -879,7 +879,7 @@ function ToolLifecycleTimeline({
                 <button
                   key={t}
                   onClick={() => setFilterType(filterType === t ? null : t)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                  className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
                     filterType === t
                       ? (meta?.color ?? 'bg-muted text-muted-foreground border-border')
                       : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
@@ -927,11 +927,11 @@ function ToolLifecycleTimeline({
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
                     className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-muted/30 transition-colors text-left"
                   >
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border shrink-0 ${meta.color}`}>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border shrink-0 ${meta.color}`}>
                       <span>{meta.icon}</span> {label}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-mono text-muted-foreground truncate">
+                      <p className="text-xs font-mono text-muted-foreground truncate">
                         {evt.txSignature.slice(0, 16)}…
                         {evt.blockTime
                           ? ` · ${new Date(evt.blockTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
@@ -939,7 +939,7 @@ function ToolLifecycleTimeline({
                       </p>
                     </div>
                     {details.length > 0 && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">{details.length} fields</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{details.length} fields</span>
                     )}
                     <svg
                       className={`h-3 w-3 text-muted-foreground transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
@@ -951,7 +951,7 @@ function ToolLifecycleTimeline({
 
                   {isExpanded && (
                     <div className="border-t border-border/50 px-4 py-3 space-y-2">
-                      <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground mb-2">
+                      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground mb-2">
                         <span className="font-mono font-semibold text-foreground/70">{evt.eventType}</span>
                         <span>·</span>
                         <a
@@ -979,21 +979,21 @@ function ToolLifecycleTimeline({
                         <div className="rounded-lg border border-border/50 divide-y divide-border/50">
                           {details.map(([k, v]) => (
                             <div key={k} className="flex items-start justify-between gap-4 px-3 py-1.5">
-                              <span className="text-[10px] font-mono text-chart-2 shrink-0 min-w-[120px] pt-0.5">{k}</span>
-                              <span className="text-[10px] font-mono text-foreground/80 text-right break-all max-w-[400px]">{v}</span>
+                              <span className="text-xs font-mono text-chart-2 shrink-0 min-w-[120px] pt-0.5">{k}</span>
+                              <span className="text-xs font-mono text-foreground/80 text-right break-all max-w-[400px]">{v}</span>
                             </div>
                           ))}
                           {evt.agentPda && (
                             <div className="flex items-start justify-between gap-4 px-3 py-1.5">
-                              <span className="text-[10px] font-mono text-chart-2 shrink-0 min-w-[120px] pt-0.5">Agent</span>
-                              <Link href={`/agents/${evt.agentPda}`} className="text-[10px] font-mono text-primary hover:text-primary/80 transition-colors">
+                              <span className="text-xs font-mono text-chart-2 shrink-0 min-w-[120px] pt-0.5">Agent</span>
+                              <Link href={`/agents/${evt.agentPda}`} className="text-xs font-mono text-primary hover:text-primary/80 transition-colors">
                                 {evt.agentPda.slice(0, 16)}… →
                               </Link>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <p className="text-[10px] text-muted-foreground italic">No additional fields</p>
+                        <p className="text-xs text-muted-foreground italic">No additional fields</p>
                       )}
                     </div>
                   )}
@@ -1057,7 +1057,7 @@ function SapEventTimeline({
       <CardContent className="pt-6">
         <SectionHeader title="SAP Event Timeline" count={events.length}>
           {scanned > 0 && (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               Scanned {scanned} transaction{scanned !== 1 ? 's' : ''}
             </span>
           )}
@@ -1072,7 +1072,7 @@ function SapEventTimeline({
           <div className="py-8 text-center">
             <Activity className="h-6 w-6 text-muted-foreground/50 mx-auto mb-2" />
             <p className="text-xs text-muted-foreground">No SAP events found for this address.</p>
-            <p className="text-[10px] text-muted-foreground/60 mt-1">
+            <p className="text-xs text-muted-foreground/60 mt-1">
               Events are Anchor-encoded in transaction log messages.
             </p>
           </div>
@@ -1090,11 +1090,11 @@ function SapEventTimeline({
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
                     className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-muted/30 transition-colors text-left"
                   >
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border shrink-0 ${colors}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border shrink-0 ${colors}`}>
                       {label}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-mono text-muted-foreground truncate">
+                      <p className="text-xs font-mono text-muted-foreground truncate">
                         {evt.txSignature.slice(0, 16)}…
                         {evt.blockTime
                           ? ` · ${new Date(evt.blockTime * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
@@ -1102,7 +1102,7 @@ function SapEventTimeline({
                       </p>
                     </div>
                     {dataKeys.length > 0 && (
-                      <span className="text-[10px] text-muted-foreground shrink-0">{dataKeys.length} fields</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{dataKeys.length} fields</span>
                     )}
                     <svg
                       className={`h-3 w-3 text-muted-foreground transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
@@ -1114,7 +1114,7 @@ function SapEventTimeline({
 
                   {isExpanded && (
                     <div className="border-t border-border/50 px-4 py-3 space-y-2">
-                      <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground mb-2">
+                      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground mb-2">
                         <span className="font-mono font-semibold text-foreground/70">{evt.name}</span>
                         <span>·</span>
                         <a
@@ -1139,14 +1139,14 @@ function SapEventTimeline({
                               : String(v);
                             return (
                               <div key={k} className="flex items-start justify-between gap-4 px-3 py-1.5">
-                                <span className="text-[10px] font-mono text-chart-2 shrink-0 min-w-[120px] pt-0.5">{k}</span>
-                                <span className="text-[10px] font-mono text-foreground/80 text-right break-all max-w-[400px]">{display}</span>
+                                <span className="text-xs font-mono text-chart-2 shrink-0 min-w-[120px] pt-0.5">{k}</span>
+                                <span className="text-xs font-mono text-foreground/80 text-right break-all max-w-[400px]">{display}</span>
                               </div>
                             );
                           })}
                         </div>
                       ) : (
-                        <p className="text-[10px] text-muted-foreground italic">No fields decoded</p>
+                        <p className="text-xs text-muted-foreground italic">No fields decoded</p>
                       )}
                     </div>
                   )}

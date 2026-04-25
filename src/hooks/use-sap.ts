@@ -100,7 +100,9 @@ type ToolsResponse = {
 
 /** Default polling intervals (ms). 0 = off. */
 const POLL = {
-  agents: 120_000,
+  // Lowered from 120s \u2192 30s so the UI re-renders soon after the indexer
+  // invalidates the server SWR cache on a new tx / agent registration.
+  agents: 30_000,
   transactions: 10_000,
   escrows: 15_000,
   vaults: 30_000,
@@ -176,6 +178,31 @@ export function useAgentMetaplex(wallet: string | null) {
 
 /* ── MPL Core / EIP-8004 NFT inventory ───────────────────── */
 
+export type AgentEip8004Registration = {
+  schema?: string | null;
+  type?: string | null;
+  name?: string | null;
+  version?: string | null;
+  description?: string | null;
+  image?: string | null;
+  synapseAgent?: string | null;
+  owner?: string | null;
+  authority?: string | null;
+  address?: string | null;
+  walletAddress?: string | null;
+  capabilities?: unknown;
+  /** Metaplex schema: `{ name, endpoint, version? }`. Older SAP cards used `{ id, type, url }`. */
+  services?: Array<{ name?: string; endpoint?: string; version?: string; id?: string; type?: string; url?: string }>;
+  /** Cross-chain registration pointers (Solana / EVM). */
+  registrations?: Array<{ agentId: string; agentRegistry: string }>;
+  supportedTrust?: string[];
+  x402Support?: boolean;
+  active?: boolean;
+  tokens?: unknown[];
+  issuedAt?: number | null;
+  [k: string]: unknown;
+};
+
 export type AgentNftItem = {
   asset: string;
   name: string | null;
@@ -185,6 +212,10 @@ export type AgentNftItem = {
   agentIdentityUri: string | null;
   linkedToThisAgent: boolean;
   hasAgentIdentity: boolean;
+  /** Hostname of the AgentIdentity URI (e.g. 'api.metaplex.com', 'explorer.oobeprotocol.ai'). */
+  identityHost: string | null;
+  /** Decoded EIP-8004 / agent-card JSON for any AgentIdentity-bearing asset. */
+  registration: AgentEip8004Registration | null;
 };
 
 export type AgentNftsResponse = {
@@ -201,6 +232,41 @@ export type AgentNftsResponse = {
 export function useAgentNfts(wallet: string | null) {
   const url = wallet ? `/api/sap/agents/${wallet}/nfts` : null;
   return useFetch<AgentNftsResponse>(url, { keepStale: true });
+}
+
+/* ── Metaplex Agents Registry (api.metaplex.com) ─────────── */
+
+export type MetaplexRegistryAgent = {
+  id: string;
+  mintAddress: string;
+  network: string;
+  name: string | null;
+  description: string | null;
+  image: string | null;
+  walletAddress: string;
+  authority: string | null;
+  agentToken: string | null;
+  agentMetadataUri: string;
+  metadata?: Record<string, unknown> | null;
+};
+
+export type MetaplexRegistryResponse = {
+  agents: MetaplexRegistryAgent[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  walletAddress: string;
+  network: string;
+  fetchedAt: number;
+  clientSideFiltered: boolean;
+  error: string | null;
+};
+
+/** Lists all agents the wallet has registered on api.metaplex.com. */
+export function useMetaplexRegistry(wallet: string | null) {
+  const url = wallet ? `/api/sap/agents/${wallet}/metaplex-registry` : null;
+  return useFetch<MetaplexRegistryResponse>(url, { keepStale: true });
 }
 
 /* ── Token metadata (shared, DB-cached) ───────────────── */

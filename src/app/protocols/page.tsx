@@ -351,7 +351,7 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
               <Layers className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-500">Protocol</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Protocol</p>
               <Link
                 href={`/protocols/${encodeURIComponent(protocol.id)}`}
                 className="group/title mt-0.5 inline-flex items-center gap-1.5 text-base font-semibold text-white transition-colors hover:text-primary"
@@ -361,7 +361,7 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
               </Link>
             </div>
           </div>
-          <Badge variant="secondary" className="text-[10px] tabular-nums shrink-0">
+          <Badge variant="secondary" className="text-xs tabular-nums shrink-0">
             {protocol.agentCount} agents
           </Badge>
         </div>
@@ -372,18 +372,18 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg bg-neutral-800/50 px-3 py-2">
             <p className="text-lg font-bold tabular-nums text-white font-mono">{protocol.agentCount}</p>
-            <p className="text-[10px] text-neutral-500 uppercase tracking-wider">Agents</p>
+            <p className="text-xs text-neutral-500 uppercase tracking-wider">Agents</p>
           </div>
           <div className="rounded-lg bg-neutral-800/50 px-3 py-2">
             <p className="text-lg font-bold tabular-nums text-white font-mono">{protocol.capabilities.length}</p>
-            <p className="text-[10px] text-neutral-500 uppercase tracking-wider">Capabilities</p>
+            <p className="text-xs text-neutral-500 uppercase tracking-wider">Capabilities</p>
           </div>
         </div>
 
         {protocol.topAgent && (
           <div className="rounded-lg border border-neutral-800 bg-neutral-800/30 px-3 py-2.5">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-neutral-500">Top Agent</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Top Agent</p>
               <StatusBadge active={protocol.topAgent.isActive} size="xs" />
             </div>
             <Link href={`/agents/${protocol.topAgent.wallet ?? protocol.topAgent.pda}`} className="mt-1 flex items-center gap-2 text-xs text-neutral-200 hover:text-primary transition-colors min-w-0">
@@ -396,13 +396,13 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
         {/* Agents */}
         {protocol.agents.length > 0 && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Agents (DB)</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">Agents (DB)</p>
             <div className="flex flex-wrap gap-1.5">
               {visibleAgents.map((agent) => (
                 <Link
                   key={agent.pda}
                   href={`/agents/${agent.wallet ?? agent.pda}`}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800/70 px-2 py-1 text-[11px] text-neutral-300 transition-colors hover:border-primary/40 hover:bg-neutral-800 hover:text-primary"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800/70 px-2 py-1 text-xs text-neutral-300 transition-colors hover:border-primary/40 hover:bg-neutral-800 hover:text-primary"
                   title={agent.name ?? agent.pda}
                 >
                   <Users className="h-3 w-3 shrink-0" />
@@ -410,7 +410,7 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
                 </Link>
               ))}
               {protocol.agents.length > visibleAgents.length && (
-                <Badge variant="secondary" className="text-[10px] tabular-nums">+{protocol.agents.length - visibleAgents.length}</Badge>
+                <Badge variant="secondary" className="text-xs tabular-nums">+{protocol.agents.length - visibleAgents.length}</Badge>
               )}
             </div>
           </div>
@@ -419,12 +419,12 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
         {/* Capabilities */}
         {protocol.capabilities.length > 0 && (
           <div className="border-t border-neutral-800 pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-1.5">Capabilities</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-1.5">Capabilities</p>
             <div className="flex flex-wrap gap-1">
               {protocol.capabilities.slice(0, 6).map((cap) => (
-                <Badge key={cap.id} variant="outline" className="text-[10px] border-neutral-700 text-neutral-300">{cap.id}</Badge>
+                <Badge key={cap.id} variant="outline" className="text-xs border-neutral-700 text-neutral-300">{cap.id}</Badge>
               ))}
-              {protocol.capabilities.length > 6 && <Badge variant="secondary" className="text-[10px]">+{protocol.capabilities.length - 6}</Badge>}
+              {protocol.capabilities.length > 6 && <Badge variant="secondary" className="text-xs">+{protocol.capabilities.length - 6}</Badge>}
             </div>
           </div>
         )}

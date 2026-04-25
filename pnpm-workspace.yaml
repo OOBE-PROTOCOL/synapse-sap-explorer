@@ -3,3 +3,6 @@ ignoredBuiltDependencies:
   - esbuild
   - unrs-resolver
   - utf-8-validate
+
+overrides:
+  '@oobe-protocol-labs/synapse-sap-sdk': link:../synapse-agent-sap/synapse-sap-sdk

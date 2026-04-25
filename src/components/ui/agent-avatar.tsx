@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Bot } from 'lucide-react';
 import { cn } from '~/lib/utils';
-import Image from 'next/image';
 
 type AgentAvatarProps = {
   name: string;
@@ -21,8 +20,22 @@ type AgentAvatarProps = {
 function resolveFavicon(endpoint: string | null | undefined): string | null {
   if (!endpoint) return null;
   try {
-    const origin = new URL(endpoint).origin;
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(origin)}&sz=128`;
+    const url = new URL(endpoint);
+    const hostname = url.hostname.toLowerCase();
+
+    // Google S2 won't resolve local/private hosts and would spam logs with 404s.
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.local') ||
+      hostname.startsWith('127.') ||
+      hostname === '::1' ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('192.168.')
+    ) {
+      return null;
+    }
+
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`;
   } catch {
     return null;
   }
@@ -52,10 +65,22 @@ export function AgentAvatar({ name, endpoint, logo, size = 48, className }: Agen
       style={{ width: size, height: size }}
     >
       {showImg ? (
-        <Image src={logoUrl || faviconUrl!} alt={`${name} avatar`} fill className="object-contain bg-neutral-900 p-1" onError={() => {
-          if (logoUrl) setLogoError(true);
-          else setFaviconError(true);
-        }} />
+        /* Plain <img> on purpose: avatars are 40-48px, Next/Image adds no
+           value AND its server-side proxy spammed `⨯ upstream image response
+           failed` for valid favicons that Google S2 occasionally 404s. */
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl || faviconUrl!}
+          alt={`${name} avatar`}
+          width={size}
+          height={size}
+          loading="lazy"
+          className="h-full w-full object-contain bg-neutral-900 p-1"
+          onError={() => {
+            if (logoUrl) setLogoError(true);
+            else setFaviconError(true);
+          }}
+        />
       ) : (
         <div
           className="h-full w-full flex items-center justify-center"

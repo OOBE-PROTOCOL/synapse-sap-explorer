@@ -50,6 +50,73 @@ function makePool(): Pool {
     });
 }
 
+/**
+ * Some deployments have partial SQL migration history.
+ * Ensure optional explorer tables exist before sync/indexers write to them.
+ */
+async function ensureOptionalSapTables(p: Pool): Promise<void> {
+  await p.query('CREATE SCHEMA IF NOT EXISTS sap_exp');
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS sap_exp.token_metadata (
+      mint        TEXT PRIMARY KEY,
+      symbol      TEXT NOT NULL,
+      name        TEXT NOT NULL,
+      logo        TEXT,
+      uri         TEXT,
+      source      TEXT NOT NULL DEFAULT 'onchain',
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await p.query(`
+    ALTER TABLE sap_exp.token_metadata
+      ADD COLUMN IF NOT EXISTS logo TEXT,
+      ADD COLUMN IF NOT EXISTS uri TEXT,
+      ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'onchain',
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  `);
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS sap_exp.x402_direct_payments (
+      id               BIGSERIAL PRIMARY KEY,
+      signature        TEXT NOT NULL UNIQUE,
+      agent_wallet     TEXT NOT NULL,
+      agent_ata        TEXT NOT NULL,
+      payer_wallet     TEXT NOT NULL,
+      payer_ata        TEXT NOT NULL,
+      amount           NUMERIC NOT NULL,
+      amount_raw       NUMERIC NOT NULL,
+      mint             TEXT NOT NULL,
+      decimals         SMALLINT NOT NULL DEFAULT 6,
+      memo             TEXT,
+      has_x402_memo    BOOLEAN NOT NULL DEFAULT false,
+      settlement_data  JSONB,
+      slot             BIGINT NOT NULL,
+      block_time       TIMESTAMPTZ,
+      indexed_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await p.query(`
+    ALTER TABLE sap_exp.x402_direct_payments
+      ADD COLUMN IF NOT EXISTS agent_ata TEXT,
+      ADD COLUMN IF NOT EXISTS payer_wallet TEXT,
+      ADD COLUMN IF NOT EXISTS payer_ata TEXT,
+      ADD COLUMN IF NOT EXISTS amount_raw NUMERIC,
+      ADD COLUMN IF NOT EXISTS mint TEXT,
+      ADD COLUMN IF NOT EXISTS decimals SMALLINT NOT NULL DEFAULT 6,
+      ADD COLUMN IF NOT EXISTS memo TEXT,
+      ADD COLUMN IF NOT EXISTS has_x402_memo BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS settlement_data JSONB,
+      ADD COLUMN IF NOT EXISTS slot BIGINT,
+      ADD COLUMN IF NOT EXISTS block_time TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  `);
+
+  await p.query('CREATE UNIQUE INDEX IF NOT EXISTS x402_direct_payments_signature_key ON sap_exp.x402_direct_payments (signature)');
+}
+
 export function getSharedPool(): Pool {
     if (!_g.__sapSharedPool) {
         _g.__sapSharedPool = makePool();
@@ -71,6 +138,9 @@ if (!_gg[_probeKey]) {
   }
   if (process.env.DATABASE_URL) {
     pool.query('SELECT 1').then(() => {
+      ensureOptionalSapTables(pool).catch((e) => {
+        console.warn('[db] optional table bootstrap failed:', (e as Error).message);
+      });
       markDbUp();
       console.log('[db] connection OK — circuit breaker open');
       // Kick off SDK sync engine (backfill + event stream)

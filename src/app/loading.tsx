@@ -7,7 +7,7 @@ export default function GlobalLoading() {
         <Loader2 className="h-8 w-8 animate-spin text-primary/60" />
         <div className="absolute inset-0 h-8 w-8 animate-glow-pulse rounded-full" />
       </div>
-      <p className="text-sm text-muted-foreground/60 tracking-wider uppercase text-[10px] font-semibold">Loading…</p>
+      <p className="text-sm text-muted-foreground/60 tracking-wider uppercase text-xs font-semibold">Loading…</p>
       <div className="h-px w-20 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
     </div>
   );

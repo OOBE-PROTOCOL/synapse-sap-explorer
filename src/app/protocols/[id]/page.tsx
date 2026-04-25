@@ -97,14 +97,14 @@ export default function ProtocolDetailPage() {
                 <Layers className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-500">Protocol</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Protocol</p>
                 <h1 className="text-2xl font-semibold tracking-tight text-white">{decodedId}</h1>
                 <p className="mt-0.5 text-sm text-neutral-400">{agents.length} agent{agents.length !== 1 ? 's' : ''} · {capabilities.length} capabilit{capabilities.length !== 1 ? 'ies' : 'y'}</p>
               </div>
             </div>
             <Link
               href={`/protocols/${encodeURIComponent(decodedId)}`}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-neutral-700 bg-neutral-800/80 px-2.5 text-[11px] text-neutral-300 hover:border-primary/35 hover:text-primary"
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-neutral-700 bg-neutral-800/80 px-2.5 text-xs text-neutral-300 hover:border-primary/35 hover:text-primary"
             >
               Route
               <ArrowUpRight className="h-3 w-3" />
@@ -136,7 +136,7 @@ export default function ProtocolDetailPage() {
                   </div>
                   <div className="text-right hidden sm:block">
                     <p className="text-xs font-bold tabular-nums text-white">{Number(a.totalCallsServed).toLocaleString()}</p>
-                    <p className="text-[10px] text-neutral-500">calls</p>
+                    <p className="text-xs text-neutral-500">calls</p>
                   </div>
                 </Link>
               ))}
@@ -157,10 +157,10 @@ export default function ProtocolDetailPage() {
                 <Link key={c.id} href={`/capabilities/${encodeURIComponent(c.id)}`}
                   className="flex items-center gap-3 rounded-lg border border-neutral-800 px-3 py-2.5 transition-colors hover:border-primary/35 hover:bg-neutral-800/60"
                 >
-                  <Badge variant="outline" className="text-[10px]">{c.id}</Badge>
-                  {c.version && <Badge variant="secondary" className="text-[9px]">v{c.version}</Badge>}
+                  <Badge variant="outline" className="text-xs">{c.id}</Badge>
+                  {c.version && <Badge variant="secondary" className="text-xs">v{c.version}</Badge>}
                   <span className="flex-1 text-xs text-neutral-400 truncate">{c.description ?? ''}</span>
-                  <span className="text-[10px] text-neutral-500 tabular-nums">{c.ownerCount} owner{c.ownerCount !== 1 ? 's' : ''}</span>
+                  <span className="text-xs text-neutral-500 tabular-nums">{c.ownerCount} owner{c.ownerCount !== 1 ? 's' : ''}</span>
                 </Link>
               ))}
             </div>

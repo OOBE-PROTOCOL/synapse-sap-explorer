@@ -130,7 +130,7 @@ function OutcomeFilter({
         )}
       />
       {cfg.label}
-      <span className="text-[10px] text-muted-foreground tabular-nums">({count})</span>
+      <span className="text-xs text-muted-foreground tabular-nums">({count})</span>
     </button>
   );
 }
@@ -294,7 +294,7 @@ export default function DisputesPage() {
                           <span className="text-sm font-medium truncate">
                             {DISPUTE_TYPE_LABELS[d.disputeType] ?? d.disputeType}
                           </span>
-                          <Badge variant={outcomeCfg.variant as 'default'} className="text-[10px]">
+                          <Badge variant={outcomeCfg.variant as 'default'} className="text-xs">
                             {outcomeCfg.label}
                           </Badge>
                         </div>
@@ -308,13 +308,13 @@ export default function DisputesPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       {/* Resolution layer badge */}
                       <span className={cn(
-                        'inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-md border',
+                        'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md border',
                         layerCfg.className,
                       )}>
                         <LayerIcon className="h-3 w-3" />
                         {layerCfg.label}
                       </span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                      <span className="text-xs text-muted-foreground tabular-nums">
                         {timeAgo(d.createdAt)}
                       </span>
                     </div>
@@ -351,7 +351,7 @@ export default function DisputesPage() {
                   {/* Calls comparison bar (if data) */}
                   {d.provenCalls != null && d.claimedCalls != null && d.claimedCalls > 0 && (
                     <div className="mt-3 pt-3 border-t border-border/30">
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                         <span>Proven: <span className="text-foreground font-mono">{d.provenCalls}</span></span>
                         <span>Claimed: <span className="text-foreground font-mono">{d.claimedCalls}</span></span>
                       </div>
@@ -367,7 +367,7 @@ export default function DisputesPage() {
                   {/* Reason */}
                   {d.reason && (
                     <div className="mt-3 pt-3 border-t border-border/30">
-                      <p className="text-[11px] text-muted-foreground italic line-clamp-2">
+                      <p className="text-xs text-muted-foreground italic line-clamp-2">
                         &ldquo;{d.reason}&rdquo;
                       </p>
                     </div>
@@ -375,7 +375,7 @@ export default function DisputesPage() {
 
                   {/* Proof deadline */}
                   {d.proofDeadline && d.outcome === 'Pending' && (
-                    <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-400">
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
                       <AlertTriangle className="h-3 w-3" />
                       Proof deadline: {new Date(d.proofDeadline).toLocaleString()}
                     </div>

@@ -83,19 +83,19 @@ export default function EscrowDetailPage() {
       <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
         <Card><CardContent className="pt-6 text-center">
           <p className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatAmount(escrow.balance)}</p>
-          <p className="text-[10px] text-muted-foreground">Current Balance</p>
+          <p className="text-xs text-muted-foreground">Current Balance</p>
         </CardContent></Card>
         <Card><CardContent className="pt-6 text-center">
           <p className="text-lg font-bold tabular-nums text-foreground">{formatAmount(escrow.totalDeposited)}</p>
-          <p className="text-[10px] text-muted-foreground">Total Deposited</p>
+          <p className="text-xs text-muted-foreground">Total Deposited</p>
         </CardContent></Card>
         <Card><CardContent className="pt-6 text-center">
           <p className="text-lg font-bold tabular-nums text-foreground">{formatAmount(escrow.totalSettled)}</p>
-          <p className="text-[10px] text-muted-foreground">Total Settled</p>
+          <p className="text-xs text-muted-foreground">Total Settled</p>
         </CardContent></Card>
         <Card><CardContent className="pt-6 text-center">
           <p className="text-lg font-bold tabular-nums text-foreground">{Number(escrow.totalCallsSettled).toLocaleString()}</p>
-          <p className="text-[10px] text-muted-foreground">Calls Settled</p>
+          <p className="text-xs text-muted-foreground">Calls Settled</p>
         </CardContent></Card>
       </div>
 
@@ -106,15 +106,15 @@ export default function EscrowDetailPage() {
           <CopyableField label="Escrow PDA" value={escrow.pda} />
           <CopyableField label="Agent" value={escrow.agent} href={`/address/${escrow.agent}`} truncate />
           {agentMap[escrow.agent] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agent} className="text-[11px]" /></div>
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agent} className="text-xs" /></div>
           )}
           <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} truncate />
           {agentMap[escrow.agentWallet] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agentWallet} className="text-[11px]" /></div>
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agentWallet} className="text-xs" /></div>
           )}
           <CopyableField label="Depositor" value={escrow.depositor} href={`/address/${escrow.depositor}`} truncate />
           {agentMap[escrow.depositor] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.depositor} className="text-[11px]" /></div>
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.depositor} className="text-xs" /></div>
           )}
           {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} truncate />}
           <CopyableField label="Token Decimals" value={String(escrow.tokenDecimals)} mono={false} />
@@ -167,16 +167,16 @@ export default function EscrowDetailPage() {
           <SectionHeader title="Timestamps" />
           <div className="space-y-3">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Created</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Created</span>
               <TimestampDisplay unixSeconds={escrow.createdAt} />
             </div>
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Last Settled</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Last Settled</span>
               <TimestampDisplay unixSeconds={escrow.lastSettledAt} />
             </div>
             {escrow.expiresAt !== '0' && (
               <div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Expires</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Expires</span>
                 <TimestampDisplay unixSeconds={escrow.expiresAt} />
               </div>
             )}
@@ -252,24 +252,24 @@ function EscrowEventTimeline({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-semibold ${color}`}>{short}</span>
                       {ev.data?.callsSettled !== undefined && Number(ev.data.callsSettled) > 0 && (
-                        <Badge variant="secondary" className="text-[10px] h-4">{Number(ev.data.callsSettled)} calls</Badge>
+                        <Badge variant="secondary" className="text-xs h-4">{Number(ev.data.callsSettled)} calls</Badge>
                       )}
                       {ev.data?.amount !== undefined && (
-                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                        <span className="text-xs tabular-nums text-muted-foreground">
                           {(Number(ev.data.amount) / 1e9).toFixed(6)} SOL
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                       {ev.blockTime && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           {new Date(ev.blockTime * 1000).toLocaleString()}
                         </span>
                       )}
                       {ev.txSignature && (
                         <a
                           href={`/tx/${ev.txSignature}`}
-                          className="text-[10px] font-mono text-primary/70 hover:text-primary transition-colors"
+                          className="text-xs font-mono text-primary/70 hover:text-primary transition-colors"
                         >
                           {ev.txSignature.slice(0, 8)}…
                         </a>

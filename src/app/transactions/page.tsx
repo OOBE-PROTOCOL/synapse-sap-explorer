@@ -215,7 +215,7 @@ function ActionLabel({ tx }: { tx: SapTx }) {
           isTransfer ? 'text-muted-foreground' : 'text-primary',
         )}>{first}</span>
         {ix.length > 1 && (
-          <span className="text-[10px] text-muted-foreground">+{ix.length - 1}</span>
+          <span className="text-xs text-muted-foreground">+{ix.length - 1}</span>
         )}
       </div>
     );
@@ -228,7 +228,7 @@ function ActionLabel({ tx }: { tx: SapTx }) {
       <div className="flex items-center gap-1.5">
         <span className="text-sm font-medium text-primary/80">{first}</span>
         {events.length > 1 && (
-          <span className="text-[10px] text-muted-foreground">+{events.length - 1}</span>
+          <span className="text-xs text-muted-foreground">+{events.length - 1}</span>
         )}
       </div>
     );
@@ -492,7 +492,7 @@ function TxRow({ tx, agentMap, escrowMap }: { tx: SapTx; agentMap: AgentMap; esc
               </Link>
             ))}
             {counterparties.length > 2 && (
-              <span className="text-[9px] text-muted-foreground/40">
+              <span className="text-xs text-muted-foreground/40">
                 +{counterparties.length - 2} more
               </span>
             )}
@@ -513,7 +513,7 @@ function TxRow({ tx, agentMap, escrowMap }: { tx: SapTx; agentMap: AgentMap; esc
                   ? tx.value.amount.toFixed(2)
                   : tx.value.amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </span>
-            <span className={`text-[10px] font-medium ${
+            <span className={`text-xs font-medium ${
               tx.value.symbol === 'USDC' ? 'text-emerald-400' :
               tx.value.symbol === 'SOL' ? 'text-primary' :
               'text-muted-foreground'
@@ -747,7 +747,7 @@ export default function TransactionsPage() {
           {/* Filters card — border only, no bg, 2-column grid */}
           <Card className="border-neutral-700 bg-transparent hover:border-neutral-600 transition-all duration-300">
             <CardContent className="p-4">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-400 mb-3">Filters</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400 mb-3">Filters</p>
               <div className="grid grid-cols-2 gap-2">
                 {/* Col 1: sort + SAP instruction filter */}
                 <div className="flex flex-col gap-2">

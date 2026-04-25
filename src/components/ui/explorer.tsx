@@ -77,7 +77,7 @@ export function TimestampDisplay({
       <span className="text-muted-foreground/30">·</span>
       <span className="text-primary/70 tabular-nums">{relativeTime}</span>
       <span className="text-muted-foreground/30">·</span>
-      <span className="text-muted-foreground font-mono text-[10px]">Unix: {ts}</span>
+      <span className="text-muted-foreground font-mono text-xs">Unix: {ts}</span>
     </div>
   );
 }
@@ -193,7 +193,7 @@ export function TxStatusBadge({ success, className }: { success: boolean; classN
     <Badge
       variant={success ? 'default' : 'destructive'}
       className={cn(
-        'gap-1.5 text-[10px] font-semibold uppercase tracking-wider',
+        'gap-1.5 text-xs font-semibold uppercase tracking-wider',
         success
           ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
           : 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20 hover:bg-red-500/20',
@@ -250,7 +250,7 @@ export function DIDIdentity({
             <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
             <span className="text-xs text-muted-foreground">No DID registered on-chain</span>
             {wallet && (
-              <span className="text-[10px] text-muted-foreground/60 font-mono ml-auto">{wallet.slice(0, 8)}…</span>
+              <span className="text-xs text-muted-foreground/60 font-mono ml-auto">{wallet.slice(0, 8)}…</span>
             )}
           </div>
         )}
@@ -314,19 +314,19 @@ export function InstructionView({
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left"
       >
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-[10px] font-mono text-muted-foreground shrink-0">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-xs font-mono text-muted-foreground shrink-0">
           #{index}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {instruction.program && (
-              <Badge variant="default" className="text-[9px]">{instruction.program}</Badge>
+              <Badge variant="default" className="text-xs">{instruction.program}</Badge>
             )}
             {instruction.type && (
-              <Badge variant="secondary" className="text-[9px]">{instruction.type}</Badge>
+              <Badge variant="secondary" className="text-xs">{instruction.type}</Badge>
             )}
           </div>
-          <span className="text-[10px] font-mono text-muted-foreground mt-0.5 block truncate">
+          <span className="text-xs font-mono text-muted-foreground mt-0.5 block truncate">
             {instruction.programId}
           </span>
         </div>
@@ -343,8 +343,8 @@ export function InstructionView({
 
           {instruction.parsed && Object.keys(instruction.parsed).length > 0 && (
             <div className="mt-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-2">Parsed Data</span>
-              <pre className="text-[10px] font-mono text-foreground/70 bg-muted rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">Parsed Data</span>
+              <pre className="text-xs font-mono text-foreground/70 bg-muted rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
                 {JSON.stringify(instruction.parsed, null, 2)}
               </pre>
             </div>
@@ -352,8 +352,8 @@ export function InstructionView({
 
           {instruction.data && (
             <div className="mt-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Raw Data</span>
-              <p className="text-[10px] font-mono text-muted-foreground break-all">{instruction.data}</p>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">Raw Data</span>
+              <p className="text-xs font-mono text-muted-foreground break-all">{instruction.data}</p>
             </div>
           )}
 
@@ -361,7 +361,7 @@ export function InstructionView({
             <div className="mt-2">
               <button
                 onClick={() => setShowAccounts(!showAccounts)}
-                className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showAccounts ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 Accounts ({instruction.accounts.length})
@@ -370,8 +370,8 @@ export function InstructionView({
                 <div className="mt-1 space-y-0.5 ml-3">
                   {instruction.accounts.map((acc, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <span className="text-[9px] text-muted-foreground/50 w-4 text-right">{i}</span>
-                      <a href={`/address/${acc}`} className="text-[10px] font-mono text-primary/70 hover:text-primary transition-colors truncate">
+                      <span className="text-xs text-muted-foreground/50 w-4 text-right">{i}</span>
+                      <a href={`/address/${acc}`} className="text-xs font-mono text-primary/70 hover:text-primary transition-colors truncate">
                         {acc.length > 20 ? `${acc.slice(0, 8)}…${acc.slice(-6)}` : acc}
                       </a>
                     </div>
@@ -383,20 +383,20 @@ export function InstructionView({
 
           {instruction.innerInstructions && instruction.innerInstructions.length > 0 && (
             <div className="mt-2 border-t border-border pt-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
                 Inner Instructions ({instruction.innerInstructions.length})
               </span>
               <div className="space-y-1 ml-3">
                 {instruction.innerInstructions.map((inner, i) => (
                   <div key={i} className="rounded-md border border-border bg-muted/50 p-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-muted-foreground/50">↳ {i}</span>
+                      <span className="text-xs text-muted-foreground/50">↳ {i}</span>
                       {inner.program && <Badge variant="outline" className="text-[8px]">{inner.program}</Badge>}
-                      {inner.type && <span className="text-[9px] text-muted-foreground">{inner.type}</span>}
+                      {inner.type && <span className="text-xs text-muted-foreground">{inner.type}</span>}
                     </div>
-                    <span className="text-[9px] font-mono text-muted-foreground/60 mt-0.5 block truncate">{inner.programId}</span>
+                    <span className="text-xs font-mono text-muted-foreground/60 mt-0.5 block truncate">{inner.programId}</span>
                     {inner.parsed && (
-                      <pre className="text-[9px] font-mono text-muted-foreground/70 mt-1 break-all max-h-20 overflow-auto" style={{ scrollbarWidth: 'thin' }}>
+                      <pre className="text-xs font-mono text-muted-foreground/70 mt-1 break-all max-h-20 overflow-auto" style={{ scrollbarWidth: 'thin' }}>
                         {JSON.stringify(inner.parsed, null, 2)}
                       </pre>
                     )}
@@ -435,7 +435,7 @@ export function OnChainDataSection({
       </button>
       {expanded && (
         <div className="border-t border-border px-4 py-3">
-          <pre className="text-[10px] font-mono text-foreground/70 bg-muted rounded-lg p-3 overflow-x-auto max-h-[400px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+          <pre className="text-xs font-mono text-foreground/70 bg-muted rounded-lg p-3 overflow-x-auto max-h-[400px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {JSON.stringify(data, null, 2)}
           </pre>
         </div>
@@ -456,7 +456,7 @@ export function SectionHeader({ title, count, children, className }: {
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         {count !== undefined && (
-          <Badge variant="secondary" className="text-[10px] tabular-nums">{count}</Badge>
+          <Badge variant="secondary" className="text-xs tabular-nums">{count}</Badge>
         )}
       </div>
       {children}

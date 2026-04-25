@@ -119,7 +119,7 @@ export default function VaultsPage() {
                             {vault.pda.slice(0, 8)}…{vault.pda.slice(-6)}
                           </span>
                           {vault.latestTxTime && (
-                            <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                            <p className="text-xs text-muted-foreground/50 mt-0.5">
                               Last activity {timeAgo(vault.latestTxTime)}
                             </p>
                           )}
@@ -134,7 +134,7 @@ export default function VaultsPage() {
                     <TableCell className="text-right">
                       <span className="text-sm font-semibold tabular-nums">{vault.totalSessions}</span>
                       {vault.sessionsSummary.filter(s => !s.isClosed).length > 0 && (
-                        <span className="ml-1.5 text-[10px] text-emerald-400">
+                        <span className="ml-1.5 text-xs text-emerald-400">
                           {vault.sessionsSummary.filter(s => !s.isClosed).length} open
                         </span>
                       )}
@@ -157,7 +157,7 @@ export default function VaultsPage() {
                           <span
                             key={key}
                             className={cn(
-                              'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold ring-1',
+                              'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ring-1',
                               layers[key as keyof typeof layers]
                                 ? 'bg-primary/10 text-primary ring-primary/20'
                                 : 'text-muted-foreground/30 ring-border/20',

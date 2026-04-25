@@ -328,13 +328,24 @@ async function backgroundRpcRefresh(limit: number): Promise<HydratedTransaction[
   const conn = getSynapseConnection();
   const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
 
-  const signatures = await withRetry(
-    () => conn.getSignaturesForAddress(
-      new PublicKey(SAP_PROGRAM_ADDRESS),
-      { limit },
-    ),
-    'getSignaturesForAddress',
-  );
+  const signatures: Awaited<ReturnType<typeof conn.getSignaturesForAddress>> = [];
+  const programPk = new PublicKey(SAP_PROGRAM_ADDRESS);
+  let before: string | undefined;
+  let remaining = Math.max(1, limit);
+
+  // Solana RPC hard-cap: getSignaturesForAddress limit <= 1000.
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, 1000);
+    const page = await withRetry(
+      () => conn.getSignaturesForAddress(programPk, { limit: chunk, ...(before ? { before } : {}) }),
+      'getSignaturesForAddress',
+    );
+    if (!page.length) break;
+    signatures.push(...page);
+    remaining -= page.length;
+    if (page.length < chunk) break;
+    before = page[page.length - 1]?.signature;
+  }
 
   const sigs: RpcSignatureInfo[] = signatures.map((s) => ({
     signature: s.signature,

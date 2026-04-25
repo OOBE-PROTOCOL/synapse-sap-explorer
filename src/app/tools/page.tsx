@@ -172,7 +172,7 @@ export default function ToolsPage() {
           <ExplorerMetric icon={<Hash className="h-3.5 w-3.5" />} label="Paid Calls Settled" value={stats.totalCallsSettled} accent="cyan" />
           <Card className="bg-neutral-900 border-neutral-700 overflow-hidden hover:border-neutral-600 transition-all duration-300">
             <CardContent className="p-4">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-400 mb-3">Filters & Sort</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-400 mb-3">Filters & Sort</p>
               <div className="space-y-2">
                 <Select value={`${sortKey}-${sortDir}`} onValueChange={(v) => { const [k, d] = v.split('-') as [SortKey, SortDir]; setSortKey(k); setSortDir(d); }}>
                   <SelectTrigger className="h-7 w-full text-xs"><SelectValue /></SelectTrigger>
@@ -277,10 +277,10 @@ export default function ToolsPage() {
                           <div className="min-w-0">
                             <span className="text-sm font-medium text-foreground block truncate group-hover:text-primary transition-colors">{d.toolName}</span>
                             <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
-                              <span className="text-[10px] font-mono text-muted-foreground/60 truncate">{tool.pda.slice(0, 8)}…{tool.pda.slice(-4)}</span>
+                              <span className="text-xs font-mono text-muted-foreground/60 truncate">{tool.pda.slice(0, 8)}…{tool.pda.slice(-4)}</span>
                               {hasInscribedSchema && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-violet-500/10 text-violet-300 ring-1 ring-violet-500/25 shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-semibold bg-violet-500/10 text-violet-300 ring-1 ring-violet-500/25 shrink-0"
                                   title={`Tool schema inscribed on-chain (${tool.inscribedSchemaCount ?? 0} cached)`}
                                 >
                                   <BookOpen className="h-2.5 w-2.5" />
@@ -299,25 +299,25 @@ export default function ToolsPage() {
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1.5">
                           {hasInputSchema ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-blue-500/8 text-blue-400 ring-1 ring-blue-500/20" title="Input schema inscribed on-chain">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-semibold bg-blue-500/8 text-blue-400 ring-1 ring-blue-500/20" title="Input schema inscribed on-chain">
                               <BookOpen className="h-2.5 w-2.5" /> IN
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] text-muted-foreground/40 ring-1 ring-border/30">IN</span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs text-muted-foreground/40 ring-1 ring-border/30">IN</span>
                           )}
                           {hasOutputSchema ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-emerald-500/8 text-emerald-400 ring-1 ring-emerald-500/20" title="Output schema inscribed on-chain">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/8 text-emerald-400 ring-1 ring-emerald-500/20" title="Output schema inscribed on-chain">
                               <BookOpen className="h-2.5 w-2.5" /> OUT
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] text-muted-foreground/40 ring-1 ring-border/30">OUT</span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs text-muted-foreground/40 ring-1 ring-border/30">OUT</span>
                           )}
                           {d.isCompound && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-primary/8 text-primary ring-1 ring-primary/20">Multi</span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-semibold bg-primary/8 text-primary ring-1 ring-primary/20">Multi</span>
                           )}
                         </div>
                         {(hasInputSchema || hasOutputSchema) && tool.agentName && (
-                          <p className="text-[9px] text-muted-foreground/50 mt-0.5 truncate max-w-[140px]">
+                          <p className="text-xs text-muted-foreground/50 mt-0.5 truncate max-w-[140px]">
                             by {tool.agentName}
                           </p>
                         )}

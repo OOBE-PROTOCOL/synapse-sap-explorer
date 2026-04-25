@@ -142,7 +142,7 @@ function StatusFilter({
     >
       <span className={cn('h-1.5 w-1.5 rounded-full transition-colors', active ? 'bg-primary' : cfg.dot)} />
       {cfg.label}
-      <span className="text-[10px] text-neutral-500 tabular-nums">({count})</span>
+      <span className="text-xs text-neutral-500 tabular-nums">({count})</span>
     </button>
   );
 }
@@ -260,7 +260,7 @@ export default function EscrowsPage() {
         {statusFilter && (
           <button
             onClick={() => setStatusFilter(null)}
-            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors ml-1"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
           >
             Clear
           </button>
@@ -387,29 +387,29 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
                   <span className="text-sm font-semibold text-foreground truncate max-w-full">
                     {escrow.agentName ?? 'Unknown Agent'}
                   </span>
-                  <Badge className={cn('text-[10px] gap-1', cfg.className)}>
+                  <Badge className={cn('text-xs gap-1', cfg.className)}>
                     <span className={cn('h-1.5 w-1.5 rounded-full', cfg.dot)} />
                     {cfg.label}
                   </Badge>
                   {escrow.closedAt && (
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       Closed {new Date(escrow.closedAt).toLocaleDateString()}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                  <span className="text-[10px] text-muted-foreground shrink-0">PDA</span>
+                  <span className="text-xs text-muted-foreground shrink-0">PDA</span>
                   <Address value={escrow.pda} copy />
                 </div>
               </div>
             </div>
 
             {/* Parties */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] mt-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1">
               <span className="text-muted-foreground">Agent</span>
               <Address value={escrow.agent} copy />
               <span className="text-muted-foreground">Depositor</span>
-              <AgentTag address={escrow.depositor} agentMap={walletAgentMap} className="text-[10px]" />
+              <AgentTag address={escrow.depositor} agentMap={walletAgentMap} className="text-xs" />
             </div>
           </div>
 
@@ -417,8 +417,8 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
           <div className="grid grid-cols-3 sm:flex sm:items-center gap-3 sm:gap-5 sm:shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-border/40">
             {pricePerCall > 0 && (
               <div className="text-left sm:text-right min-w-0">
-                <p className="text-xs sm:text-sm font-bold tabular-nums text-foreground truncate">{formatAmount(pricePerCall)} <span className="text-[10px] font-normal text-muted-foreground">{tokenLabel}</span></p>
-                <p className="text-[9px] text-muted-foreground uppercase tracking-[0.12em] font-semibold">Price/Call</p>
+                <p className="text-xs sm:text-sm font-bold tabular-nums text-foreground truncate">{formatAmount(pricePerCall)} <span className="text-xs font-normal text-muted-foreground">{tokenLabel}</span></p>
+                <p className="text-xs text-muted-foreground uppercase tracking-[0.12em] font-semibold">Price/Call</p>
               </div>
             )}
             <div className="text-left sm:text-right min-w-0">
@@ -429,13 +429,13 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
                 <p className={cn('text-sm sm:text-lg font-bold tabular-nums font-mono truncate',
                   balance > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-muted-foreground'
                 )}>{formatAmount(balance)}</p>
-                <span className="text-[10px] sm:text-xs font-normal text-muted-foreground hidden sm:inline">{tokenLabel}</span>
+                <span className="text-xs sm:text-xs font-normal text-muted-foreground hidden sm:inline">{tokenLabel}</span>
               </div>
-              <p className="text-[9px] text-muted-foreground uppercase tracking-[0.12em] font-semibold truncate">{tokenName}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-[0.12em] font-semibold truncate">{tokenName}</p>
             </div>
             <div className="text-left sm:text-right min-w-0">
               <p className="text-xs sm:text-sm font-bold tabular-nums text-foreground font-mono truncate">{callsSettled}{maxCalls > 0 ? `/${maxCalls}` : ''}</p>
-              <p className="text-[9px] text-muted-foreground uppercase tracking-[0.12em] font-semibold">Calls</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-[0.12em] font-semibold">Calls</p>
             </div>
           </div>
         </div>
@@ -444,10 +444,10 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
         {(totalDeposited > 0 || maxCalls > 0) && (
           <div className="mt-3">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {maxCalls > 0 ? `Calls ${callsSettled}/${maxCalls}` : 'Funds Utilization'}
               </span>
-              <span className="text-[10px] tabular-nums text-muted-foreground font-mono">{utilization.toFixed(1)}%</span>
+              <span className="text-xs tabular-nums text-muted-foreground font-mono">{utilization.toFixed(1)}%</span>
             </div>
             <div className="h-1 rounded-full bg-neutral-800 overflow-hidden">
               <div
@@ -473,13 +473,13 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
             </span>
           )}
           {(escrow.volumeCurve ?? []).length > 0 && (
-            <Badge variant="outline" className="text-[10px]">Volume curve ({escrow.volumeCurve!.length} tiers)</Badge>
+            <Badge variant="outline" className="text-xs">Volume curve ({escrow.volumeCurve!.length} tiers)</Badge>
           )}
           <div className="ml-auto">
             <button
               onClick={onToggle}
               className={cn(
-                'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] transition-all duration-200 border',
+                'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-all duration-200 border',
                 expanded
                   ? 'bg-primary/10 text-primary border-primary/20'
                   : 'text-neutral-500 hover:text-white hover:bg-neutral-800 border-transparent hover:border-neutral-700',
@@ -494,11 +494,11 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
         {/* Event Timeline */}
         {expanded && (
           <div className="mt-3 pt-3 border-t border-neutral-800">
-            <h4 className="text-[9px] font-semibold text-neutral-500 uppercase tracking-[0.15em] mb-2">
+            <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-[0.15em] mb-2">
               Event History
             </h4>
             {events.length === 0 ? (
-              <p className="text-[11px] text-neutral-500 py-2">No events tracked yet for this escrow.</p>
+              <p className="text-xs text-neutral-500 py-2">No events tracked yet for this escrow.</p>
             ) : (
               <div className="relative space-y-0">
                 {/* Timeline line */}
@@ -515,31 +515,31 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
                         <div className="flex items-center gap-2">
                           <span className={cn('text-xs font-medium', evCfg.color)}>{evCfg.label}</span>
                           {ev.amountChanged && Number(ev.amountChanged) !== 0 && (
-                            <span className="text-[10px] tabular-nums text-muted-foreground">
+                            <span className="text-xs tabular-nums text-muted-foreground">
                               {Number(ev.amountChanged) > 0 ? '+' : ''}{formatAmount(Number(ev.amountChanged))} {tokenLabel}
                             </span>
                           )}
                           {ev.callsSettled && Number(ev.callsSettled) > 0 && (
-                            <span className="text-[10px] tabular-nums text-muted-foreground">
+                            <span className="text-xs tabular-nums text-muted-foreground">
                               {ev.callsSettled} calls
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           {ev.blockTime && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {new Date(ev.blockTime).toLocaleString()}
                             </span>
                           )}
                           {ev.signer && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               by <Address value={ev.signer} copy />
                             </span>
                           )}
                           {ev.txSignature && (
                             <Link
                               href={`/tx/${ev.txSignature}`}
-                              className="text-[10px] text-primary/70 hover:text-primary transition-colors"
+                              className="text-xs text-primary/70 hover:text-primary transition-colors"
                             >
                               {ev.txSignature.slice(0, 8)}...
                             </Link>

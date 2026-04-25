@@ -1,66 +1,54 @@
 export const dynamic = 'force-dynamic';
 
 /* ──────────────────────────────────────────────
- * GET /agents/[wallet]/eip-8004.json
+ * GET /agents/[sapPda]/eip-8004.json
  *
- * Public endpoint serving EIP-8004 JSON registration.
- * Handles the .json extension for Metaplex Core AgentIdentity plugins.
+ * Canonical hybrid EIP-8004 card. Single source of truth merging:
+ *   1. SAP on-chain `AgentAccount`
+ *   2. Metaplex Core `AgentIdentity` plugin (if any)
+ *   3. Metaplex public Agents Registry (api.metaplex.com)
+ *
+ * Always served when the SAP agent exists — even when no Metaplex
+ * artifact is present, so SAP-only agents still expose a card here.
  * ────────────────────────────────────────────── */
 
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
 import { swr } from '~/lib/cache';
-import { getMetaplexLinkSnapshot } from '~/lib/sap/metaplex-link';
-import { getSapClient } from '~/lib/sap/discovery';
+import {
+  buildHybridEip8004Card,
+  AgentNotFoundError,
+} from '~/lib/sap/eip-8004-hybrid';
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ wallet: string }> },
 ) {
   try {
-    const { wallet: agentPdaStr } = await params;
-    const agentPda = new PublicKey(agentPdaStr);
+    const { wallet: sapPdaStr } = await params;
 
-    // Read the AgentAccount to get the owner wallet
-    const agent = await swr(
-      `agent:${agentPdaStr}:account`,
-      () => getSapClient().agent.fetch(agentPda),
-      { ttl: 300_000, swr: 600_000 }, // 5min fresh / 10min stale
-    );
-
-    if (!agent) {
-      return NextResponse.json(
-        { error: 'Agent not found on-chain' },
-        { status: 404, headers: { 'content-type': 'application/json' } },
-      );
-    }
-
-    // Resolve the Metaplex link
-    const snapshot = await swr(
-      `agent:${agentPdaStr}:metaplex`,
-      () => getMetaplexLinkSnapshot(agent.wallet.toBase58()),
+    const card = await swr(
+      `eip8004:${sapPdaStr}:hybrid`,
+      () => buildHybridEip8004Card(sapPdaStr),
       { ttl: 60_000, swr: 300_000 },
     );
 
-    if (!snapshot.registration || !snapshot.linked) {
-      return NextResponse.json(
-        { error: 'No Metaplex Core registration found for this agent' },
-        { status: 404, headers: { 'content-type': 'application/json' } },
-      );
-    }
-
-    // Serve the registration JSON with proper cache headers
-    return NextResponse.json(snapshot.registration, {
+    return NextResponse.json(card, {
       status: 200,
       headers: {
         'content-type': 'application/json',
-        'cache-control': 'public, max-age=300, s-maxage=300',
+        'cache-control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=300',
       },
     });
   } catch (err: unknown) {
+    if (err instanceof AgentNotFoundError) {
+      return NextResponse.json(
+        { error: err.message },
+        { status: 404, headers: { 'content-type': 'application/json' } },
+      );
+    }
     console.error('[agents/eip-8004.json]', err);
     return NextResponse.json(
-      { error: (err as Error).message ?? 'Failed to retrieve EIP-8004 registration' },
+      { error: (err as Error).message ?? 'Failed to retrieve EIP-8004 card' },
       { status: 500, headers: { 'content-type': 'application/json' } },
     );
   }

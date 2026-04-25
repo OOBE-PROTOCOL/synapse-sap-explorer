@@ -140,7 +140,7 @@ export default function DisputeDetailPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card className="arena-panel">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
               <Swords className="h-3 w-3" />
               Dispute Type
             </div>
@@ -150,7 +150,7 @@ export default function DisputeDetailPage() {
         </Card>
         <Card className="arena-panel">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
               <Scale className="h-3 w-3" />
               Outcome
             </div>
@@ -166,7 +166,7 @@ export default function DisputeDetailPage() {
         </Card>
         <Card className="arena-panel">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
               <Lock className="h-3 w-3" />
               Bond
             </div>
@@ -175,7 +175,7 @@ export default function DisputeDetailPage() {
         </Card>
         <Card className="arena-panel">
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
               <Receipt className="h-3 w-3" />
               Calls
             </div>
@@ -183,7 +183,7 @@ export default function DisputeDetailPage() {
               <span className="text-sm font-mono">
                 {dispute.provenCalls ?? '—'} / {dispute.claimedCalls ?? '—'}
               </span>
-              <span className="text-[10px] text-muted-foreground">proven/claimed</span>
+              <span className="text-xs text-muted-foreground">proven/claimed</span>
             </div>
           </CardContent>
         </Card>
@@ -234,7 +234,7 @@ export default function DisputeDetailPage() {
                     )}>
                       {step.label}
                       {isCurrent && (
-                        <Badge variant="outline" className="ml-2 text-[9px] animate-pulse">
+                        <Badge variant="outline" className="ml-2 text-xs animate-pulse">
                           Current
                         </Badge>
                       )}
@@ -265,7 +265,7 @@ export default function DisputeDetailPage() {
                         )} />
                         <span>Deadline: {new Date(dispute.proofDeadline).toLocaleString()}</span>
                         {new Date(dispute.proofDeadline) < new Date() && (
-                          <Badge variant="neon-rose" className="text-[9px]">Expired</Badge>
+                          <Badge variant="neon-rose" className="text-xs">Expired</Badge>
                         )}
                       </div>
                     )}

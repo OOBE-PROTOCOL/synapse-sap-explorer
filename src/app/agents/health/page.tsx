@@ -212,12 +212,12 @@ export default function AgentHealthPage() {
                           <p className="text-sm font-semibold truncate">
                             {agent.identity?.name ?? 'Unnamed'}
                           </p>
-                          <Address value={id?.wallet ?? agent.pda} className="text-[10px]" />
+                          <Address value={id?.wallet ?? agent.pda} className="text-xs" />
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className={cn('h-2 w-2 rounded-full animate-pulse', hcfg.dotClass)} />
-                        <span className={cn('text-[10px] font-medium', hcfg.className)}>
+                        <span className={cn('text-xs font-medium', hcfg.className)}>
                           {hcfg.label}
                         </span>
                       </div>
@@ -225,7 +225,7 @@ export default function AgentHealthPage() {
 
                     {/* Health bar */}
                     <div className="mb-3">
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                         <span>Health Score</span>
                         <span className={cn('font-mono font-bold', hcfg.className)}>
                           {agent.health.score}%
@@ -247,7 +247,7 @@ export default function AgentHealthPage() {
                     </div>
 
                     {/* Metrics grid */}
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="flex items-center gap-1.5">
                         <TrendingUp className="h-3 w-3 text-muted-foreground" />
                         <span className="text-muted-foreground">Rep:</span>
@@ -275,7 +275,7 @@ export default function AgentHealthPage() {
                       <div className="mt-2 pt-2 border-t border-border/30">
                         <div className="flex flex-wrap gap-1">
                           {agent.health.factors.map((f) => (
-                            <Badge key={f} variant="outline" className="text-[9px] px-1.5 py-0">
+                            <Badge key={f} variant="outline" className="text-xs px-1.5 py-0">
                               {f}
                             </Badge>
                           ))}
