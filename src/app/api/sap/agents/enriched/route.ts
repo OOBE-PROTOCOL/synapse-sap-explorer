@@ -222,7 +222,7 @@ function finalizeBalances(
 
 /* ── Route handler ──────────────────────────────────────── */
 
-export async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
+async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     // Fetch agents directly in-process (avoid self-fetch over HTTPS which can
     // hit ERR_SSL_PACKET_LENGTH_TOO_LONG when Node loops back through nginx).
     const [rawAgents, solPrice] = await Promise.all([

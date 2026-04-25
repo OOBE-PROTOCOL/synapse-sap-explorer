@@ -195,12 +195,14 @@ export async function buildHybridEip8004Card(
     services.push({ id: 'x402', type: 'x402-payment', url: agent.x402Endpoint });
   }
   const mplRegistration = snap?.registration ?? null;
-  if (Array.isArray(mplRegistration?.services)) {
-    for (const svc of mplRegistration.services) {
+  const mplServices = (mplRegistration as { services?: unknown } | null)?.services;
+  if (Array.isArray(mplServices)) {
+    for (const raw of mplServices) {
+      const svc = raw as { id?: unknown; type?: unknown; url?: unknown } | null;
       if (!svc) continue;
       const id = String(svc.id ?? svc.type ?? 'service');
       // Avoid duplicating x402 if already present.
-      if (services.some((s) => s.id === id || s.url === svc.url)) continue;
+      if (services.some((s) => s.id === id || (typeof svc.url === 'string' && s.url === svc.url))) continue;
       services.push({
         id,
         type: String(svc.type ?? 'service'),
@@ -247,7 +249,7 @@ export async function buildHybridEip8004Card(
         linked: !!snap?.linked,
         asset: snap?.asset ?? null,
         agentIdentityUri: snap?.agentIdentityUri ?? null,
-        registration: mplRegistration,
+        registration: mplRegistration as Eip8004RegistrationJson | null,
         registry: {
           host: 'api.metaplex.com',
           network: reg?.network ?? 'solana-mainnet',

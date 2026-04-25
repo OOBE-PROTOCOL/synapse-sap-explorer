@@ -141,19 +141,8 @@ async function pollSapTransactions(): Promise<void> {
         warnDedup('post-tx-resync', `[sap-sync] post-tx agent re-sync failed: ${((e as Error).message ?? '').slice(0, 120)}`);
       }
       invalidateAgentCaches(`${count} new tx`);
-      // Warm `agents:enriched` synchronously so the very next /api/sap/agents/enriched
-      // call returns the rebuilt payload (instead of serving the just-deleted
-      // stale entry from `peek()` and only revalidating in background).
-      try {
-        const { swr } = await import('~/lib/cache');
-        const route = await import('~/app/api/sap/agents/enriched/route');
-        const fetcher = (route as unknown as { fetchEnrichedAgents?: () => Promise<unknown> }).fetchEnrichedAgents;
-        if (fetcher) {
-          await swr('agents:enriched', () => fetcher(), { ttl: 30_000, swr: 180_000 });
-        }
-      } catch (e) {
-        warnDedup('warm-enriched', `[sap-sync] warm enriched cache failed: ${((e as Error).message ?? '').slice(0, 120)}`);
-      }
+      // Cache is now empty; the next /api/sap/agents/enriched call will
+      // rebuild it from on-chain data (route handler has its own SWR layer).
     }
   } catch (err) {
     console.warn('[sap-sync] RPC tx poll failed:', (err as Error).message);
