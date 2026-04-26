@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, Package, HelpCircle } from 'lucide-react';
-import { ReputationBar, StatusBadge, Address, ProtocolBadge, Skeleton, Tabs, EmptyState, AgentAvatar, ExplorerPagination, usePagination } from '~/components/ui';
+import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, Package, HelpCircle, Search } from 'lucide-react';
+import { ReputationBar, StatusBadge, Address, ProtocolBadge, Skeleton, EmptyState, AgentAvatar, ExplorerPagination, usePagination } from '~/components/ui';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -65,6 +65,7 @@ export default function AgentDetailPage() {
 }
 
 const AGENT_TABS = ['overview', 'revenue', 'tools', 'escrows', 'feedbacks', 'attestations', 'events', 'vault', 'x402', 'metaplex'] as const;
+type AgentTab = (typeof AGENT_TABS)[number];
 
 function AgentDetailInner() {
   const { wallet } = useParams<{ wallet: string }>();
@@ -85,7 +86,8 @@ function AgentDetailInner() {
   const { data: metaplexData, loading: metaplexLoading } = useAgentMetaplex(canonicalWallet);
   const { data: nftsData } = useAgentNfts(canonicalWallet);
   const { data: registryData, loading: registryLoading } = useMetaplexRegistry(canonicalWallet);
-  const [activeTab, setActiveTab] = useQueryState('tab', 'overview' as typeof AGENT_TABS[number], QueryParam.enum('overview', AGENT_TABS));
+  const [activeTab, setActiveTab] = useQueryState('tab', 'overview' as AgentTab, QueryParam.enum('overview', AGENT_TABS));
+  const [sectionFilter, setSectionFilter] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState(false);
   const [resolveAttempted, setResolveAttempted] = useState(false);
@@ -186,6 +188,25 @@ function AgentDetailInner() {
 
   const totalCallsSettled = agentEscrows.reduce((s, e) => s + Number(e.totalCallsSettled), 0);
   const totalSolSettled = agentEscrows.reduce((s, e) => s + Number(e.totalSettled), 0);
+
+  const sidebarSections: Array<{ value: AgentTab; label: string; count?: number }> = [
+    { value: 'overview', label: 'Overview' },
+    { value: 'revenue', label: 'SAP Revenue' },
+    { value: 'tools', label: 'Tools', count: agentTools.length },
+    { value: 'escrows', label: 'Escrows', count: agentEscrows.length },
+    { value: 'events', label: 'SAP Events', count: agentEvents.length },
+    { value: 'feedbacks', label: 'Feedbacks', count: agentFeedbacks.length },
+    { value: 'attestations', label: 'Attestations', count: agentAttestations.length },
+    { value: 'vault', label: 'Memory Vaults', count: memoryData?.stats?.vaultCount ?? agentVaults.length },
+    { value: 'x402', label: 'x402 Txns', count: x402Data?.total ?? 0 },
+    { value: 'metaplex', label: 'Metaplex', count: metaplexData?.linked ? 1 : 0 },
+  ];
+  const normalizedSectionFilter = sectionFilter.trim().toLowerCase();
+  const visibleSections = sidebarSections.filter((s) =>
+    normalizedSectionFilter.length === 0
+      ? true
+      : s.label.toLowerCase().includes(normalizedSectionFilter),
+  );
 
   // ── Registry coordination ────────────────────────────────────────────────
   // Reaching this render means SAP registration is a given (we read the
@@ -910,26 +931,56 @@ function AgentDetailInner() {
         </div>
       </div>
 
-      {/* ═══════════ TABS ═══════════ */}
-      <div>
-        <Tabs
-          tabs={[
-            { value: 'overview', label: 'Overview' },
-            { value: 'revenue', label: 'SAP Revenue' },
-            { value: 'tools', label: 'Tools', count: agentTools.length },
-            { value: 'escrows', label: 'Escrows', count: agentEscrows.length },
-            { value: 'events', label: 'SAP Events', count: agentEvents.length },
-            { value: 'feedbacks', label: 'Feedbacks', count: agentFeedbacks.length },
-            { value: 'attestations', label: 'Attestations', count: agentAttestations.length },
-            { value: 'vault', label: 'Memory Vaults', count: memoryData?.stats?.vaultCount ?? agentVaults.length },
-            { value: 'x402', label: 'x402 Txns', count: x402Data?.total ?? 0 },
-            { value: 'metaplex', label: 'Metaplex', count: metaplexData?.linked ? 1 : 0 },
-          ]}
-          active={activeTab}
-          onChange={(v) => setActiveTab(v as typeof AGENT_TABS[number])}
-        />
+      {/* ═══════════ SIDEBAR + CONTENT ═══════════ */}
+      <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="rounded-lg border border-border/30 bg-card/60 p-3 sm:p-4 h-fit lg:sticky lg:top-20">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 mb-2">Sections</p>
+          <div className="relative mb-3">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-500" />
+            <input
+              value={sectionFilter}
+              onChange={(e) => setSectionFilter(e.target.value)}
+              placeholder="Filter sections"
+              className="h-8 w-full rounded-md border border-neutral-800 bg-neutral-900/70 pl-8 pr-2 text-xs text-neutral-200 placeholder:text-neutral-500 outline-none ring-0 focus:border-primary/50"
+            />
+          </div>
 
-        <div className="rounded-lg rounded-tl-none border border-border/30 bg-card/60 p-4 sm:p-6 space-y-6 -mt-px">
+          {visibleSections.length === 0 ? (
+            <div className="rounded-md border border-dashed border-neutral-800 bg-neutral-900/40 px-3 py-3 text-xs text-neutral-500">
+              No section matches this filter.
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {visibleSections.map((s) => {
+                const isActive = s.value === activeTab;
+                return (
+                  <button
+                    key={s.value}
+                    onClick={() => setActiveTab(s.value)}
+                    className={cn(
+                      'w-full rounded-md border px-2.5 py-2 text-left transition-colors flex items-center gap-2',
+                      isActive
+                        ? 'border-primary/40 bg-primary/10 text-primary'
+                        : 'border-neutral-800 bg-neutral-900/50 text-neutral-300 hover:bg-neutral-800/50 hover:text-white',
+                    )}
+                  >
+                    <span className="text-xs font-medium truncate">{s.label}</span>
+                    {typeof s.count === 'number' && (
+                      <Badge
+                        variant="secondary"
+                        className={cn('ml-auto text-[10px] px-1.5 py-0 tabular-nums', isActive ? 'bg-primary/15 text-primary' : 'bg-neutral-800 text-neutral-400')}
+                      >
+                        {s.count}
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </aside>
+
+        <div className="rounded-lg border border-border/30 bg-card/60 p-4 sm:p-6 space-y-6">
         {/* Tab: Overview */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">

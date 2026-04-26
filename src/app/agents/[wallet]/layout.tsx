@@ -9,11 +9,17 @@ type Props = {
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { wallet } = await params;
-  const shortWallet = wallet.length > 12 ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : wallet;
+  const { wallet: walletOrId } = await params;
+  const shortWallet = walletOrId.length > 12 ? `${walletOrId.slice(0, 6)}...${walletOrId.slice(-4)}` : walletOrId;
 
   try {
-    const res = await fetch(`${API_BASE}/api/sap/agents/${wallet}`, {
+    const resolved = await fetch(`${API_BASE}/api/sap/agents/resolve/${walletOrId}`, {
+      next: { revalidate: 60 },
+    }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as { wallet?: string | null } | null;
+
+    const canonicalWallet = resolved?.wallet ?? walletOrId;
+
+    const res = await fetch(`${API_BASE}/api/sap/agents/${canonicalWallet}`, {
       next: { revalidate: 60 },
     });
 
@@ -35,16 +41,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       };
     }
 
+    const computed = profile.computed ?? null;
     const name = identity.name || shortWallet;
-    const score = identity.reputationScore ?? 0;
-    const calls = Number(identity.totalCallsServed ?? 0).toLocaleString();
-    const toolCount = String(identity.capabilities?.length ?? 0);
+    const score = Number(computed?.reputationScore ?? identity.reputationScore ?? 0);
+    const calls = Number(computed?.totalCalls ?? identity.totalCallsServed ?? 0).toLocaleString();
+    const toolCount = String(computed?.capabilityCount ?? identity.capabilities?.length ?? 0);
     const isActive = identity.isActive ? 'active' : 'inactive';
 
     const ogUrl = new URL(`${SITE_URL}/api/og`);
     ogUrl.searchParams.set('type', 'agent');
     ogUrl.searchParams.set('name', name);
-    ogUrl.searchParams.set('wallet', wallet);
+    ogUrl.searchParams.set('wallet', canonicalWallet);
     ogUrl.searchParams.set('score', String(score));
     ogUrl.searchParams.set('calls', calls);
     ogUrl.searchParams.set('tools', toolCount);
@@ -59,7 +66,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         type: 'profile',
         title: `${name} | Synapse Explorer`,
         description,
-        url: `${SITE_URL}/agents/${wallet}`,
+        url: `${SITE_URL}/agents/${canonicalWallet}`,
         siteName: 'Synapse Explorer',
         images: [{ url: ogUrl.toString(), width: 1200, height: 630, alt: `Agent ${name}` }],
       },
