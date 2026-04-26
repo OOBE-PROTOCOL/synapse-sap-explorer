@@ -508,3 +508,23 @@ export const tokenMetadata = sapExpSchema.table('token_metadata', {
     updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/* ═══════════════════════════════════════════════
+ * agent_metaplex — Persistent cache for Metaplex × SAP link snapshots
+ * ═══════════════════════════════════════════════ */
+
+export const agentMetaplex = sapExpSchema.table('agent_metaplex', {
+    wallet:           text('wallet').primaryKey(),
+    sapAgentPda:      text('sap_agent_pda'),
+    asset:            text('asset'),
+    linked:           boolean('linked').notNull().default(false),
+    pluginCount:      integer('plugin_count').notNull().default(0),
+    registryCount:    integer('registry_count').notNull().default(0),
+    agentIdentityUri: text('agent_identity_uri'),
+    registration:     jsonb('registration').$type<unknown>(),
+    registryAgents:   jsonb('registry_agents').$type<unknown[]>().notNull().default([]),
+    source:           text('source').notNull().default('unknown'), // das | searchAssets | on-chain | none
+    error:            text('error'),
+    refreshedAt:      timestamp('refreshed_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt:        timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+

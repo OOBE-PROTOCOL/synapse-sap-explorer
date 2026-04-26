@@ -17,6 +17,7 @@ import {
   syncCursors,
   settlementLedger,
   x402DirectPayments,
+  agentMetaplex,
 } from '~/db/schema';
 
 /* ── Agents ───────────────────────────────────── */
@@ -993,4 +994,43 @@ export async function selectToolsByAgent(agentPda: string) {
     .from(tools)
     .where(eq(tools.agentPda, agentPda))
     .orderBy(desc(tools.updatedAt));
+}
+
+/* ── Agent Metaplex Snapshot ──────────────────── */
+
+export async function selectAgentMetaplex(wallet: string) {
+  const rows = await db
+    .select()
+    .from(agentMetaplex)
+    .where(eq(agentMetaplex.wallet, wallet))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function selectAllAgentMetaplex() {
+  return db.select().from(agentMetaplex);
+}
+
+export async function upsertAgentMetaplex(data: typeof agentMetaplex.$inferInsert) {
+  const now = new Date();
+  return db
+    .insert(agentMetaplex)
+    .values({ ...data, refreshedAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: agentMetaplex.wallet,
+      set: {
+        sapAgentPda: data.sapAgentPda ?? null,
+        asset: data.asset ?? null,
+        linked: data.linked ?? false,
+        pluginCount: data.pluginCount ?? 0,
+        registryCount: data.registryCount ?? 0,
+        agentIdentityUri: data.agentIdentityUri ?? null,
+        registration: data.registration ?? null,
+        registryAgents: data.registryAgents ?? [],
+        source: data.source ?? 'unknown',
+        error: data.error ?? null,
+        refreshedAt: now,
+        updatedAt: now,
+      },
+    });
 }

@@ -326,7 +326,7 @@ async function enumerateAssetsForWallet(
     const assets = await Promise.race<AssetV1[]>([
       fetchAssetsByOwner(umi, umiPublicKey(wallet.toBase58())),
       new Promise<AssetV1[]>((_, reject) =>
-        setTimeout(() => reject(new Error('on-chain timeout 8s')), 8_000),
+        setTimeout(() => reject(new Error('on-chain timeout 15s')), 15_000),
       ),
     ]);
     if (assets.length > 0) {
@@ -520,8 +520,18 @@ async function toItem(asset: AssetV1, sapAgentPda: string | null): Promise<Metap
  *
  * Never throws; all errors are captured in `snapshot.error`.
  */
-const SNAPSHOT_CACHE_TTL_MS = 60_000;
+// Asymmetric TTLs: positive results (linked or any plugin discovered) cached
+// long because they're stable; negative cached short so newly-minted agents
+// surface within ~30s without an explicit cache bust.
+const SNAPSHOT_CACHE_TTL_POSITIVE_MS = 10 * 60_000;
+const SNAPSHOT_CACHE_TTL_NEGATIVE_MS = 30_000;
 const snapshotCache = new Map<string, { at: number; value: MetaplexLinkSnapshot }>();
+
+function snapshotTtl(v: MetaplexLinkSnapshot): number {
+  return v.linked || v.pluginCount > 0
+    ? SNAPSHOT_CACHE_TTL_POSITIVE_MS
+    : SNAPSHOT_CACHE_TTL_NEGATIVE_MS;
+}
 
 export async function getMetaplexLinkSnapshot(
   wallet: string,
@@ -529,7 +539,7 @@ export async function getMetaplexLinkSnapshot(
 ): Promise<MetaplexLinkSnapshot> {
   const cacheKey = `${wallet}:${options.skipOnChain ? 'fast' : 'full'}`;
   const cached = snapshotCache.get(cacheKey);
-  if (cached && Date.now() - cached.at < SNAPSHOT_CACHE_TTL_MS) {
+  if (cached && Date.now() - cached.at < snapshotTtl(cached.value)) {
     return cached.value;
   }
   let walletPk: PublicKey;

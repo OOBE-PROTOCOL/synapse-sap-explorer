@@ -11,8 +11,7 @@ import {
 } from '~/lib/sap/discovery';
 import { fetchAgentWellKnownBatch, type AgentWellKnown } from '~/lib/sap/well-known';
 import { resolveTokens } from '~/lib/sap/token-metadata';
-import { getMetaplexLinkSnapshot } from '~/lib/sap/metaplex-link';
-import { listRegistryAgentsForWallet } from '~/lib/metaplex/registry';
+import { getCachedAgentMetaplexBatch } from '~/lib/sap/metaplex-snapshot-store';
 import { swr, peek } from '~/lib/cache';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
 
@@ -246,7 +245,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     const wallets = agents.map((a) => a.identity?.wallet).filter(Boolean) as string[];
 
     // Fetch well-known, metadata, raw balances, on-chain tools, and staking in parallel
-    const [wellKnownMap, allTools, stakingResults, metaplexResults, registryResults, ...rest] = await Promise.all([
+    const [wellKnownMap, allTools, stakingResults, metaplexBadgeMap, ...rest] = await Promise.all([
       fetchAgentWellKnownBatch(endpoints),
       findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
       // Batch fetch staking for all agents
@@ -272,22 +271,10 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
           }
         }),
       ),
-      // Batch resolve Metaplex Core link via DAS — one call per wallet,
-      // never throws (metaplex-link helper captures errors).
-      // On-chain tier is bounded by 8s timeout per wallet; with Promise.all
-      // the 11 wallets are resolved in parallel so worst-case wall time ≈ 8s.
-      Promise.all(
-        wallets.map((w) =>
-          getMetaplexLinkSnapshot(w).catch(() => null),
-        ),
-      ),
-      // Batch resolve api.metaplex.com Agents Registry presence — one call
-      // per wallet, never throws (helper returns empty list on failure).
-      Promise.all(
-        wallets.map((w) =>
-          listRegistryAgentsForWallet(w).catch(() => null),
-        ),
-      ),
+      // DB-backed Metaplex badge cache (stale-while-revalidate). Returns
+      // instantly from `agent_metaplex` table; cold wallets block on a
+      // single resolution call, then are persisted forever.
+      getCachedAgentMetaplexBatch(wallets),
       ...agentUris.map((uri) => fetchAgentMetadata(uri)),
       ...wallets.map((w) => fetchRawBalances(w)),
     ]);
@@ -368,17 +355,10 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
         deployedTokenCount: wallet ? (deployerCountMap.get(wallet) ?? 0) : 0,
         staking: (stakingResults as (AgentStakeSummary | null)[])[agentIdx] ?? null,
         metaplex: ((): AgentMetaplexBadge | null => {
-          const snap = (metaplexResults as Array<Awaited<ReturnType<typeof getMetaplexLinkSnapshot>> | null>)[agentIdx];
-          const reg = (registryResults as Array<Awaited<ReturnType<typeof listRegistryAgentsForWallet>> | null>)[agentIdx];
-          const pluginCount = snap?.pluginCount ?? 0;
-          const registryCount = reg?.agents.length ?? 0;
-          if (!snap && registryCount === 0) return null;
-          return {
-            asset: snap?.asset ?? null,
-            linked: !!snap?.linked,
-            pluginCount,
-            registryCount,
-          };
+          const wallet = agent.identity?.wallet;
+          if (!wallet) return null;
+          const badge = metaplexBadgeMap.get(wallet);
+          return badge ?? null;
         })(),
       };
     });

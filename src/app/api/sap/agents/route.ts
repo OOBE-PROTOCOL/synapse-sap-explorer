@@ -62,6 +62,16 @@ async function rpcFetchAgents(
     console.warn('[agents] DB write failed:', (e as Error).message),
   );
 
+  // Kick off Metaplex snapshot refresh for any new wallet (non-blocking).
+  // The snapshot store dedups inflight refreshes per wallet.
+  void (async () => {
+    const { invalidateMetaplexSnapshot } = await import('~/lib/sap/metaplex-snapshot-store');
+    for (const a of serialized) {
+      const w = a.identity?.wallet;
+      if (w) invalidateMetaplexSnapshot(w).catch(() => {});
+    }
+  })();
+
   return { agents: serialized, total: serialized.length };
 }
 
