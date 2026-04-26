@@ -17,7 +17,6 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 const SITE_URL = 'https://explorer.oobeprotocol.ai';
-const OG_BG_SRC = `${SITE_URL}/og-bg.png`;
 const OG_LOGO_SRC = `${SITE_URL}/explorer_logo.png`;
 const BRAND_NAME = 'SAP EXPLORER';
 
@@ -41,27 +40,25 @@ function Logo({ size = 48 }: { size?: number }) {
   );
 }
 
-/* ── Background layers (Satori does not support CSS background:url, must use <img>) ── */
-function Background({ overlayOpacity = 0.78 }: { overlayOpacity?: number }) {
+/* ── Background: pure-CSS layered gradients + grid.
+   No external image fetch (reliable in Edge + previews).
+   Composition:
+     1. Deep navy base
+     2. Cyan radial glow top-left (brand accent)
+     3. Violet radial glow bottom-right (depth)
+     4. Subtle SVG grid overlay (texture, ~3% opacity)
+     5. Vignette for focus
+   ────────────────────────────────────────────── */
+const GRID_SVG =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><path d="M60 0H0v60" fill="none" stroke="rgb(125,211,252)" stroke-opacity="0.06" stroke-width="1"/></svg>`,
+  );
+
+function Background() {
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={OG_BG_SRC}
-        alt=""
-        width={1200}
-        height={630}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '1200px',
-          height: '630px',
-          objectFit: 'cover',
-          filter: 'blur(18px) saturate(120%)',
-          transform: 'scale(1.08)',
-        }}
-      />
+      {/* Base + radial glows (single layer, Satori supports multi-bg) */}
       <div
         style={{
           position: 'absolute',
@@ -70,7 +67,47 @@ function Background({ overlayOpacity = 0.78 }: { overlayOpacity?: number }) {
           width: '1200px',
           height: '630px',
           display: 'flex',
-          background: `linear-gradient(135deg, rgba(3, 13, 25, ${overlayOpacity * 0.85}) 0%, rgba(5, 19, 35, ${overlayOpacity * 0.92}) 52%, rgba(3, 13, 25, ${overlayOpacity}) 100%)`,
+          background:
+            'radial-gradient(ellipse 900px 600px at 0% 0%, rgba(34, 211, 238, 0.18) 0%, transparent 60%),' +
+            'radial-gradient(ellipse 800px 500px at 100% 100%, rgba(139, 92, 246, 0.16) 0%, transparent 55%),' +
+            'linear-gradient(135deg, #050d1a 0%, #081628 50%, #050d1a 100%)',
+        }}
+      />
+      {/* Grid texture */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          backgroundImage: `url("${GRID_SVG}")`,
+          backgroundRepeat: 'repeat',
+        }}
+      />
+      {/* Top accent line */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '1200px',
+          height: '2px',
+          display: 'flex',
+          background: 'linear-gradient(90deg, transparent 0%, rgba(34, 211, 238, 0.7) 50%, transparent 100%)',
+        }}
+      />
+      {/* Vignette */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          background: 'radial-gradient(ellipse 1200px 630px at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%)',
         }}
       />
     </>
@@ -85,7 +122,7 @@ const ROOT_STYLE = {
   position: 'relative' as const,
   fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
   padding: '52px',
-  backgroundColor: '#030d19',
+  backgroundColor: '#050d1a',
 };
 
 /* ── Transaction OG ── */
@@ -424,7 +461,7 @@ function renderDefaultOG() {
   return new ImageResponse(
     (
       <div style={{ ...ROOT_STYLE, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-        <Background overlayOpacity={0.7} />
+        <Background />
         <div
           style={{
             display: 'flex',
