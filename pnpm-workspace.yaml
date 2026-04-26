@@ -1,8 +1,11 @@
 ignoredBuiltDependencies:
   - bufferutil
-  - esbuild
   - unrs-resolver
   - utf-8-validate
 
-overrides:
-  '@oobe-protocol-labs/synapse-sap-sdk': link:../synapse-agent-sap/synapse-sap-sdk
+# Local dev override (only effective when the sibling repo exists).
+# On production servers without the sibling checkout, pnpm falls back to
+# the published version declared in package.json (^0.9.3).
+# Comment this back in when actively developing the SDK locally.
+# overrides:
+#   '@oobe-protocol-labs/synapse-sap-sdk': link:../synapse-agent-sap/synapse-sap-sdk
