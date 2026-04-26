@@ -313,17 +313,22 @@ async function enumerateAssetsForWallet(
     }
   }
 
-  // Tier 2 — direct on-chain enumeration (Synapse RPC only).
-  // Skipped on hot batch paths (e.g. /agents listing) because
-  // `fetchAssetsByOwner` is a heavy `getProgramAccounts` scan that can take
-  // 30s+ and block the whole batch. Reserved for the per-agent detail page.
+  // Tier 2 — direct on-chain enumeration via Synapse RPC.
+  // `fetchAssetsByOwner` does `getProgramAccounts` against MPL Core; it can
+  // be slow per wallet, but in batch contexts (Promise.all) all wallets run
+  // in parallel so total wall time ≈ max(perWallet). Bounded by 8s timeout.
   if (options.skipOnChain) {
     diagnostics.push('On-chain tier skipped (batch mode)');
     return { source: 'none', assets: [], diagnostics };
   }
   try {
     const umi = getAuthenticatedUmi();
-    const assets = await fetchAssetsByOwner(umi, umiPublicKey(wallet.toBase58()));
+    const assets = await Promise.race<AssetV1[]>([
+      fetchAssetsByOwner(umi, umiPublicKey(wallet.toBase58())),
+      new Promise<AssetV1[]>((_, reject) =>
+        setTimeout(() => reject(new Error('on-chain timeout 8s')), 8_000),
+      ),
+    ]);
     if (assets.length > 0) {
       return { source: 'on-chain', assets, diagnostics };
     }
@@ -515,7 +520,7 @@ async function toItem(asset: AssetV1, sapAgentPda: string | null): Promise<Metap
  *
  * Never throws; all errors are captured in `snapshot.error`.
  */
-const SNAPSHOT_CACHE_TTL_MS = 5 * 60_000;
+const SNAPSHOT_CACHE_TTL_MS = 60_000;
 const snapshotCache = new Map<string, { at: number; value: MetaplexLinkSnapshot }>();
 
 export async function getMetaplexLinkSnapshot(
