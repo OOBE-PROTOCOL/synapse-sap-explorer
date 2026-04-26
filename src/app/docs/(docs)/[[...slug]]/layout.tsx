@@ -12,7 +12,10 @@ export default function Layout({ children }: { children: ReactNode }) {
       {...baseOptions}
       sidebar={{
         collapsible: true,
-        defaultOpenLevel: 1,
+        // Keep all top-level folders (CLI, SDK, Core, Examples, …) closed
+        // by default. Only the active branch auto-expands. This matches
+        // the user's request for a less crowded, more discoverable IA.
+        defaultOpenLevel: 0,
         // Per-breakpoint sidebar width. fumadocs reads --fd-sidebar-width
         // for layout calculations; we override its defaults so the sidebar
         // is comfortable on large displays without crowding content.
