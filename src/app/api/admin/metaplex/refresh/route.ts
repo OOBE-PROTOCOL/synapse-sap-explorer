@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server';
 import { selectAllAgents } from '~/lib/db/queries';
 import { invalidateMetaplexSnapshot } from '~/lib/sap/metaplex-snapshot-store';
 import { invalidateSnapshotCache } from '~/lib/sap/metaplex-link';
+import { invalidate, invalidatePrefix } from '~/lib/cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,8 +37,15 @@ export async function POST(req: Request) {
     wallets = rows.map((r) => r.wallet).filter(Boolean) as string[];
   }
 
-  // Drop in-memory cache first so the re-resolution actually re-fetches.
+  // Drop in-memory caches first so the re-resolution actually re-fetches.
   invalidateSnapshotCache();
+  // Per-wallet SWR keys used by /nfts and /metaplex routes.
+  for (const w of wallets) {
+    invalidate(`agent:${w}:metaplex`);
+    invalidate(`agent:${w}:nfts`);
+  }
+  // Listing cache used by /api/sap/agents/enriched.
+  invalidatePrefix('agents:enriched');
 
   // Refresh sequentially to avoid hammering Synapse RPC.
   const results: { wallet: string; ok: boolean; error?: string }[] = [];
