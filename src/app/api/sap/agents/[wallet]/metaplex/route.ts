@@ -19,14 +19,26 @@ export const dynamic = 'force-dynamic';
 
 import { synapseResponse } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
-import { getMetaplexLinkSnapshot } from '~/lib/sap/metaplex-link';
+import { getMetaplexLinkSnapshot, invalidateSnapshotCache } from '~/lib/sap/metaplex-link';
+import { invalidateMetaplexSnapshot } from '~/lib/sap/metaplex-snapshot-store';
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ wallet: string }> },
 ) {
   try {
     const { wallet } = await params;
+    const url = new URL(req.url);
+    const fresh = url.searchParams.get('fresh') === '1';
+
+    if (fresh) {
+      // Bypass all caches and force a clean re-resolution.
+      invalidateSnapshotCache(wallet);
+      const snapshot = await getMetaplexLinkSnapshot(wallet, { fresh: true });
+      // Best-effort: also refresh the DB-backed snapshot for consistency.
+      void invalidateMetaplexSnapshot(wallet).catch(() => {});
+      return synapseResponse(snapshot);
+    }
 
     // Route param already is the owner wallet.
     const snapshot = await swr(

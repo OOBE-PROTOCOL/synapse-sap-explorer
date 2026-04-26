@@ -60,6 +60,8 @@ export type MetaplexLinkSnapshot = {
   pluginCount: number;
   /** Last error encountered (debug only), or null. */
   error: string | null;
+  /** Per-tier diagnostics (debug only). */
+  diagnostics?: string[];
 };
 
 export type Eip8004RegistrationJson = {
@@ -533,11 +535,19 @@ function snapshotTtl(v: MetaplexLinkSnapshot): number {
     : SNAPSHOT_CACHE_TTL_NEGATIVE_MS;
 }
 
+export function invalidateSnapshotCache(wallet?: string): void {
+  if (!wallet) { snapshotCache.clear(); return; }
+  for (const k of snapshotCache.keys()) {
+    if (k.startsWith(`${wallet}:`)) snapshotCache.delete(k);
+  }
+}
+
 export async function getMetaplexLinkSnapshot(
   wallet: string,
-  options: { skipOnChain?: boolean } = {},
+  options: { skipOnChain?: boolean; fresh?: boolean } = {},
 ): Promise<MetaplexLinkSnapshot> {
   const cacheKey = `${wallet}:${options.skipOnChain ? 'fast' : 'full'}`;
+  if (options.fresh) snapshotCache.delete(cacheKey);
   const cached = snapshotCache.get(cacheKey);
   if (cached && Date.now() - cached.at < snapshotTtl(cached.value)) {
     return cached.value;
@@ -598,6 +608,7 @@ export async function getMetaplexLinkSnapshot(
       registration,
       pluginCount,
       error: null,
+      diagnostics: enumeration.diagnostics,
     };
     snapshotCache.set(cacheKey, { at: Date.now(), value: result });
     return result;
@@ -612,6 +623,7 @@ export async function getMetaplexLinkSnapshot(
     registration: null,
     pluginCount,
     error: null,
+    diagnostics: enumeration.diagnostics,
   };
   snapshotCache.set(cacheKey, { at: Date.now(), value: result });
   return result;
