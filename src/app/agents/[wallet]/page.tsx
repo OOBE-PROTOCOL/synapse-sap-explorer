@@ -1863,6 +1863,34 @@ function AgentEventTimeline({
 
 import type { AgentMetaplexLink, AgentNftItem, MetaplexRegistryResponse } from '~/hooks/use-sap';
 
+/* ── Pill ─────────────────────────────────────────────────
+ * Three flat variants used everywhere in the Metaplex tab.
+ * No border + bg + color stacking; each variant picks one
+ * cue. Status carries no chrome, just colored text.
+ * ──────────────────────────────────────────────────────── */
+type PillVariant = 'status' | 'kind' | 'sap' | 'mpl';
+function Pill({
+  variant = 'kind',
+  className,
+  title,
+  children,
+}: {
+  variant?: PillVariant;
+  className?: string;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  const base =
+    'inline-flex items-center gap-1 text-[10px] font-medium leading-none whitespace-nowrap';
+  const styles: Record<PillVariant, string> = {
+    status: 'uppercase tracking-wider text-emerald-300/90',
+    kind: 'rounded-md bg-neutral-800/60 px-1.5 py-1 font-mono text-neutral-300',
+    sap: 'rounded-md bg-pink-500/10 px-1.5 py-1 font-mono text-pink-300',
+    mpl: 'rounded-md bg-amber-500/10 px-1.5 py-1 font-mono text-amber-300',
+  };
+  return <span className={cn(base, styles[variant], className)} title={title}>{children}</span>;
+}
+
 function AgentMetaplexTab({
   data,
   loading,
@@ -1932,19 +1960,10 @@ function AgentMetaplexTab({
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-semibold text-foreground">Metaplex Core Bridge</h3>
-              <Badge className={cn(
-                'text-xs px-2 py-1',
-                heroState === 'both'
-                  ? 'bg-pink-500/15 text-pink-400 border border-pink-500/20'
-                  : 'bg-neutral-800 text-neutral-500 border border-neutral-700',
-              )}>
+              <Pill variant={heroState === 'both' ? 'sap' : 'kind'}>
                 {heroState === 'both' ? 'SAP + METAPLEX' : 'SAP ONLY'}
-              </Badge>
-              {linked && (
-                <Badge className="text-xs px-1.5 py-0 border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
-                  URI-BOUND
-                </Badge>
-              )}
+              </Pill>
+              {linked && <Pill variant="status">URI-BOUND</Pill>}
             </div>
             <p className="text-xs text-neutral-500">
               {heroState === 'both'
@@ -1991,9 +2010,7 @@ function AgentMetaplexTab({
                     {asset}
                     <ExternalLink className="h-3 w-3 shrink-0" />
                   </Link>
-                  <Badge className="text-xs px-1.5 py-0 border bg-pink-500/15 text-pink-300 border-pink-500/30">
-                    SAP-BOUND
-                  </Badge>
+                  <Pill variant="sap">SAP-BOUND</Pill>
                 </div>
               ) : identityNfts.length > 0 ? (
                 <div className="flex items-center gap-2 justify-end flex-wrap">
@@ -2075,9 +2092,7 @@ function AgentMetaplexTab({
               <p className="text-xs text-neutral-600 uppercase tracking-wider font-medium mb-2">Capabilities</p>
               <div className="flex flex-wrap gap-1.5">
                 {registration.capabilities.map((c, i) => (
-                  <Badge key={i} className="text-xs bg-neutral-800 text-neutral-300 border border-neutral-700 px-1.5 py-0">
-                    {String(c)}
-                  </Badge>
+                  <Pill key={i}>{String(c)}</Pill>
                 ))}
               </div>
             </CardContent>
@@ -2115,7 +2130,7 @@ function AgentMetaplexTab({
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-neutral-300 font-medium break-all">{svc.id}</span>
-                        <Badge className="text-xs bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0 shrink-0">{svc.type}</Badge>
+                        <Pill className="shrink-0">{svc.type}</Pill>
                       </div>
                       {svc.url && (
                         <Link href={svc.url} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 break-all">
@@ -2151,7 +2166,7 @@ function AgentMetaplexTab({
               Metaplex Registry
               <span className="text-xs font-normal text-neutral-600 normal-case tracking-normal">api.metaplex.com</span>
               <InfoTip label={"Public peer-trust index hosted by Metaplex. Lists every agent minted through MPL Core's AgentIdentity bridge — independent of the SAP host. An entry here proves a third party indexed this agent. Not all on-chain plugins end up here, and the registry can list off-chain-only cards."} />
-              <Badge variant="secondary" className="text-xs ml-auto tabular-nums">{registryAgents.length}</Badge>
+              <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-neutral-500 tabular-nums">{registryAgents.length} {registryAgents.length === 1 ? 'entry' : 'entries'}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-4 pt-0 space-y-3">
@@ -2188,13 +2203,10 @@ function AgentMetaplexTab({
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <p className="text-xs font-medium text-white truncate">{a.name ?? 'Unnamed agent'}</p>
                               {hasToken && (
-                                <Badge
-                                  className="text-xs px-1.5 py-0 border bg-amber-500/15 text-amber-200 border-amber-400/40 inline-flex items-center gap-1"
-                                  title="This agent has launched its own SPL token via the Metaplex Agent Token feature (typically a Meteora DBC bonding curve). The token is bound to the agent's MPL Core asset and tradeable."
-                                >
+                                <Pill variant="mpl" title="This agent has launched its own SPL token via the Metaplex Agent Token feature (typically a Meteora DBC bonding curve). The token is bound to the agent's MPL Core asset and tradeable.">
                                   <Coins className="h-3 w-3" />
                                   AGENT TOKEN
-                                </Badge>
+                                </Pill>
                               )}
                             </div>
                             {a.description && (
@@ -2262,7 +2274,7 @@ function AgentMetaplexTab({
               <Sparkles className="h-3.5 w-3.5 text-amber-400" />
               Discovered AgentIdentity NFTs
               <InfoTip label={"Direct on-chain proof. MPL Core assets owned by this wallet that carry the AgentIdentity external plugin (EIP-8004 agent-card extension). The plugin URI is the source of truth — pointing it at the SAP host (gold cards) means this NFT is the canonical, transferable handle for this agent."} />
-              <Badge variant="secondary" className="text-xs ml-auto tabular-nums">{identityNfts.length}</Badge>
+              <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-neutral-500 tabular-nums">{identityNfts.length} {identityNfts.length === 1 ? 'asset' : 'assets'}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-4 pt-3 space-y-3">
@@ -2328,21 +2340,13 @@ function AgentMetaplexTab({
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium text-white truncate">{n.name ?? reg?.name ?? 'Unnamed asset'}</p>
-                        <Badge className={cn(
-                          'text-xs px-1.5 py-0 border',
-                          isCanonical
-                            ? 'bg-amber-500/15 text-amber-200 border-amber-400/40'
-                            : 'bg-neutral-800 text-neutral-300 border-neutral-700',
-                        )}>
+                        <Pill variant={isCanonical ? 'sap' : 'mpl'}>
                           {isCanonical ? 'SAP × METAPLEX' : `METAPLEX · ${n.identityHost ?? 'registry'}`}
-                        </Badge>
+                        </Pill>
                         {inRegistry && (
-                          <Badge
-                            className="text-xs px-1.5 py-0 border bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-                            title="Mint listed on api.metaplex.com Agents Registry"
-                          >
+                          <Pill variant="status" title="Mint listed on api.metaplex.com Agents Registry">
                             ✓ REGISTRY
-                          </Badge>
+                          </Pill>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -2402,17 +2406,16 @@ function AgentMetaplexTab({
                             <Sparkles className="h-3 w-3" />
                             EIP-8004 Card
                           </p>
-                          {reg.active && (
-                            <Badge className="text-xs px-1.5 py-0 border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">● ACTIVE</Badge>
+                          {reg.active && <Pill variant="status">ACTIVE</Pill>}
+                          {reg.x402Support && <Pill>x402</Pill>}
+                          {trust.length > 0 && (
+                            <span className="inline-flex items-center gap-1 flex-wrap">
+                              <span className="text-[10px] uppercase tracking-wider text-neutral-500">Trust ·</span>
+                              {trust.map((t) => (
+                                <Pill key={String(t)}>{String(t)}</Pill>
+                              ))}
+                            </span>
                           )}
-                          {reg.x402Support && (
-                            <Badge className="text-xs px-1.5 py-0 border bg-sky-500/10 text-sky-300 border-sky-500/30">x402</Badge>
-                          )}
-                          {trust.map((t) => (
-                            <Badge key={String(t)} className="text-xs px-1.5 py-0 border bg-neutral-800 text-neutral-300 border-neutral-700">
-                              trust · {String(t)}
-                            </Badge>
-                          ))}
                         </div>
 
                         {reg.description && (
@@ -2455,14 +2458,9 @@ function AgentMetaplexTab({
                                 return (
                                   <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                      <Badge className={cn(
-                                        'text-xs px-1.5 py-0 border shrink-0',
-                                        isCanonical
-                                          ? 'bg-amber-500/10 text-amber-200 border-amber-500/25'
-                                          : 'bg-neutral-800 text-neutral-300 border-neutral-700',
-                                      )}>
+                                      <Pill variant={isCanonical ? 'mpl' : 'kind'} className="shrink-0">
                                         {label}
-                                      </Badge>
+                                      </Pill>
                                       {svc.version && (
                                         <span className="text-xs text-neutral-600 font-mono">v{svc.version}</span>
                                       )}
@@ -2497,9 +2495,7 @@ function AgentMetaplexTab({
                                 return (
                                   <div key={i} className="flex items-center justify-between gap-2 text-xs rounded border border-neutral-800/80 bg-neutral-950/40 px-3 py-2 flex-wrap">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                      <Badge className="text-xs px-1.5 py-0 border bg-neutral-800 text-neutral-300 border-neutral-700 shrink-0">
-                                        {decoded.chain}
-                                      </Badge>
+                                      <Pill className="shrink-0">{decoded.chain}</Pill>
                                       {decoded.explorer ? (
                                         <Link
                                           href={decoded.explorer}
