@@ -274,15 +274,29 @@ async function enumerateAssetsForWallet(
 ): Promise<EnumerationResult> {
   const diagnostics: string[] = [];
 
-  // Tier 1 — DAS (preferred).
+  // Tier 1 — DAS via Synapse RPC (preferred).
   try {
     const dasAssets = await fetchAssetsViaDas(wallet);
     if (dasAssets.length > 0) {
       return { source: 'das', assets: dasAssets, diagnostics };
     }
-    diagnostics.push('DAS returned 0 assets');
+    diagnostics.push('Synapse DAS returned 0 assets');
   } catch (e) {
-    diagnostics.push(`DAS lookup failed: ${(e as Error).message}`);
+    diagnostics.push(`Synapse DAS lookup failed: ${(e as Error).message}`);
+  }
+
+  // Tier 1b — DAS via fallback RPC (Helius). Synapse DAS frequently returns
+  // 0 for wallets with confirmed MPL Core assets; Helius DAS is canonical.
+  if (env.SAP_FALLBACK_RPC_URL) {
+    try {
+      const dasAssets = await fetchAssetsViaDas(wallet, env.SAP_FALLBACK_RPC_URL);
+      if (dasAssets.length > 0) {
+        return { source: 'das', assets: dasAssets, diagnostics };
+      }
+      diagnostics.push('Fallback DAS returned 0 assets');
+    } catch (e) {
+      diagnostics.push(`Fallback DAS lookup failed: ${(e as Error).message}`);
+    }
   }
 
   // Tier 2 — direct on-chain enumeration (Synapse RPC only).
@@ -308,8 +322,15 @@ async function enumerateAssetsForWallet(
  * re-fetching each Core asset id via `fetchAsset` (DAS-side plugin shape
  * is unreliable per the 2026-04 audit).
  */
-async function fetchAssetsViaDas(wallet: PublicKey): Promise<AssetV1[]> {
-  const { url, headers } = getRpcConfig();
+async function fetchAssetsViaDas(
+  wallet: PublicKey,
+  rpcUrl?: string,
+): Promise<AssetV1[]> {
+  const { url: synapseUrl, headers: synapseHeaders } = getRpcConfig();
+  const url = rpcUrl ?? synapseUrl;
+  const headers: Record<string, string> = rpcUrl
+    ? { 'content-type': 'application/json' }
+    : { 'content-type': 'application/json', ...synapseHeaders };
   const body = {
     jsonrpc: '2.0',
     id: 'sap-explorer-getAssetsByOwner',
@@ -323,7 +344,7 @@ async function fetchAssetsViaDas(wallet: PublicKey): Promise<AssetV1[]> {
   };
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
+    headers,
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(10_000),
   });
