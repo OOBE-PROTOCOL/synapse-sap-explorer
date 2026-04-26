@@ -440,10 +440,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-[data-tick_2s_ease-in-out_infinite]" />
               <span className="text-foreground font-medium uppercase tracking-widest">Mainnet</span>
             </div>
-            <span className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground font-mono select-all">SAPpUhs…FETZ</span>
-            <span className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground">v0.7.0</span>
             <a
               href="https://solscan.io/account/SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ"
               target="_blank"

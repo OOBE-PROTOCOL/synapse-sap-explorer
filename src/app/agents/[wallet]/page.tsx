@@ -56,18 +56,6 @@ function safeDateStr(raw: string | number | null | undefined): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-/**
- * Safely truncate an address-like value for display.
- * Returns '—' for non-string inputs (objects, numbers, null, undefined),
- * which can leak into the metaplex tab from foreign EIP-8004 JSON files
- * whose schema is not enforced.
- */
-function shortAddr(value: unknown, head = 12, tail = 6): string {
-  if (typeof value !== 'string' || value.length === 0) return '—';
-  if (value.length <= head + tail + 1) return value;
-  return `${value.slice(0, head)}…${value.slice(-tail)}`;
-}
-
 export default function AgentDetailPage() {
   return (
     <Suspense fallback={null}>
@@ -985,7 +973,7 @@ function AgentDetailInner() {
               No section matches this filter.
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {visibleSections.map((s) => {
                 const isActive = s.value === activeTab;
                 return (
@@ -993,10 +981,10 @@ function AgentDetailInner() {
                     key={s.value}
                     onClick={() => openSection(s.value)}
                     className={cn(
-                      'w-full rounded-md border px-2.5 py-2 text-left transition-colors flex items-center gap-2',
+                      'w-full rounded-lg border px-3 py-2.5 text-left transition-colors flex items-center gap-2.5',
                       isActive
                         ? 'border-primary/40 bg-primary/10 text-primary'
-                        : 'border-neutral-800 bg-neutral-900/50 text-neutral-300 hover:bg-neutral-800/50 hover:text-white',
+                        : 'border-neutral-800/60 bg-neutral-900/40 text-neutral-300 hover:bg-neutral-800/60 hover:text-white',
                     )}
                   >
                     <span className="text-xs font-medium truncate">{s.label}</span>
@@ -1273,8 +1261,6 @@ function AgentDetailInner() {
           <AgentMetaplexTab
             data={metaplexData}
             loading={metaplexLoading}
-            onCopy={copyAddr}
-            copied={copied}
             nfts={nftsData?.items ?? null}
             registry={registryData ?? null}
           />
@@ -1880,15 +1866,11 @@ import type { AgentMetaplexLink, AgentNftItem, MetaplexRegistryResponse } from '
 function AgentMetaplexTab({
   data,
   loading,
-  onCopy,
-  copied,
   nfts,
   registry,
 }: {
   data: AgentMetaplexLink | null;
   loading: boolean;
-  onCopy: (text: string) => void;
-  copied: string | null;
   nfts: AgentNftItem[] | null;
   registry: MetaplexRegistryResponse | null;
 }) {
@@ -1992,39 +1974,29 @@ function AgentMetaplexTab({
           <PropertyRow
             label="SAP PDA"
             value={
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono text-xs text-neutral-300 truncate max-w-[16rem]">{sapAgentPda}</span>
-                <button onClick={() => onCopy(sapAgentPda)} className="text-neutral-600 hover:text-neutral-300">
-                  <Copy className="h-3 w-3" />
-                </button>
-                {copied === sapAgentPda && <span className="text-xs text-emerald-400">✓</span>}
-              </div>
+              <span className="font-mono text-xs text-neutral-300 break-all">{sapAgentPda}</span>
             }
           />
           <PropertyRow
             label="MPL Core Asset"
             value={
               asset ? (
-                <div className="flex items-center gap-1.5 justify-end">
+                <div className="flex items-center gap-2 justify-end flex-wrap">
                   <Link
                     href={`${SOLSCAN}/token/${asset}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-xs text-pink-400 hover:underline truncate max-w-[16rem] inline-flex items-center gap-1"
+                    className="font-mono text-xs text-pink-400 hover:underline break-all inline-flex items-center gap-1"
                   >
                     {asset}
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-3 w-3 shrink-0" />
                   </Link>
-                  <button onClick={() => onCopy(asset)} className="text-neutral-600 hover:text-neutral-300">
-                    <Copy className="h-3 w-3" />
-                  </button>
-                  {copied === asset && <span className="text-xs text-emerald-400">✓</span>}
-                  <Badge className="text-xs px-1.5 py-0 border bg-pink-500/15 text-pink-300 border-pink-500/30 ml-1">
+                  <Badge className="text-xs px-1.5 py-0 border bg-pink-500/15 text-pink-300 border-pink-500/30">
                     SAP-BOUND
                   </Badge>
                 </div>
               ) : identityNfts.length > 0 ? (
-                <div className="flex items-center gap-1.5 justify-end min-w-0">
+                <div className="flex items-center gap-2 justify-end flex-wrap">
                   <span
                     className="inline-flex shrink-0 cursor-help"
                     aria-label="Discovered MPL Core asset"
@@ -2040,15 +2012,11 @@ function AgentMetaplexTab({
                     href={`${SOLSCAN}/token/${identityNfts[0].asset}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-xs text-amber-400 hover:underline truncate max-w-[16rem] inline-flex items-center gap-1"
+                    className="font-mono text-xs text-amber-400 hover:underline break-all inline-flex items-center gap-1"
                   >
                     {identityNfts[0].asset}
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-3 w-3 shrink-0" />
                   </Link>
-                  <button onClick={() => onCopy(identityNfts[0].asset)} className="text-neutral-600 hover:text-neutral-300">
-                    <Copy className="h-3 w-3" />
-                  </button>
-                  {copied === identityNfts[0].asset && <span className="text-xs text-emerald-400">✓</span>}
                 </div>
               ) : (
                 <span className="text-xs text-neutral-600 italic">none discovered</span>
@@ -2091,10 +2059,10 @@ function AgentMetaplexTab({
             <PropertyRow label="Name" value={<span className="text-xs text-neutral-300">{registration.name ?? '—'}</span>} />
             <PropertyRow label="Version" value={<span className="text-xs text-neutral-400 font-mono">{registration.version ?? '—'}</span>} />
             {registration.synapseAgent && (
-              <PropertyRow label="Synapse Agent" value={<span className="text-xs text-neutral-400 font-mono truncate max-w-[16rem]">{registration.synapseAgent}</span>} />
+              <PropertyRow label="Synapse Agent" value={<span className="text-xs text-neutral-400 font-mono break-all">{registration.synapseAgent}</span>} />
             )}
             {registration.owner && (
-              <PropertyRow label="Owner" value={<span className="text-xs text-neutral-400 font-mono truncate max-w-[16rem]">{registration.owner}</span>} />
+              <PropertyRow label="Owner" value={<span className="text-xs text-neutral-400 font-mono break-all">{registration.owner}</span>} />
             )}
             {registration.issuedAt && (
               <PropertyRow label="Issued" value={<span className="text-xs text-neutral-400">{safeDateStr(registration.issuedAt)}</span>} />
@@ -2121,9 +2089,9 @@ function AgentMetaplexTab({
               <p className="text-xs text-neutral-600 uppercase tracking-wider font-medium mb-2">Executives</p>
               <div className="space-y-1.5">
                 {registration.executives.map((ex, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs">
-                    <span className="font-mono text-neutral-300 truncate max-w-[14rem]">{ex.address}</span>
-                    <div className="flex items-center gap-2 text-neutral-500">
+                  <div key={i} className="flex items-center justify-between gap-3 rounded-md border border-neutral-800 bg-neutral-950/40 px-3.5 py-2.5 text-xs">
+                    <span className="font-mono text-neutral-300 break-all min-w-0 flex-1">{ex.address}</span>
+                    <div className="flex items-center gap-2 text-neutral-500 shrink-0">
                       {typeof ex.permissions === 'number' && (
                         <span className="font-mono">perm 0x{ex.permissions.toString(16)}</span>
                       )}
@@ -2143,14 +2111,14 @@ function AgentMetaplexTab({
               <p className="text-xs text-neutral-600 uppercase tracking-wider font-medium mb-2">Services</p>
               <div className="space-y-1.5">
                 {registration.services.map((svc, i) => (
-                  <div key={i} className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs">
-                    <div className="flex items-center justify-between gap-3">
+                  <div key={i} className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3.5 py-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-neutral-300 font-medium truncate max-w-[12rem]">{svc.id}</span>
-                        <Badge className="text-xs bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0">{svc.type}</Badge>
+                        <span className="text-neutral-300 font-medium break-all">{svc.id}</span>
+                        <Badge className="text-xs bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0 shrink-0">{svc.type}</Badge>
                       </div>
                       {svc.url && (
-                        <Link href={svc.url} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 truncate max-w-[14rem]">
+                        <Link href={svc.url} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 break-all">
                           {svc.url}
                           <ExternalLink className="h-3 w-3 shrink-0" />
                         </Link>
@@ -2197,13 +2165,13 @@ function AgentMetaplexTab({
                       <div
                         key={a.id}
                         className={cn(
-                          'relative rounded-lg border p-2.5 space-y-2 transition-colors',
+                          'relative rounded-lg border p-4 space-y-3 transition-colors',
                           hasToken
                             ? 'border-amber-400/40 bg-amber-500/5'
                             : 'border-neutral-800 bg-neutral-950/50',
                         )}
                       >
-                        <div className="flex items-start gap-2.5">
+                        <div className="flex items-start gap-3">
                           {a.image ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -2234,26 +2202,22 @@ function AgentMetaplexTab({
                             )}
                           </div>
                         </div>
-                        <div className="space-y-1 text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-neutral-600">Mint ·</span>
+                        <div className="space-y-2 text-xs">
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-neutral-600 shrink-0">Mint ·</span>
                             <Link
                               href={`${SOLSCAN}/token/${a.mintAddress}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="font-mono text-neutral-400 hover:text-amber-300 truncate inline-flex items-center gap-1"
+                              className="font-mono text-neutral-400 hover:text-amber-300 inline-flex items-center gap-1 break-all"
                             >
-                              {a.mintAddress.slice(0, 10)}…{a.mintAddress.slice(-6)}
-                              <ExternalLink className="h-3 w-3" />
+                              {a.mintAddress}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
                             </Link>
-                            <button onClick={() => onCopy(a.mintAddress)} className="text-neutral-600 hover:text-neutral-300">
-                              <Copy className="h-3 w-3" />
-                            </button>
-                            {copied === a.mintAddress && <span className="text-emerald-400">✓</span>}
                           </div>
                           {hasToken && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-amber-400/80 inline-flex items-center gap-1">
+                            <div className="flex items-baseline gap-1.5 flex-wrap">
+                              <span className="text-amber-400/80 inline-flex items-center gap-1 shrink-0">
                                 <Coins className="h-3 w-3" />
                                 Token ·
                               </span>
@@ -2261,18 +2225,15 @@ function AgentMetaplexTab({
                                 href={`${SOLSCAN}/token/${a.agentToken}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="font-mono text-amber-300 hover:underline truncate inline-flex items-center gap-1"
+                                className="font-mono text-amber-300 hover:underline inline-flex items-center gap-1 break-all"
                               >
-                                {a.agentToken!.slice(0, 10)}…{a.agentToken!.slice(-6)}
-                                <ExternalLink className="h-3 w-3" />
+                                {a.agentToken!}
+                                <ExternalLink className="h-3 w-3 shrink-0" />
                               </Link>
-                              <button onClick={() => onCopy(a.agentToken!)} className="text-neutral-600 hover:text-neutral-300">
-                                <Copy className="h-3 w-3" />
-                              </button>
-                              {copied === a.agentToken && <span className="text-emerald-400">✓</span>}
                             </div>
                           )}
-                          <div>
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-neutral-600 shrink-0">Metadata ·</span>
                             <Link
                               href={a.agentMetadataUri}
                               target="_blank"
@@ -2390,17 +2351,13 @@ function AgentMetaplexTab({
                           target="_blank"
                           rel="noreferrer"
                           className={cn(
-                            'font-mono text-xs truncate inline-flex items-center gap-1 hover:underline',
+                            'font-mono text-xs break-all inline-flex items-center gap-1 hover:underline',
                             isCanonical ? 'text-amber-300/80' : 'text-neutral-400',
                           )}
                         >
-                          {shortAddr(n.asset, 12, 6)}
-                          <ExternalLink className="h-3 w-3" />
+                          {n.asset}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
                         </Link>
-                        <button onClick={() => onCopy(n.asset)} className="text-neutral-600 hover:text-neutral-300">
-                          <Copy className="h-3 w-3" />
-                        </button>
-                        {copied === n.asset && <span className="text-xs text-emerald-400">✓</span>}
                       </div>
                     </div>
                   </div>
@@ -2470,17 +2427,14 @@ function AgentMetaplexTab({
                             <div className="truncate"><span className="text-neutral-600">Version · </span><span className="text-neutral-300 font-mono">{reg.version}</span></div>
                           )}
                           {regOwner && (
-                            <div className="sm:col-span-2 flex items-center gap-1.5">
-                              <span className="text-neutral-600">Owner · </span>
+                            <div className="sm:col-span-2 flex items-baseline gap-1.5 flex-wrap">
+                              <span className="text-neutral-600 shrink-0">Owner · </span>
                               <Link
                                 href={`/agents/${regOwner}`}
-                                className="font-mono text-neutral-300 hover:text-amber-300 truncate"
-                              >shortAddr(regOwner, 12, 
-                                {regOwner.slice(0, 12)}…{regOwner.slice(-6)}
+                                className="font-mono text-neutral-300 hover:text-amber-300 break-all"
+                              >
+                                {regOwner}
                               </Link>
-                              <button onClick={() => onCopy(regOwner)} className="text-neutral-600 hover:text-neutral-300">
-                                <Copy className="h-3 w-3" />
-                              </button>
                             </div>
                           )}
                           {reg.issuedAt && (
@@ -2541,7 +2495,7 @@ function AgentMetaplexTab({
                               {registrations.map((r, i) => {
                                 const decoded = decodeAgentRegistry(r.agentRegistry);
                                 return (
-                                  <div key={i} className="flex items-center justify-between gap-2 text-xs rounded border border-neutral-800/80 bg-neutral-950/40 px-2 py-1.5">
+                                  <div key={i} className="flex items-center justify-between gap-2 text-xs rounded border border-neutral-800/80 bg-neutral-950/40 px-3 py-2 flex-wrap">
                                     <div className="flex items-center gap-1.5 min-w-0">
                                       <Badge className="text-xs px-1.5 py-0 border bg-neutral-800 text-neutral-300 border-neutral-700 shrink-0">
                                         {decoded.chain}
@@ -2551,21 +2505,18 @@ function AgentMetaplexTab({
                                           href={decoded.explorer}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="font-mono text-neutral-500 hover:text-amber-300 truncate inline-flex items-center gap-1"
+                                          className="font-mono text-neutral-500 hover:text-amber-300 break-all inline-flex items-center gap-1"
                                         >
                                           {decoded.registryLabel}
                                           <ExternalLink className="h-3 w-3 shrink-0" />
                                         </Link>
                                       ) : (
-                                        <span className="font-mono text-neutral-500 truncate">{decoded.registryLabel}</span>
+                                        <span className="font-mono text-neutral-500 break-all">{decoded.registryLabel}</span>
                                       )}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                       <span className="text-neutral-600">id ·</span>
                                       <span className="font-mono text-neutral-300">{r.agentId}</span>
-                                      <button onClick={() => onCopy(r.agentId)} className="text-neutral-600 hover:text-neutral-300">
-                                        <Copy className="h-3 w-3" />
-                                      </button>
                                     </div>
                                   </div>
                                 );
