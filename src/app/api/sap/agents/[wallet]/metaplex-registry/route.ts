@@ -18,13 +18,20 @@ import {
   getRegistryAgentsByMints,
 } from '~/lib/metaplex/registry';
 import { getMetaplexAssetsForWallet } from '~/lib/sap/metaplex-link';
+import { getRpcConfig, getSapClient } from '~/lib/sap/discovery';
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ wallet: string }> },
 ) {
   try {
-    const { wallet } = await params;
+    const { wallet: walletOrId } = await params;
+    const { url: rpcUrl } = getRpcConfig();
+    const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
+      identifier: walletOrId,
+      rpcUrl,
+    }).catch(() => null);
+    const wallet = resolved?.wallet?.toBase58() ?? walletOrId;
     const data = await swr(
       `agent:${wallet}:metaplex-registry`,
       async () => {

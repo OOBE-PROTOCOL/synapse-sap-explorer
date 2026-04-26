@@ -16,6 +16,9 @@ import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
+const SITE_URL = 'https://explorer.oobeprotocol.ai';
+const OG_BG_SRC = `${SITE_URL}/og-bg.png`;
+const OG_LOGO_SRC = `${SITE_URL}/synapse-metadata-logo.png`;
 
 /* ── Inlined 64×64 Synapse logo as data-uri ── */
 // prettier-ignore
@@ -37,7 +40,7 @@ export async function GET(req: NextRequest) {
 function Logo({ size = 48 }: { size?: number }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={LOGO_SRC} width={size} height={size} style={{ borderRadius: size * 0.25 }} alt="" />
+    <img src={OG_LOGO_SRC ?? LOGO_SRC} width={size} height={size} style={{ borderRadius: size * 0.25 }} alt="" />
   );
 }
 
@@ -59,7 +62,7 @@ function renderTxOG(p: URLSearchParams) {
           width: '1200px',
           height: '630px',
           display: 'flex',
-          background: 'linear-gradient(135deg, #081523 0%, #0b1e31 52%, #081523 100%)',
+          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
           fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
           padding: '52px',
         }}
@@ -152,7 +155,7 @@ function renderAgentOG(p: URLSearchParams) {
           width: '1200px',
           height: '630px',
           display: 'flex',
-          background: 'linear-gradient(135deg, #071325 0%, #0f2137 52%, #071325 100%)',
+          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
           fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
           padding: '52px',
         }}
@@ -247,7 +250,7 @@ function renderEntityOG(p: URLSearchParams) {
           width: '1200px',
           height: '630px',
           display: 'flex',
-          background: 'linear-gradient(135deg, #071325 0%, #0f2137 52%, #071325 100%)',
+          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
           fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
           padding: '52px',
         }}
@@ -320,7 +323,7 @@ function renderDocsOG(p: URLSearchParams) {
           width: '1200px',
           height: '630px',
           display: 'flex',
-          background: 'linear-gradient(135deg, #06111f 0%, #0b1b2e 52%, #06111f 100%)',
+          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
           fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
           padding: '52px',
         }}
@@ -383,7 +386,7 @@ function renderPageOG(p: URLSearchParams) {
       <div
         style={{
           width: '1200px', height: '630px', display: 'flex', flexDirection: 'column',
-          background: 'linear-gradient(135deg, #0e0b16 0%, #1a1230 50%, #0e0b16 100%)',
+          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
           fontFamily: 'monospace', padding: '60px',
         }}
       >
@@ -415,7 +418,7 @@ function renderDefaultOG() {
         style={{
           width: '1200px', height: '630px', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0e0b16 0%, #1a1230 50%, #0e0b16 100%)',
+          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
           fontFamily: 'monospace',
         }}
       >

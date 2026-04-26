@@ -70,20 +70,21 @@ function AgentDetailInner() {
   const { wallet } = useParams<{ wallet: string }>();
   const router = useRouter();
   const { data, loading, error } = useAgent(wallet);
+  const canonicalWallet = data?.profile?.identity?.wallet ?? wallet;
   const { data: toolsData } = useTools();
   const { data: escrowsData } = useEscrows();
   const { data: feedbacksData } = useFeedbacks();
   const { data: attestationsData } = useAttestations();
   const { data: vaultsData } = useVaults();
   const { data: eventsData, loading: evLoading } = useAddressEvents(data?.profile?.pda ?? null, { limit: 50 });
-  const { data: revenueData, loading: revLoading } = useAgentRevenue(wallet, 30);
+  const { data: revenueData, loading: revLoading } = useAgentRevenue(canonicalWallet, 30);
   const { data: memoryData, loading: memLoading } = useAgentMemory(data?.profile?.pda ?? undefined);
-  const { data: x402Data, loading: x402Loading } = useX402Payments(wallet);
-  const { data: balancesData, loading: balLoading } = useAgentBalances(wallet);
+  const { data: x402Data, loading: x402Loading } = useX402Payments(canonicalWallet);
+  const { data: balancesData, loading: balLoading } = useAgentBalances(canonicalWallet);
   const { data: stakingData } = useAgentStaking(data?.profile?.pda ?? null);
-  const { data: metaplexData, loading: metaplexLoading } = useAgentMetaplex(wallet);
-  const { data: nftsData } = useAgentNfts(wallet);
-  const { data: registryData, loading: registryLoading } = useMetaplexRegistry(wallet);
+  const { data: metaplexData, loading: metaplexLoading } = useAgentMetaplex(canonicalWallet);
+  const { data: nftsData } = useAgentNfts(canonicalWallet);
+  const { data: registryData, loading: registryLoading } = useMetaplexRegistry(canonicalWallet);
   const [activeTab, setActiveTab] = useQueryState('tab', 'overview' as typeof AGENT_TABS[number], QueryParam.enum('overview', AGENT_TABS));
   const [copied, setCopied] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState(false);
@@ -730,9 +731,23 @@ function AgentDetailInner() {
                                             {n.linkedToThisAgent && (
                                               <Badge className="text-xs bg-pink-500/15 text-pink-300 border-pink-500/30 px-1 py-0 shrink-0">Agent</Badge>
                                             )}
+                                            {n.wasTransferred && (
+                                              <Badge className="text-xs bg-amber-500/15 text-amber-300 border-amber-500/30 px-1 py-0 shrink-0">Transferred</Badge>
+                                            )}
                                           </div>
                                           <div className="space-y-0.5">
                                             <p className="text-xs text-neutral-500 truncate">Asset: {n.asset.slice(0, 8)}…{n.asset.slice(-4)}</p>
+                                            {n.wasTransferred && (
+                                              <p className="text-xs text-amber-300">
+                                                Transferred{n.currentOwner ? ` to ${n.currentOwner.slice(0, 6)}…${n.currentOwner.slice(-4)}` : ''}
+                                              </p>
+                                            )}
+                                            {n.salePriceSol != null && (
+                                              <p className="text-xs text-emerald-300 font-mono">Sale price: {n.salePriceSol.toFixed(4)} SOL</p>
+                                            )}
+                                            {n.wasTransferred && n.salePriceSol == null && (
+                                              <p className="text-xs text-neutral-500">Sale price unavailable from public RPC data</p>
+                                            )}
                                             {n.description && (
                                               <p className="text-xs text-neutral-400 line-clamp-2">{n.description}</p>
                                             )}
@@ -803,9 +818,23 @@ function AgentDetailInner() {
                                             {n.linkedToThisAgent && (
                                               <Badge className="text-xs bg-pink-500/15 text-pink-300 border-pink-500/30 px-1 py-0 shrink-0">Agent</Badge>
                                             )}
+                                            {n.wasTransferred && (
+                                              <Badge className="text-xs bg-amber-500/15 text-amber-300 border-amber-500/30 px-1 py-0 shrink-0">Transferred</Badge>
+                                            )}
                                           </div>
                                           <div className="space-y-0.5">
                                             <p className="text-xs text-neutral-500 truncate">Asset: {n.asset.slice(0, 8)}…{n.asset.slice(-4)}</p>
+                                            {n.wasTransferred && (
+                                              <p className="text-xs text-amber-300">
+                                                Transferred{n.currentOwner ? ` to ${n.currentOwner.slice(0, 6)}…${n.currentOwner.slice(-4)}` : ''}
+                                              </p>
+                                            )}
+                                            {n.salePriceSol != null && (
+                                              <p className="text-xs text-emerald-300 font-mono">Sale price: {n.salePriceSol.toFixed(4)} SOL</p>
+                                            )}
+                                            {n.wasTransferred && n.salePriceSol == null && (
+                                              <p className="text-xs text-neutral-500">Sale price unavailable from public RPC data</p>
+                                            )}
                                             {n.description && (
                                               <p className="text-xs text-neutral-400 line-clamp-2">{n.description}</p>
                                             )}

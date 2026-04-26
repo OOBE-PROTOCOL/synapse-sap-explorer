@@ -93,6 +93,16 @@ export type MetaplexNftItem = {
   identityHost: string | null;
   /** Best-effort decoded EIP-8004 / agent-card JSON fetched from agentIdentityUri. */
   registration: Eip8004RegistrationJson | null;
+  /** True when the queried wallet still owns this asset. */
+  ownedByWallet: boolean;
+  /** Current wallet owner according to latest fetch. */
+  currentOwner: string | null;
+  /** True when asset is no longer owned by the queried wallet. */
+  wasTransferred: boolean;
+  /** Sale price when known; null when not available from public data. */
+  salePriceSol: number | null;
+  /** Data origin for this row. */
+  source: 'wallet' | 'registry';
 };
 
 export type MetaplexAssetsResponse = {
@@ -122,6 +132,7 @@ const DEFAULT_BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   process.env.SITE_URL ??
   SAP_EXPLORER_BASE_URL;
+const MPL_CORE_PROGRAM_ID = 'CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d';
 
 function buildExpectedUrl(sapAgentPda: string, baseUrl = DEFAULT_BASE_URL): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
@@ -302,9 +313,17 @@ async function enumerateAssetsForWallet(
     diagnostics.push(`Synapse searchAssets failed: ${(e as Error).message}`);
   }
 
-  // Tier 1b removed (2026-04): we serve exclusively from Synapse RPC.
-  // Previously a Helius fallback ran here; it is now disabled to avoid
-  // mixed-source asset reads.
+  // Tier 1b — Synapse getProgramAccountsV2 (owner-indexed pagination).
+  // Best-effort: this method may not be enabled on all clusters.
+  try {
+    const gpaAssets = await fetchAssetsViaProgramAccountsV2(wallet);
+    if (gpaAssets.length > 0) {
+      return { source: 'on-chain', assets: gpaAssets, diagnostics };
+    }
+    diagnostics.push('Synapse getProgramAccountsV2 returned 0 assets');
+  } catch (e) {
+    diagnostics.push(`Synapse getProgramAccountsV2 failed: ${(e as Error).message}`);
+  }
 
   // Tier 2 — direct on-chain enumeration via Synapse RPC.
   // `fetchAssetsByOwner` does `getProgramAccounts` against MPL Core; it can
@@ -443,6 +462,60 @@ async function fetchAssetsViaSearch(
 }
 
 /**
+ * Tier 1b — Synapse custom paginated owner scan over MPL Core accounts.
+ * Returns hydrated AssetV1 rows by account pubkey.
+ */
+async function fetchAssetsViaProgramAccountsV2(wallet: PublicKey): Promise<AssetV1[]> {
+  const { url, headers } = getRpcConfig();
+  const body = {
+    jsonrpc: '2.0',
+    id: 'sap-explorer-gpa-v2-owner',
+    method: 'getProgramAccountsV2',
+    params: {
+      programId: MPL_CORE_PROGRAM_ID,
+      ownerAddress: wallet.toBase58(),
+      pageSize: 100,
+      page: 1,
+    },
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(4_000),
+  });
+  if (!res.ok) throw new Error(`getProgramAccountsV2 HTTP ${res.status}`);
+
+  const json = (await res.json()) as {
+    result?:
+      | Array<{ pubkey?: string }>
+      | { accounts?: Array<{ pubkey?: string }> };
+    error?: { message?: string };
+  };
+  if (json.error) throw new Error(json.error.message ?? 'unknown gpa-v2 error');
+
+  const rows = Array.isArray(json.result)
+    ? json.result
+    : Array.isArray(json.result?.accounts)
+      ? json.result.accounts
+      : [];
+
+  const ids = rows
+    .map((r) => r.pubkey)
+    .filter((v): v is string => !!v)
+    .slice(0, 1000);
+
+  if (ids.length === 0) return [];
+
+  const umi = getAuthenticatedUmi();
+  const hydrated = await Promise.allSettled(ids.map((id) => fetchAsset(umi, umiPublicKey(id))));
+  return hydrated
+    .filter((r): r is PromiseFulfilledResult<AssetV1> => r.status === 'fulfilled')
+    .map((r) => r.value);
+}
+
+/**
  * Best-effort fetch of an EIP-8004 / agent-card JSON from any AgentIdentity URI.
  * Returns null on network/parse failure — never throws. Used for both the canonical
  * SAP host AND foreign registries (e.g. api.metaplex.com) so the UI can render
@@ -488,6 +561,11 @@ async function toItem(asset: AssetV1, sapAgentPda: string | null): Promise<Metap
     fetchEip8004Json(uri),
   ]);
 
+  const ownerField = (asset as unknown as {
+    owner?: { toString(): string };
+  }).owner;
+  const currentOwner = ownerField ? ownerField.toString() : null;
+
   return {
     asset: asset.publicKey.toString(),
     name: asset.name ?? meta?.name ?? null,
@@ -499,6 +577,11 @@ async function toItem(asset: AssetV1, sapAgentPda: string | null): Promise<Metap
     hasAgentIdentity: !!uri,
     identityHost: hostnameOf(uri),
     registration,
+    ownedByWallet: true,
+    currentOwner,
+    wasTransferred: false,
+    salePriceSol: null,
+    source: 'wallet',
   };
 }
 

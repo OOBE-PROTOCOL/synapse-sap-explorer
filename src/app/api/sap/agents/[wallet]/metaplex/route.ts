@@ -21,13 +21,20 @@ import { synapseResponse } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
 import { getMetaplexLinkSnapshot, invalidateSnapshotCache } from '~/lib/sap/metaplex-link';
 import { invalidateMetaplexSnapshot } from '~/lib/sap/metaplex-snapshot-store';
+import { getRpcConfig, getSapClient } from '~/lib/sap/discovery';
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ wallet: string }> },
 ) {
   try {
-    const { wallet } = await params;
+    const { wallet: walletOrId } = await params;
+    const { url: rpcUrl } = getRpcConfig();
+    const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
+      identifier: walletOrId,
+      rpcUrl,
+    }).catch(() => null);
+    const wallet = resolved?.wallet?.toBase58() ?? walletOrId;
     const url = new URL(req.url);
     const fresh = url.searchParams.get('fresh') === '1';
 

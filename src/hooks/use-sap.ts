@@ -216,6 +216,11 @@ export type AgentNftItem = {
   identityHost: string | null;
   /** Decoded EIP-8004 / agent-card JSON for any AgentIdentity-bearing asset. */
   registration: AgentEip8004Registration | null;
+  ownedByWallet: boolean;
+  currentOwner: string | null;
+  wasTransferred: boolean;
+  salePriceSol: number | null;
+  source: 'wallet' | 'registry';
 };
 
 export type AgentNftsResponse = {
