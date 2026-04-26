@@ -16,11 +16,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         // by default. Only the active branch auto-expands. This matches
         // the user's request for a less crowded, more discoverable IA.
         defaultOpenLevel: 0,
-        // Per-breakpoint sidebar width. fumadocs reads --fd-sidebar-width
-        // for layout calculations; we override its defaults so the sidebar
-        // is comfortable on large displays without crowding content.
+        // Compact rail: 100px on md+. Mobile drawer keeps comfortable width.
         className:
-          "[--fd-sidebar-width:260px] md:[--fd-sidebar-width:280px] lg:[--fd-sidebar-width:300px] xl:[--fd-sidebar-width:320px] max-w-[82vw]",
+          "[--fd-sidebar-width:280px] md:[--fd-sidebar-width:100px] lg:[--fd-sidebar-width:100px] xl:[--fd-sidebar-width:100px] max-w-[82vw]",
         banner: (
           <div className="flex flex-col gap-3 pb-1">
             <Link

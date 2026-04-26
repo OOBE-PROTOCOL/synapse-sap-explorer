@@ -586,7 +586,8 @@ aside#nd-sidebar-mobile button[data-state] {
 }
 
 /* Item rows (links + folder triggers).
-   Padding-inline-start is set above per nesting depth. */
+   Padding-inline-start is set above per nesting depth.
+   On md+ the sidebar is a 100px rail — truncate with ellipsis. */
 [data-sidebar] a,
 [data-sidebar] button[data-state],
 aside#nd-sidebar a,
@@ -601,6 +602,57 @@ aside#nd-sidebar-mobile button[data-state] {
   background: transparent !important;
   text-decoration: none !important;
   transition: background-color 0.15s, color 0.15s !important;
+}
+
+/* Compact rail (md+): truncate labels, hide chevrons, tighten everything */
+@media (min-width: 768px) {
+  aside#nd-sidebar a,
+  aside#nd-sidebar button[data-state] {
+    padding-inline-start: 0.5rem !important;
+    padding-inline-end: 0.5rem !important;
+    padding-block: 0.375rem !important;
+    font-size: 0.6875rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+  }
+
+  /* Nested levels: small step so child rows still read as children */
+  aside#nd-sidebar div[data-radix-collapsible-content] a,
+  aside#nd-sidebar div[data-radix-collapsible-content] button[data-state] {
+    padding-inline-start: 0.875rem !important;
+  }
+  aside#nd-sidebar div[data-radix-collapsible-content]
+    div[data-radix-collapsible-content] a,
+  aside#nd-sidebar div[data-radix-collapsible-content]
+    div[data-radix-collapsible-content] button[data-state] {
+    padding-inline-start: 1.125rem !important;
+  }
+
+  /* Section labels: tighter, no divider line on a 100px rail */
+  aside#nd-sidebar p.inline-flex {
+    font-size: 0.5625rem !important;
+    letter-spacing: 0.12em !important;
+    margin: 0.625rem 0 0.25rem !important;
+    padding-inline: 0.5rem !important;
+  }
+  aside#nd-sidebar p.inline-flex::after { display: none !important; }
+
+  /* Hide the chevron on folder triggers (no room) */
+  aside#nd-sidebar button[data-state] svg[data-icon] {
+    display: none !important;
+  }
+
+  /* Banner / footer / search: tighten to fit 100px */
+  aside#nd-sidebar [data-search-toggle],
+  aside#nd-sidebar button[aria-label*="Search"] {
+    padding: 0.375rem 0.5rem !important;
+    font-size: 0.625rem !important;
+  }
+  aside#nd-sidebar [data-search-toggle] kbd {
+    display: none !important;
+  }
 }
 
 [data-sidebar] a:hover,
