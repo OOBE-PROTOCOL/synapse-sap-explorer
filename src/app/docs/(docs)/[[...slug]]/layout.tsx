@@ -14,15 +14,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         defaultOpenLevel: 1,
         banner: (
           <div className="flex flex-col gap-3 pb-1">
-            <div className="rounded-lg border border-fd-primary/20 bg-gradient-to-br from-fd-primary/5 to-fd-accent/40 px-3.5 py-3">
-              <p className="text-[0.8125rem] font-semibold text-fd-foreground leading-snug">
-                Synapse Agent Protocol
-              </p>
-              <p className="mt-1 text-[0.6875rem] leading-relaxed text-fd-muted-foreground">
-                On-chain AI agent infrastructure on Solana.
-                Identity, payments, memory, and discovery.
-              </p>
-            </div>
+            
             <Link
               href="/docs/sdk/quickstart"
               className="group flex items-center gap-2 rounded-md bg-fd-primary/10 px-3 py-2 text-[0.75rem] font-semibold text-fd-primary transition-colors hover:bg-fd-primary/20"

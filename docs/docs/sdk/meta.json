@@ -9,6 +9,8 @@
     "session-manager",
     "---Commerce---",
     "escrow-api",
+    "---Metaplex Integration---",
+    "metaplex-bridge",
     "---Tools & Plugins---",
     "plugin-adapter",
     "---Infrastructure---",

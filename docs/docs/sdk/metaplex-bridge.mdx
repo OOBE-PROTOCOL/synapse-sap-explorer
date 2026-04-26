@@ -1,0 +1,267 @@
+---
+title: Metaplex Bridge
+description: Link a SAP agent to a Metaplex Core asset through the AgentIdentity external plugin. Covers triple-check audits, atomic register flows, EIP-8004 hosting, and authenticated RPC reads.
+---
+
+# Metaplex Bridge
+
+`client.metaplex` connects a SAP agent to a Metaplex Core asset using the `AgentIdentity` external plugin. The plugin is **asset-only** and stores **one field**: a URI pointing to an [EIP-8004](https://eips.ethereum.org/EIPS/eip-8004) registration JSON. Capabilities, services, executives, and reputation live in that JSON, served live from the SAP indexer.
+
+| Field | Value |
+|-------|-------|
+| Module | `client.metaplex` |
+| Since | SDK `0.9.0` (atomic flows: `0.9.3`) |
+| Peer | `@metaplex-foundation/mpl-core` >= 1.9.0 |
+
+## How the link works
+
+```
+                ┌──────────────────────────────────────┐
+                │   MPL Core Asset (transferable NFT)  │
+                │   AgentIdentity.uri ──┐              │
+                └───────────────────────┼──────────────┘
+                                        ▼
+   https://explorer.oobeprotocol.ai/agents/<sapAgentPda>/eip-8004.json
+                                        │
+                                        ▼
+        SAP indexer ◀── reads ── AgentAccount + VaultDelegate*
+```
+
+One MPL transaction attaches the plugin. After that, every SAP write propagates with **zero MPL transactions** because the JSON is rendered live from on-chain SAP state.
+
+## Decision matrix
+
+| You want to | Use |
+|-------------|-----|
+| Mint a tradeable NFT identity for an existing SAP agent | `buildAttachAgentIdentityIx(...)` |
+| Migrate an asset to a new registry host | `buildUpdateAgentIdentityUriIx(...)` |
+| Render an explorer page for one agent (image + on-chain stats) | `getUnifiedProfile({ asset, rpcUrl, rpcHeaders? })` |
+| Confirm an asset cryptographically links to a SAP PDA | `verifyLink({ asset, sapAgentPda, rpcUrl, rpcHeaders? })` |
+| Three-layer link audit (mpl-core + EIP-8004 JSON + SAP PDA) | `tripleCheckLink({ asset, expectedOwner?, rpcUrl, rpcHeaders? })` |
+| Mint MPL Core asset and attach AgentIdentity in one tx (SAP exists) | `buildMintAndAttachIxs(opts)` |
+| Register SAP for an existing MPL asset's owner (idempotent) | `buildRegisterSapForMplOwnerIx(opts)` |
+| Atomic both-sided register (start fresh) | `buildRegisterBothIxs(opts)` |
+| Serve the EIP-8004 JSON from your own host | `buildEip8004Registration({ sapAgentOwner, services })` |
+| Compute the canonical URL without fetching | `deriveRegistrationUrl(sapAgentPda, baseUrl)` |
+
+## Linking flow (single transaction)
+
+```ts
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { Transaction } from "@solana/web3.js";
+
+const client = SapClient.from(provider);
+
+const ix = await client.metaplex.buildAttachAgentIdentityIx({
+  asset:               mplCoreAsset,
+  authority:           wallet.publicKey,
+  sapAgentOwner:       wallet.publicKey,
+  registrationBaseUrl: "https://explorer.oobeprotocol.ai",
+  rpcUrl:              process.env.RPC_URL!,
+});
+
+await provider.sendAndConfirm(new Transaction().add(ix));
+```
+
+What happens on-chain:
+
+1. `mpl_core` adds an `AgentIdentity` adapter to the asset with `uri = https://explorer.oobeprotocol.ai/agents/<sapAgentPda>/eip-8004.json` and lifecycle check `[Execute, CanApprove]`.
+2. SAP state is **untouched**: no SAP transaction, no SAP fee.
+
+What happens off-chain afterwards:
+
+- Whenever the SAP agent's capabilities, vault delegates, or x402 tiers change, the served JSON updates automatically.
+- The MPL plugin **never needs to be touched again** unless you migrate hosts (use `buildUpdateAgentIdentityUriIx`).
+
+## Reading a unified profile
+
+```ts
+const profile = await client.metaplex.getUnifiedProfile({
+  asset:  mplCoreAsset,
+  rpcUrl: process.env.RPC_URL!,
+});
+
+if (profile.linked) {
+  console.log("Agent name :", profile.mpl?.registration?.name);
+  console.log("Capabilities:", profile.sap.identity?.capabilities);
+  console.log("Reputation :", profile.sap.stats?.reputationScore);
+}
+```
+
+`profile.linked` is `true` when:
+
+1. `AgentIdentity.uri` ends with `/agents/<sapAgentPda>/eip-8004.json`, **and**
+2. The fetched JSON's `synapseAgent` field equals the SAP PDA.
+
+This is what makes the link bidirectional and cryptographic without any on-chain SAP change.
+
+## Triple-check link audit
+
+`tripleCheckLink` runs three independent checks and reports each layer:
+
+```ts
+const result = await client.metaplex.tripleCheckLink({
+  asset:         assetPk,
+  expectedOwner: walletPk,
+  rpcUrl,
+  rpcHeaders,   // required on gated RPCs
+});
+
+result.layers; // { mplOnChain, eip8004Json, sapOnChain }
+result.linked; // true ⇔ all three layers pass
+```
+
+| Layer | Passes when | Common failure cause |
+|-------|-------------|----------------------|
+| `mplOnChain`  | Asset readable + `AgentIdentity` plugin present | RPC blocks `fetchAsset` (401), asset not found, no plugin attached |
+| `eip8004Json` | `agentIdentityUri` resolves AND JSON `synapseAgent === sapPda` | URI points to a foreign registry (e.g. `api.metaplex.com/v1/agents/...`) |
+| `sapOnChain`  | `AgentAccount` PDA exists for the asset's owner | Wallet never registered a SAP agent |
+
+Drive next-step actions from partial passes:
+
+| State | Next action |
+|-------|-------------|
+| `mpl + sap`, no `eip` | Update the plugin URI to point to the SAP host (`buildUpdateAgentIdentityUriIx`) |
+| `sap` only | Mint identity NFT and attach (`buildMintAndAttachIxs`) |
+| `mpl` only | Register the asset owner on SAP (`buildRegisterSapForMplOwnerIx`) |
+| none | Atomic both-sided register (`buildRegisterBothIxs`) |
+
+## Authenticated RPC reads
+
+Every read method accepts an optional `rpcHeaders?: Record<string, string>` that the bridge injects into `umi`'s HTTP client. This is required when your RPC enforces auth (Synapse RPC, Helius, QuickNode, etc.). Without it `fetchAsset` silently returns 401 and the read layers report `false`.
+
+```ts
+import { getRpcConfig } from "@/lib/sap/discovery";
+
+const { url, headers } = getRpcConfig();
+const result = await client.metaplex.tripleCheckLink({
+  asset:         new PublicKey(assetId),
+  expectedOwner: new PublicKey(walletId),
+  rpcUrl:        url,
+  rpcHeaders:    headers,
+});
+```
+
+## Three register flows
+
+### Flow A: SAP exists, mint MPL and attach (2 ixs in 1 tx)
+
+```ts
+const ixs = await client.metaplex.buildMintAndAttachIxs({
+  sapAgentOwner: wallet,
+  authority:     wallet,
+  payer:         wallet,
+  owner:         wallet,
+  name:          "My Agent",
+  metadataUri:   "https://...metadata.json",
+  registrationBaseUrl: "https://explorer.oobeprotocol.ai",
+  rpcUrl:        process.env.RPC_URL!,
+});
+
+await provider.sendAndConfirm(new Transaction().add(...ixs));
+```
+
+### Flow B: MPL asset exists, register SAP for its owner (idempotent)
+
+```ts
+const ix = await client.metaplex.buildRegisterSapForMplOwnerIx({
+  asset:        mplCoreAsset,
+  rpcUrl:       process.env.RPC_URL!,
+  rpcHeaders,
+  registration: { name: "My Agent", description: "...", capabilities: [...] },
+});
+
+if (ix) await provider.sendAndConfirm(new Transaction().add(ix));
+```
+
+`ix` is `null` when the SAP agent already exists. Safe to call repeatedly.
+
+### Flow C: atomic both-sided (no SAP, no MPL)
+
+```ts
+const ixs = await client.metaplex.buildRegisterBothIxs({
+  payer: wallet,
+  owner: wallet,
+  authority: wallet,
+  sapRegistration:  { name: "My Agent", capabilities: [...] },
+  mplAsset:         { name: "My Agent NFT", metadataUri: "https://..." },
+  registrationBaseUrl: "https://explorer.oobeprotocol.ai",
+  rpcUrl: process.env.RPC_URL!,
+});
+
+await provider.sendAndConfirm(new Transaction().add(...ixs));
+```
+
+A single transaction registers SAP, mints the MPL Core asset, and attaches the `AgentIdentity` plugin. Use this for new agents that need both sides from the start.
+
+## Hosting the EIP-8004 endpoint
+
+Any registry host can serve the canonical URL. Example with Next.js:
+
+```ts
+// app/api/agents/[wallet]/eip-8004.json/route.ts
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { PublicKey } from "@solana/web3.js";
+
+export async function GET(
+  _req: Request,
+  { params }: { params: { wallet: string } },
+) {
+  const client = SapClient.from(getServerProvider());
+  const json = await client.metaplex.buildEip8004Registration({
+    sapAgentOwner: new PublicKey(params.wallet),
+    services: [
+      { id: "x402-default", type: "x402-endpoint", url: `https://...` },
+    ],
+  });
+  return Response.json(json, {
+    headers: { "Cache-Control": "public, max-age=15, s-maxage=60" },
+  });
+}
+```
+
+The synapse-sap-explorer ships this endpoint at `/agents/[wallet]/eip-8004.json`, ready to use as the canonical host.
+
+## Efficiency comparison
+
+| Operation | Naive design (dual on-chain) | This bridge |
+|-----------|------------------------------|-------------|
+| Initial linking | 2 tx (SAP + MPL `addExecutive`) | 1 tx (MPL only) |
+| Add a vault delegate | 2 tx | 1 tx (SAP only) |
+| Revoke a delegate | 2 tx | 1 tx (SAP only) |
+| Capability add / x402 tier change | 2 tx | 1 tx (SAP only) |
+| Reads per profile | 2 RPC + 2 deserializations | 1 RPC + 1 fetch (cached) |
+| MPL programs touched after init | every change | never (until host migration) |
+| Required on-chain SAP changes | new instructions + new fields | **zero** |
+
+## Common pitfalls
+
+| Pitfall | Reality |
+|---------|---------|
+| "Use `addExecutive` to delegate" | Function does not exist in `mpl-core` >= 1.9.0 |
+| "AgentIdentity stores the executive list" | It stores **only** `uri: string` |
+| "We need a new SAP instruction to link" | The link is just the URI in the MPL plugin. SAP is unchanged |
+| "Attach the plugin to the collection" | `AgentIdentity` is rejected on collections by `validate_create` |
+| "Two plugins per asset" | One per asset, enforced by `add_external_plugin_adapter` |
+| "umi `Signer` requires a real keypair" | For ix-only construction the bridge uses a public-key stub. The caller signs the assembled web3.js transaction |
+
+## Quick reference
+
+```ts
+client.metaplex.deriveRegistrationUrl(sapPda, baseUrl);
+client.metaplex.buildEip8004Registration({ sapAgentOwner, services });
+client.metaplex.buildAttachAgentIdentityIx(opts);
+client.metaplex.buildUpdateAgentIdentityUriIx(opts);
+client.metaplex.getUnifiedProfile({ asset|wallet, rpcUrl, rpcHeaders? });
+client.metaplex.verifyLink({ asset, sapAgentPda, rpcUrl, rpcHeaders? });
+client.metaplex.tripleCheckLink({ asset, expectedOwner?, rpcUrl, rpcHeaders? });
+client.metaplex.buildMintAndAttachIxs(opts);
+client.metaplex.buildRegisterSapForMplOwnerIx(opts);
+client.metaplex.buildRegisterBothIxs(opts);
+```
+
+## See also
+
+- [Core: agent lifecycle](/docs/core/agent-lifecycle) for the SAP side of the link.
+- [Core: diagrams](/docs/core/diagrams) for the visual flow.
+- [SDK: agent builder](/docs/sdk/agent-builder) for the SAP register API.

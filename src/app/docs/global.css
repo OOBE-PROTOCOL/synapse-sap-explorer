@@ -207,6 +207,194 @@ div:has(> svg[id^="d"]) {
   padding: 0.75rem;
 }
 
+/* ──────────────────────────────────────────────────────────────
+   Docs typography & buttons (specificity-safe overrides)
+   These rules are scoped to `article[data-page]` and the docs
+   chrome so they cannot leak into the explorer app, but they
+   guarantee that titles, descriptions, callouts, cards, and
+   inline buttons render with the expected hierarchy even when
+   the Tailwind v4 utility classes embedded in fumadocs-ui.css
+   fail to load (e.g. on first paint, on slow networks, or when
+   our Tailwind v3 setup overrides them).
+   ────────────────────────────────────────────────────────── */
+
+/* DocsTitle (h1 at the top of every page) */
+article[data-page] > h1,
+article[data-page] [data-page-title],
+.fd-page > h1 {
+  font-size: 2.25rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fd-foreground);
+  margin: 0 0 0.75rem;
+  text-wrap: balance;
+}
+
+@media (min-width: 768px) {
+  article[data-page] > h1,
+  article[data-page] [data-page-title],
+  .fd-page > h1 {
+    font-size: 2.75rem;
+  }
+}
+
+/* DocsDescription (subtitle under DocsTitle) */
+article[data-page] > p:first-of-type,
+article[data-page] [data-page-description],
+.fd-page > p:first-of-type {
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--fd-muted-foreground);
+  margin: 0 0 2rem;
+  font-weight: 400;
+  text-wrap: pretty;
+}
+
+/* h2/h3/h4 fallbacks even outside .prose */
+article[data-page] h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--fd-border);
+  color: var(--fd-foreground);
+  scroll-margin-top: 5rem;
+}
+
+article[data-page] h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+  color: var(--fd-foreground);
+  scroll-margin-top: 5rem;
+}
+
+article[data-page] h4 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--fd-foreground);
+}
+
+article[data-page] p {
+  line-height: 1.7;
+  color: var(--fd-foreground);
+  margin: 0 0 1rem;
+}
+
+article[data-page] ul,
+article[data-page] ol {
+  margin: 0 0 1rem 1.25rem;
+  line-height: 1.7;
+}
+
+article[data-page] li + li {
+  margin-top: 0.25rem;
+}
+
+/* ── Buttons & link buttons in docs ────────────────────────── */
+.fd-button,
+[data-sidebar] a[href][class*="bg-fd-primary"],
+article[data-page] a.fd-button,
+article[data-page] a[role="button"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--fd-primary) 15%, transparent);
+  color: var(--fd-primary);
+  border: 1px solid color-mix(in srgb, var(--fd-primary) 25%, transparent);
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+  text-decoration: none;
+}
+
+.fd-button:hover,
+[data-sidebar] a[href][class*="bg-fd-primary"]:hover,
+article[data-page] a.fd-button:hover,
+article[data-page] a[role="button"]:hover {
+  background: color-mix(in srgb, var(--fd-primary) 22%, transparent);
+  border-color: color-mix(in srgb, var(--fd-primary) 40%, transparent);
+}
+
+/* ── Cards (used in MDX with <Cards>) ──────────────────────── */
+.fd-card,
+article[data-page] .fd-card {
+  display: block;
+  padding: 1rem 1.125rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--fd-border);
+  background: var(--fd-card);
+  color: var(--fd-card-foreground);
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.fd-card:hover {
+  border-color: color-mix(in srgb, var(--fd-primary) 50%, var(--fd-border));
+  box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--fd-primary) 35%, transparent);
+}
+
+.fd-card h3,
+.fd-card [data-card-title] {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+  color: var(--fd-foreground);
+}
+
+.fd-card p {
+  font-size: 0.8125rem;
+  color: var(--fd-muted-foreground);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Callouts (Info / Warning / Note) ──────────────────────── */
+.fd-callout {
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--fd-border);
+  background: color-mix(in srgb, var(--fd-primary) 7%, var(--fd-card));
+  color: var(--fd-foreground);
+  margin: 1.25rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.fd-callout[data-callout="warning"] {
+  background: color-mix(in srgb, #f59e0b 12%, var(--fd-card));
+  border-color: color-mix(in srgb, #f59e0b 40%, var(--fd-border));
+}
+
+.fd-callout[data-callout="info"] {
+  background: color-mix(in srgb, #3b82f6 10%, var(--fd-card));
+  border-color: color-mix(in srgb, #3b82f6 35%, var(--fd-border));
+}
+
+/* ── Internal links inside content ─────────────────────────── */
+article[data-page] a:not(.fd-card):not(.fd-button):not([role="button"]) {
+  color: var(--fd-primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--fd-primary) 35%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+
+article[data-page] a:not(.fd-card):not(.fd-button):not([role="button"]):hover {
+  text-decoration-color: var(--fd-primary);
+}
+
 /* ── Smooth page transitions ── */
 article[data-page] {
   animation: fd-fade-in 0.2s ease-out;
