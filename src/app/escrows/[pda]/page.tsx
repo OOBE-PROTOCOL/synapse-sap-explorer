@@ -16,7 +16,6 @@ import {
   DetailPageShell,
 } from '~/components/ui/explorer';
 import { useEscrow, useAddressEvents, type SapEvent } from '~/hooks/use-sap';
-import { useAgentMapCtx } from '~/providers/sap-data-provider';
 import { AgentTag } from '~/components/ui/agent-tag';
 import { formatTokenAmount } from '~/lib/format';
 
@@ -25,7 +24,6 @@ export default function EscrowDetailPage() {
   const router = useRouter();
   const { data, loading } = useEscrow(pda);
   const { data: eventsData, loading: evLoading } = useAddressEvents(pda, { limit: 50 });
-  const { map: agentMap } = useAgentMapCtx();
 
   const escrow = data?.escrow ?? null;
 
@@ -104,18 +102,18 @@ export default function EscrowDetailPage() {
         <CardContent className="pt-6">
           <SectionHeader title="Account Information" />
           <CopyableField label="Escrow PDA" value={escrow.pda} />
-          <CopyableField label="Agent" value={escrow.agent} href={`/address/${escrow.agent}`} />
-          {agentMap[escrow.agent] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agent} className="text-xs" truncate={false} /></div>
-          )}
+          <CopyableField label="Agent (seller)" value={escrow.agent} href={`/address/${escrow.agent}`} />
+          <div className="ml-[120px] -mt-1 mb-2">
+            <AgentTag address={escrow.agent} className="text-xs" truncate={false} />
+          </div>
           <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} />
-          {agentMap[escrow.agentWallet] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agentWallet} className="text-xs" truncate={false} /></div>
-          )}
-          <CopyableField label="Depositor" value={escrow.depositor} href={`/address/${escrow.depositor}`} />
-          {agentMap[escrow.depositor] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.depositor} className="text-xs" truncate={false} /></div>
-          )}
+          <div className="ml-[120px] -mt-1 mb-2">
+            <AgentTag address={escrow.agentWallet} className="text-xs" truncate={false} />
+          </div>
+          <CopyableField label="Depositor (buyer)" value={escrow.depositor} href={`/address/${escrow.depositor}`} />
+          <div className="ml-[120px] -mt-1 mb-2">
+            <AgentTag address={escrow.depositor} className="text-xs" truncate={false} />
+          </div>
           {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} />}
           <CopyableField label="Token Decimals" value={String(escrow.tokenDecimals)} mono={false} />
           <div className="flex items-start justify-between gap-4 py-2.5 border-b border-border/50">

@@ -6,8 +6,19 @@ import { cn } from '~/lib/utils';
 import type { AgentMap } from '~/types/api';
 import { useAgentMapCtx } from '~/providers/sap-data-provider';
 
+/** Resolve agentMap entry by either wallet or PDA. */
+function resolveEntry(address: string, agentMap: AgentMap) {
+  const direct = agentMap[address];
+  if (direct) return { entry: direct, walletAddress: address };
+  // Reverse lookup: address might be a PDA
+  for (const [wallet, entry] of Object.entries(agentMap)) {
+    if (entry?.pda === address) return { entry, walletAddress: wallet };
+  }
+  return { entry: null, walletAddress: address };
+}
+
 /**
- * AgentTag — renders a wallet address as an agent name badge if known,
+ * AgentTag — renders a wallet OR PDA as an agent name badge if known,
  * otherwise shows a truncated address. Links to the agent/address page.
  *
  * If `agentMap` is not provided, reads from SapDataProvider context automatically.
@@ -27,9 +38,9 @@ export function AgentTag({
 }) {
   const { map: ctxMap } = useAgentMapCtx();
   const agentMap = agentMapProp ?? ctxMap;
-  const entry = agentMap[address];
+  const { entry, walletAddress } = resolveEntry(address, agentMap);
   const displayName = entry?.name || (truncate ? `${address.slice(0, 4)}…${address.slice(-4)}` : address);
-  const href = entry ? `/agents/${address}` : `/address/${address}`;
+  const href = entry ? `/agents/${walletAddress}` : `/address/${address}`;
 
   return (
     <Link
@@ -64,7 +75,7 @@ export function resolveAgentName(
   agentMap: AgentMap,
   fallbackTruncate = true,
 ): string {
-  const entry = agentMap[address];
+  const { entry } = resolveEntry(address, agentMap);
   if (entry?.name) return entry.name;
   return fallbackTruncate ? `${address.slice(0, 4)}…${address.slice(-4)}` : address;
 }

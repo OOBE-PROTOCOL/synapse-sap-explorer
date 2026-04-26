@@ -1389,7 +1389,7 @@ function AgentX402Tab({
           { label: 'With x402 Memo', value: String(stats?.withMemo ?? 0) },
         ].map((kpi) => (
           <Card key={kpi.label} className="bg-neutral-900 border-neutral-800 overflow-hidden">
-            <CardContent className="pt-5 pb-4 text-center">
+            <CardContent className="mt-5 pb-4 text-center">
               <p className="text-xl font-bold tabular-nums text-white font-mono">{kpi.value}</p>
               <p className="text-xs text-neutral-500 mt-1">{kpi.label}</p>
             </CardContent>
@@ -1490,7 +1490,7 @@ function AgentRevenueTab({
           { label: 'Total Escrows', value: String(agentEscrows.length) },
         ].map((kpi) => (
           <Card key={kpi.label} className="bg-neutral-900 border-neutral-800 overflow-hidden">
-            <CardContent className="pt-5 pb-4 text-center">
+            <CardContent className="mt-5 pb-4 text-center">
               <p className="text-xl font-bold tabular-nums text-white font-mono">{kpi.value}</p>
               <p className="text-xs text-neutral-500 mt-1">{kpi.label}</p>
             </CardContent>

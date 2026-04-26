@@ -135,7 +135,7 @@ export default function ToolDetailPage() {
 
       {/* Tool Identity */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="mt-6">
           <SectionHeader title="Tool Identity" />
           <CopyableField label="Tool PDA" value={tool.pda} />
           <CopyableField label="Tool Name" value={d.toolName} mono={false} />
@@ -155,7 +155,7 @@ export default function ToolDetailPage() {
       {/* Schema Hashes */}
       <Card className="relative overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-chart-3/20 to-transparent" />
-        <CardContent className="pt-6">
+        <CardContent className="mt-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-chart-3/8 ring-1 ring-chart-3/20">
               <Shield className="h-4 w-4 text-chart-3" />
@@ -198,7 +198,7 @@ export default function ToolDetailPage() {
       {/* Creator / Owner Agent */}
       <Card className="relative overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-chart-2/20 to-transparent" />
-        <CardContent className="pt-6">
+        <CardContent className="mt-6">
           <SectionHeader title="Creator" />
           {ownerAgent?.identity ? (
             <Link href={`/agents/${ownerAgent.identity.wallet}`} className="block rounded-xl p-4 -mx-2 hover:bg-muted/30 transition-all duration-200 group/creator">
@@ -244,7 +244,7 @@ export default function ToolDetailPage() {
       {/* Escrow / Pricing Info */}
       {escrowStats && escrowStats.count > 0 && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="mt-6">
             <SectionHeader title="Pricing & Settlements" />
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mt-3">
               <div className="text-center p-3 bg-muted/30 rounded-lg">
@@ -271,7 +271,7 @@ export default function ToolDetailPage() {
       {/* Version History */}
       {d.previousVersion && d.previousVersion !== '11111111111111111111111111111111' && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="mt-6">
             <SectionHeader title="Version History" />
             <CopyableField label="Previous Version PDA" value={d.previousVersion} href={`/tools/${d.previousVersion}`} />
           </CardContent>
@@ -280,7 +280,7 @@ export default function ToolDetailPage() {
 
       {/* Timestamps */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="mt-6">
           <SectionHeader title="Timestamps" />
           <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 mt-2">
             <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
@@ -312,7 +312,7 @@ export default function ToolDetailPage() {
 
       {/* Full Deserialized Descriptor */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="mt-6">
           <SectionHeader title="Full Deserialized Descriptor" />
           <p className="text-xs text-muted-foreground -mt-2 mb-4">
             Every field from the on-chain PDA account, decoded and human-readable.
@@ -528,7 +528,7 @@ function InscribedSchemasSection({
       {/* Subtle gradient accent */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
 
-      <CardContent className="pt-6">
+      <CardContent className="mt-6">
         {/* Header with inscriber info */}
         <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex items-center gap-3">
@@ -855,7 +855,7 @@ function ToolLifecycleTimeline({
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="mt-6">
         <SectionHeader title="Tool Lifecycle Events" count={filtered.length}>
           <span className="text-xs text-muted-foreground">
             {events.length} total event{events.length !== 1 ? 's' : ''} from DB
@@ -1054,7 +1054,7 @@ function SapEventTimeline({
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="mt-6">
         <SectionHeader title="SAP Event Timeline" count={events.length}>
           {scanned > 0 && (
             <span className="text-xs text-muted-foreground">
