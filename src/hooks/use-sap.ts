@@ -176,6 +176,65 @@ export function useAgentMetaplex(wallet: string | null) {
   return useFetch<AgentMetaplexLink>(url, { keepStale: true });
 }
 
+/* ── Canonical EIP-8004 hybrid card ──────────────────────
+ * Served at /agents/<sapPda>/eip-8004.json — single source of
+ * truth merging SAP on-chain state, MPL Core plugin and the
+ * Metaplex public registry. Surfaced in the UI as the
+ * authoritative agent card. */
+export type CanonicalEip8004Card = {
+  schema: string;
+  version: string;
+  type: string;
+  name: string;
+  description: string | null;
+  synapseAgent: string;
+  owner: string;
+  issuedAt: string | null;
+  updatedAt: string | null;
+  agentUri: string | null;
+  x402Endpoint: string | null;
+  capabilities: Array<{
+    id: string;
+    version: string | null;
+    protocolId: string | null;
+    description: string | null;
+  }>;
+  protocols: string[];
+  services: Array<{ id: string; type: string; url?: string }>;
+  reputation: { score: number; totalFeedbacks: number; isActive: boolean };
+  sources: {
+    sap: { program: string; pda: string; wallet: string; version: number | null };
+    metaplex: {
+      linked: boolean;
+      asset: string | null;
+      agentIdentityUri: string | null;
+      registration: unknown;
+      registry: {
+        host: string;
+        network: string;
+        agents: unknown[];
+        error: string | null;
+      };
+    };
+  };
+  diagnostics?: {
+    sap: 'ok' | 'error' | string;
+    metaplexLink: 'ok' | 'error' | string;
+    metaplexRegistry: 'ok' | 'error' | string;
+    notes: string[];
+  };
+};
+
+/**
+ * Fetch the canonical EIP-8004 hybrid card for an agent.
+ * Hits the same-origin `/agents/<wallet>/eip-8004.json` route so the
+ * UI shows exactly what third-party consumers see.
+ */
+export function useCanonicalEip8004(wallet: string | null) {
+  const url = wallet ? `/agents/${wallet}/eip-8004.json` : null;
+  return useFetch<CanonicalEip8004Card>(url, { keepStale: true });
+}
+
 /* ── MPL Core / EIP-8004 NFT inventory ───────────────────── */
 
 export type AgentEip8004Registration = {

@@ -8,7 +8,7 @@ import { ReputationBar, StatusBadge, Address, ProtocolBadge, Skeleton, EmptyStat
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking, useAgentMetaplex, useAgentNfts, useMetaplexRegistry } from '~/hooks/use-sap';
+import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking, useAgentMetaplex, useAgentNfts, useMetaplexRegistry, useCanonicalEip8004, type CanonicalEip8004Card } from '~/hooks/use-sap';
 import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import type { SapEvent, X402PaymentRow, X402Stats } from '~/hooks/use-sap';
 import { toast } from 'sonner';
@@ -86,6 +86,7 @@ function AgentDetailInner() {
   const { data: metaplexData, loading: metaplexLoading } = useAgentMetaplex(canonicalWallet);
   const { data: nftsData } = useAgentNfts(canonicalWallet);
   const { data: registryData, loading: registryLoading } = useMetaplexRegistry(canonicalWallet);
+  const { data: canonicalCard, loading: canonicalLoading } = useCanonicalEip8004(data?.profile?.pda ?? null);
   const [activeTab, setActiveTab] = useQueryState('tab', 'overview' as AgentTab, QueryParam.enum('overview', AGENT_TABS));
   const [sectionFilter, setSectionFilter] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
@@ -1263,6 +1264,9 @@ function AgentDetailInner() {
             loading={metaplexLoading}
             nfts={nftsData?.items ?? null}
             registry={registryData ?? null}
+            canonicalCard={canonicalCard}
+            canonicalLoading={canonicalLoading}
+            sapPda={data?.profile?.pda ?? null}
           />
         )}
         </div>
@@ -1896,11 +1900,17 @@ function AgentMetaplexTab({
   loading,
   nfts,
   registry,
+  canonicalCard,
+  canonicalLoading,
+  sapPda,
 }: {
   data: AgentMetaplexLink | null;
   loading: boolean;
   nfts: AgentNftItem[] | null;
   registry: MetaplexRegistryResponse | null;
+  canonicalCard: CanonicalEip8004Card | null;
+  canonicalLoading: boolean;
+  sapPda: string | null;
 }) {
   if (loading) {
     return (
@@ -2062,6 +2072,185 @@ function AgentMetaplexTab({
           )}
         </CardContent>
       </Card>
+
+      {/* Canonical EIP-8004 Card — single source of truth served at
+          /agents/<sapPda>/eip-8004.json. Same JSON third-party
+          consumers receive (Metaplex, peer agents, indexers). */}
+      {sapPda && (canonicalLoading || canonicalCard) && (
+        <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+          <CardHeader className="pb-3 px-5 pt-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2 flex-wrap">
+              <Sparkles className="h-3.5 w-3.5 text-pink-400" />
+              Canonical EIP-8004 Card
+              <InfoTip label={"Hybrid card served at /agents/<sapPda>/eip-8004.json. Merges SAP on-chain state, the MPL Core AgentIdentity plugin (if any) and the public Metaplex registry into one canonical JSON. This is exactly what third-party consumers see when they resolve this agent."} />
+              {canonicalCard && (
+                <Pill variant="status" className="ml-auto">LIVE</Pill>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 pt-0 space-y-3">
+            {canonicalLoading && !canonicalCard ? (
+              <Skeleton className="h-24 w-full" />
+            ) : canonicalCard ? (
+              <>
+                {/* JSON URL */}
+                <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2 text-xs">
+                  <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">Canonical URL</div>
+                  <Link
+                    href={`/agents/${sapPda}/eip-8004.json`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-pink-300 hover:underline inline-flex items-center gap-1 [overflow-wrap:anywhere]"
+                  >
+                    /agents/{sapPda}/eip-8004.json
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </Link>
+                </div>
+
+                {/* Identity */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                  <div><span className="text-neutral-600">Name · </span><span className="text-neutral-200">{canonicalCard.name}</span></div>
+                  <div><span className="text-neutral-600">Version · </span><span className="text-neutral-300 font-mono">{canonicalCard.version}</span></div>
+                  <div className="sm:col-span-2 flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-neutral-600 shrink-0">Owner · </span>
+                    <Link href={`/agents/${canonicalCard.owner}`} className="font-mono text-neutral-300 hover:text-pink-300 [overflow-wrap:anywhere]">
+                      {canonicalCard.owner}
+                    </Link>
+                  </div>
+                  {canonicalCard.issuedAt && (
+                    <div><span className="text-neutral-600">Issued · </span><span className="text-neutral-300">{safeDateStr(canonicalCard.issuedAt)}</span></div>
+                  )}
+                  {canonicalCard.updatedAt && canonicalCard.updatedAt !== canonicalCard.issuedAt && (
+                    <div><span className="text-neutral-600">Updated · </span><span className="text-neutral-300">{safeDateStr(canonicalCard.updatedAt)}</span></div>
+                  )}
+                </div>
+
+                {canonicalCard.description && (
+                  <p className="text-xs text-neutral-300 leading-relaxed text-pretty">{canonicalCard.description}</p>
+                )}
+
+                {/* Endpoints */}
+                {(canonicalCard.agentUri || canonicalCard.x402Endpoint) && (
+                  <div className="space-y-1.5 text-xs">
+                    {canonicalCard.agentUri && (
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <span className="text-neutral-600 shrink-0">Agent URI · </span>
+                        <Link href={canonicalCard.agentUri} target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-pink-300 inline-flex items-center gap-1 [overflow-wrap:anywhere]">
+                          {canonicalCard.agentUri}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </Link>
+                      </div>
+                    )}
+                    {canonicalCard.x402Endpoint && (
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <span className="text-neutral-600 shrink-0">x402 · </span>
+                        <Link href={canonicalCard.x402Endpoint} target="_blank" rel="noreferrer" className="text-amber-300 hover:underline inline-flex items-center gap-1 [overflow-wrap:anywhere]">
+                          {canonicalCard.x402Endpoint}
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Protocols */}
+                {canonicalCard.protocols.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-neutral-600">Protocols</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {canonicalCard.protocols.map((p) => (
+                        <Pill key={p}>{p}</Pill>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Capabilities */}
+                {canonicalCard.capabilities.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-neutral-600">Capabilities <span className="text-neutral-500 normal-case tracking-normal tabular-nums">· {canonicalCard.capabilities.length}</span></p>
+                    <div className="rounded-md border border-neutral-800/80 divide-y divide-neutral-800/80">
+                      {canonicalCard.capabilities.map((c, i) => (
+                        <div key={i} className="px-2.5 py-1.5 text-xs space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Pill variant="sap">{c.id}</Pill>
+                            {c.version && <span className="text-neutral-600 font-mono">v{c.version}</span>}
+                            {c.protocolId && <span className="text-neutral-600">· {c.protocolId}</span>}
+                          </div>
+                          {c.description && (
+                            <p className="text-neutral-500 leading-relaxed">{c.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Services */}
+                {canonicalCard.services.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-neutral-600">Services</p>
+                    <div className="rounded-md border border-neutral-800/80 divide-y divide-neutral-800/80">
+                      {canonicalCard.services.map((s, i) => (
+                        <div key={`${s.id}-${i}`} className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Pill className="shrink-0">{s.type}</Pill>
+                            <span className="text-neutral-300 [overflow-wrap:anywhere]">{s.id}</span>
+                          </div>
+                          {s.url && (
+                            <Link href={s.url} target="_blank" rel="noreferrer" className="text-pink-300 hover:underline inline-flex items-center gap-1 shrink-0">
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sources summary */}
+                <div className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs space-y-1">
+                  <p className="text-[10px] uppercase tracking-wider text-neutral-600">Sources</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={cn(
+                        'inline-block h-1.5 w-1.5 rounded-full',
+                        canonicalCard.diagnostics?.sap === 'ok' ? 'bg-emerald-400' : 'bg-neutral-600',
+                      )} />
+                      <span className="text-neutral-400">SAP</span>
+                      <span className="text-neutral-600 font-mono">v{canonicalCard.sources.sap.version ?? '?'}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={cn(
+                        'inline-block h-1.5 w-1.5 rounded-full',
+                        canonicalCard.sources.metaplex.linked ? 'bg-emerald-400' : 'bg-neutral-700',
+                      )} />
+                      <span className="text-neutral-400">Metaplex link</span>
+                      <span className="text-neutral-600">{canonicalCard.sources.metaplex.linked ? 'bound' : 'none'}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={cn(
+                        'inline-block h-1.5 w-1.5 rounded-full',
+                        canonicalCard.sources.metaplex.registry.agents.length > 0 ? 'bg-emerald-400' : 'bg-neutral-700',
+                      )} />
+                      <span className="text-neutral-400">Registry</span>
+                      <span className="text-neutral-600 tabular-nums">{canonicalCard.sources.metaplex.registry.agents.length}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={cn(
+                        'inline-block h-1.5 w-1.5 rounded-full',
+                        canonicalCard.reputation.isActive ? 'bg-emerald-400' : 'bg-neutral-600',
+                      )} />
+                      <span className="text-neutral-400">Reputation</span>
+                      <span className="text-neutral-600 tabular-nums">{canonicalCard.reputation.score} · {canonicalCard.reputation.totalFeedbacks} fb</span>
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Registration */}
       {registration && (
