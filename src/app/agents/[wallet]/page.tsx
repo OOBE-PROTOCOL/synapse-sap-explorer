@@ -129,6 +129,16 @@ function AgentDetailInner() {
     setTimeout(() => setCopied(null), 1500);
   };
 
+  const openSection = (section: AgentTab) => {
+    setSectionFilter('');
+    setActiveTab(section);
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        document.getElementById('agent-detail-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -207,6 +217,7 @@ function AgentDetailInner() {
       ? true
       : s.label.toLowerCase().includes(normalizedSectionFilter),
   );
+  const activeSectionVisible = visibleSections.some((s) => s.value === activeTab);
 
   // ── Registry coordination ────────────────────────────────────────────────
   // Reaching this render means SAP registration is a given (we read the
@@ -316,7 +327,7 @@ function AgentDetailInner() {
                       'h-9 w-full md:w-auto',
                       linkState === 'both' && 'bg-amber-500/80 text-neutral-950 hover:bg-amber-400',
                     )}
-                    onClick={() => setActiveTab('metaplex')}
+                    onClick={() => openSection('metaplex')}
                   >
                 Open Metaplex Panel
                 <ChevronRight className="ml-1 h-3.5 w-3.5" />
@@ -945,6 +956,18 @@ function AgentDetailInner() {
             />
           </div>
 
+          {!activeSectionVisible && normalizedSectionFilter.length > 0 && (
+            <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-200">
+              Current section is filtered out.
+              <button
+                onClick={() => setSectionFilter('')}
+                className="ml-1.5 underline underline-offset-2 hover:text-white"
+              >
+                Clear filter
+              </button>
+            </div>
+          )}
+
           {visibleSections.length === 0 ? (
             <div className="rounded-md border border-dashed border-neutral-800 bg-neutral-900/40 px-3 py-3 text-xs text-neutral-500">
               No section matches this filter.
@@ -956,7 +979,7 @@ function AgentDetailInner() {
                 return (
                   <button
                     key={s.value}
-                    onClick={() => setActiveTab(s.value)}
+                    onClick={() => openSection(s.value)}
                     className={cn(
                       'w-full rounded-md border px-2.5 py-2 text-left transition-colors flex items-center gap-2',
                       isActive
@@ -980,7 +1003,7 @@ function AgentDetailInner() {
           )}
         </aside>
 
-        <div className="rounded-lg border border-border/30 bg-card/60 p-4 sm:p-6 space-y-6">
+        <div id="agent-detail-content" className="rounded-lg border border-border/30 bg-card/60 p-4 sm:p-6 space-y-6">
         {/* Tab: Overview */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
