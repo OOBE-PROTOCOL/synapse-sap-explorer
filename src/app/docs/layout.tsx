@@ -10,7 +10,7 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
       {/* Load fumadocs-ui CSS statically (bypasses TW3 PostCSS) */}
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/fumadocs-ui.css" />
-      {children}
+      <div className="fd-docs-root">{children}</div>
     </RootProvider>
   );
 }

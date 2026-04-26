@@ -11,10 +11,15 @@ export default function Layout({ children }: { children: ReactNode }) {
       tree={source.pageTree}
       {...baseOptions}
       sidebar={{
+        collapsible: true,
         defaultOpenLevel: 1,
+        // Per-breakpoint sidebar width. fumadocs reads --fd-sidebar-width
+        // for layout calculations; we override its defaults so the sidebar
+        // is comfortable on large displays without crowding content.
+        className:
+          "[--fd-sidebar-width:260px] md:[--fd-sidebar-width:280px] lg:[--fd-sidebar-width:300px] xl:[--fd-sidebar-width:320px] max-w-[82vw]",
         banner: (
           <div className="flex flex-col gap-3 pb-1">
-            
             <Link
               href="/docs/sdk/quickstart"
               className="group flex items-center gap-2 rounded-md bg-fd-primary/10 px-3 py-2 text-[0.75rem] font-semibold text-fd-primary transition-colors hover:bg-fd-primary/20"
