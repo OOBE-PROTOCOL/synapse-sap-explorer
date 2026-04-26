@@ -1,0 +1,141 @@
+
+> synapse-sap-explorer@1.0.0 build /Users/keepeeto/Desktop/synapse-sap-explorer
+> next build
+
+   ▲ Next.js 15.1.11
+   - Environments: .env
+   - Experiments (use with caution):
+     · turbo
+     · staleTimes
+
+   Creating an optimized production build ...
+[MDX] updated map file in 45.94591700000001ms
+(node:7293) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+ ⚠ Using edge runtime on a page currently disables static generation for that page
+[db] connection OK — circuit breaker open
+[sap-sync] Fallback RPC configured (SAP_FALLBACK_RPC_URL)
+[db] connection OK — circuit breaker open
+[sap-sync] Fallback RPC configured (SAP_FALLBACK_RPC_URL)
+[db] connection OK — circuit breaker open
+[sap-sync] Fallback RPC configured (SAP_FALLBACK_RPC_URL)
+[db] connection OK — circuit breaker open
+[sap-sync] Fallback RPC configured (SAP_FALLBACK_RPC_URL)
+[db] connection OK — circuit breaker open
+[sap-sync] Fallback RPC configured (SAP_FALLBACK_RPC_URL)
+[db] connection OK — circuit breaker open
+[sap-sync] Fallback RPC configured (SAP_FALLBACK_RPC_URL)
+   Generating static pages (0/72) ...
+   Generating static pages (18/72) 
+   Generating static pages (36/72) 
+   Generating static pages (54/72) 
+ ✓ Generating static pages (72/72)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                     Size     First Load JS
+┌ ○ /                                           131 kB          320 kB
+├ ○ /_not-found                                 987 B           107 kB
+├ ○ /agents                                     12.3 kB         182 kB
+├ ƒ /agents/[wallet]                            21.8 kB         167 kB
+├ ƒ /agents/[wallet]/eip-8004                   352 B           106 kB
+├ ƒ /agents/[wallet]/eip-8004.json              352 B           106 kB
+├ ○ /agents/health                              6.29 kB         139 kB
+├ ƒ /api/admin/metaplex/refresh                 352 B           106 kB
+├ ƒ /api/og                                     352 B           106 kB
+├ ƒ /api/sap/address/[address]                  352 B           106 kB
+├ ƒ /api/sap/address/[address]/events           352 B           106 kB
+├ ƒ /api/sap/agents                             352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]                    352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/balances           352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/eip-8004           352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/memory             352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/metaplex           352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/metaplex-registry  352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/nfts               352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/revenue            352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/staking            352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/triple-check       352 B           106 kB
+├ ƒ /api/sap/agents/[wallet]/x402               352 B           106 kB
+├ ƒ /api/sap/agents/enriched                    352 B           106 kB
+├ ƒ /api/sap/agents/map                         352 B           106 kB
+├ ƒ /api/sap/agents/register/both               352 B           106 kB
+├ ƒ /api/sap/agents/register/metaplex-to-sap    352 B           106 kB
+├ ƒ /api/sap/agents/register/sap-to-metaplex    352 B           106 kB
+├ ƒ /api/sap/agents/resolve/[id]                352 B           106 kB
+├ ƒ /api/sap/analytics                          352 B           106 kB
+├ ƒ /api/sap/attestations                       352 B           106 kB
+├ ƒ /api/sap/depositors                         352 B           106 kB
+├ ƒ /api/sap/depositors/[address]               352 B           106 kB
+├ ƒ /api/sap/disputes                           352 B           106 kB
+├ ƒ /api/sap/escrows                            352 B           106 kB
+├ ƒ /api/sap/escrows/[pda]                      352 B           106 kB
+├ ƒ /api/sap/escrows/alerts                     352 B           106 kB
+├ ƒ /api/sap/escrows/events                     352 B           106 kB
+├ ƒ /api/sap/escrows/map                        352 B           106 kB
+├ ƒ /api/sap/events/history                     352 B           106 kB
+├ ƒ /api/sap/events/stream                      352 B           106 kB
+├ ƒ /api/sap/feedbacks                          352 B           106 kB
+├ ƒ /api/sap/graph                              352 B           106 kB
+├ ƒ /api/sap/health/endpoints                   352 B           106 kB
+├ ƒ /api/sap/invalidate                         352 B           106 kB
+├ ƒ /api/sap/metrics                            352 B           106 kB
+├ ƒ /api/sap/network/health                     352 B           106 kB
+├ ƒ /api/sap/overview                           352 B           106 kB
+├ ƒ /api/sap/pending-settlements                352 B           106 kB
+├ ƒ /api/sap/receipts                           352 B           106 kB
+├ ƒ /api/sap/search                             352 B           106 kB
+├ ƒ /api/sap/settlements                        352 B           106 kB
+├ ƒ /api/sap/snapshots                          352 B           106 kB
+├ ƒ /api/sap/stream                             352 B           106 kB
+├ ƒ /api/sap/tokens/metadata                    352 B           106 kB
+├ ƒ /api/sap/tools                              352 B           106 kB
+├ ƒ /api/sap/tools/[pda]/events                 352 B           106 kB
+├ ƒ /api/sap/tools/[pda]/schemas                352 B           106 kB
+├ ƒ /api/sap/transactions                       352 B           106 kB
+├ ƒ /api/sap/tx/[signature]                     352 B           106 kB
+├ ƒ /api/sap/vaults                             352 B           106 kB
+├ ƒ /api/sap/vaults/[pda]                       352 B           106 kB
+├ ƒ /api/sap/vaults/[pda]/inscriptions          352 B           106 kB
+├ ƒ /api/sap/volume                             352 B           106 kB
+├ ƒ /api/sap/volume/daily                       352 B           106 kB
+├ ƒ /api/sap/x402/payments                      352 B           106 kB
+├ ƒ /api/sap/x402/stats                         352 B           106 kB
+├ ƒ /api/search                                 352 B           106 kB
+├ ○ /attestations                               4.61 kB         140 kB
+├ ƒ /attestations/[pda]                         1.91 kB         137 kB
+├ ○ /capabilities                               5.69 kB         137 kB
+├ ƒ /capabilities/[id]                          3.69 kB         142 kB
+├ ○ /disputes                                   3.16 kB         142 kB
+├ ƒ /disputes/[pda]                             5.71 kB         142 kB
+├ ● /docs/[[...slug]]                           20.1 kB         144 kB
+├   ├ /docs
+├   ├ /docs/skills
+├   ├ /docs/best-practices/cost-optimization
+├   └ [+52 more paths]
+├ ƒ /docs/api/search                            352 B           106 kB
+├ ○ /escrows                                    7.06 kB         148 kB
+├ ƒ /escrows/[pda]                              4.93 kB         144 kB
+├ ○ /events                                     8.36 kB         144 kB
+├ ○ /network                                    12.2 kB         133 kB
+├ ○ /protocol-flow                              22.1 kB         189 kB
+├ ○ /protocols                                  5.96 kB         141 kB
+├ ƒ /protocols/[id]                             5.39 kB         138 kB
+├ ○ /tools                                      7.96 kB         141 kB
+├ ƒ /tools/[pda]                                10.4 kB         149 kB
+├ ○ /transactions                               8.6 kB          139 kB
+├ ƒ /tx/[signature]                             12.8 kB         170 kB
+└ ○ /vaults                                     6.19 kB         135 kB
++ First Load JS shared by all                   106 kB
+  ├ chunks/4259-358afdbd7325bdbb.js             50.8 kB
+  ├ chunks/76117eda-0bf3bd92078f4ce0.js         53 kB
+  └ other shared chunks (total)                 2.2 kB
+
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

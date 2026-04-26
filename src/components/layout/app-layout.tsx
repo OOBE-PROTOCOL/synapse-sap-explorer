@@ -348,7 +348,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* External links */}
-          <div className={cn('mb-3 space-y-0.5', effectiveCollapsed && 'space-y-1')}>
+          <div className={cn('mb-3 flex-row space-y-0.5', effectiveCollapsed && 'space-y-1')}>
             {[
               { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
               { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
@@ -366,7 +366,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
-                {!effectiveCollapsed && <span className="truncate">{label}</span>}
+                {!effectiveCollapsed && <span className="truncate"></span>}
               </a>
             ))}
           </div>
@@ -377,11 +377,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex items-center gap-2 mb-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                 <span className="text-xs text-muted-foreground">SAP Program</span>
-                <span className="ml-auto text-xs font-mono text-muted-foreground/60">v0.7.0</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground/60">SDK · Anchor 1.0.0</span>
-                <a href="https://synapse.oobeprotocol.ai/skills.md" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-primary hover:text-primary transition-colors">Skill</a>
+                <span className="ml-auto text-xs font-mono text-muted-foreground/60"><a href="https://synapse.oobeprotocol.ai/skills.md" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-primary hover:text-primary transition-colors">Skill</a></span>
               </div>
             </div>
           ) : (
