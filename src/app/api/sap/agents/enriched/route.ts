@@ -274,9 +274,11 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
       ),
       // Batch resolve Metaplex Core link via DAS — one call per wallet,
       // never throws (metaplex-link helper captures errors).
+      // skipOnChain: true → avoids per-wallet `getProgramAccounts` (30s+ each)
+      // which would otherwise serialize 11 heavy RPC calls in this batch.
       Promise.all(
         wallets.map((w) =>
-          getMetaplexLinkSnapshot(w).catch(() => null),
+          getMetaplexLinkSnapshot(w, { skipOnChain: true }).catch(() => null),
         ),
       ),
       // Batch resolve api.metaplex.com Agents Registry presence — one call

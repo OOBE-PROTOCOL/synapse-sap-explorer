@@ -271,6 +271,7 @@ interface EnumerationResult {
  */
 async function enumerateAssetsForWallet(
   wallet: PublicKey,
+  options: { skipOnChain?: boolean } = {},
 ): Promise<EnumerationResult> {
   const diagnostics: string[] = [];
 
@@ -300,9 +301,13 @@ async function enumerateAssetsForWallet(
   }
 
   // Tier 2 — direct on-chain enumeration (Synapse RPC only).
-  // We intentionally do NOT fall back to a public RPC here: `fetchAssetsByOwner`
-  // is a heavy `getProgramAccounts` scan that public endpoints (e.g.
-  // api.mainnet.solana.com) rate-limit aggressively (429 storms observed).
+  // Skipped on hot batch paths (e.g. /agents listing) because
+  // `fetchAssetsByOwner` is a heavy `getProgramAccounts` scan that can take
+  // 30s+ and block the whole batch. Reserved for the per-agent detail page.
+  if (options.skipOnChain) {
+    diagnostics.push('On-chain tier skipped (batch mode)');
+    return { source: 'none', assets: [], diagnostics };
+  }
   try {
     const umi = getAuthenticatedUmi();
     const assets = await fetchAssetsByOwner(umi, umiPublicKey(wallet.toBase58()));
@@ -346,7 +351,7 @@ async function fetchAssetsViaDas(
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(4_000),
   });
   if (!res.ok) {
     throw new Error(`DAS HTTP ${res.status}`);
@@ -443,9 +448,18 @@ async function toItem(asset: AssetV1, sapAgentPda: string | null): Promise<Metap
  *
  * Never throws; all errors are captured in `snapshot.error`.
  */
+const SNAPSHOT_CACHE_TTL_MS = 5 * 60_000;
+const snapshotCache = new Map<string, { at: number; value: MetaplexLinkSnapshot }>();
+
 export async function getMetaplexLinkSnapshot(
   wallet: string,
+  options: { skipOnChain?: boolean } = {},
 ): Promise<MetaplexLinkSnapshot> {
+  const cacheKey = `${wallet}:${options.skipOnChain ? 'fast' : 'full'}`;
+  const cached = snapshotCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < SNAPSHOT_CACHE_TTL_MS) {
+    return cached.value;
+  }
   let walletPk: PublicKey;
   try {
     walletPk = new PublicKey(wallet);
@@ -493,7 +507,7 @@ export async function getMetaplexLinkSnapshot(
       // best-effort; link itself is verified
     }
 
-    return {
+    const result: MetaplexLinkSnapshot = {
       sapAgentPda,
       asset: linkedHit.asset,
       expectedUrl,
@@ -503,9 +517,11 @@ export async function getMetaplexLinkSnapshot(
       pluginCount,
       error: null,
     };
+    snapshotCache.set(cacheKey, { at: Date.now(), value: result });
+    return result;
   }
 
-  return {
+  const result: MetaplexLinkSnapshot = {
     sapAgentPda,
     asset: null,
     expectedUrl,
@@ -515,6 +531,8 @@ export async function getMetaplexLinkSnapshot(
     pluginCount,
     error: null,
   };
+  snapshotCache.set(cacheKey, { at: Date.now(), value: result });
+  return result;
 }
 
 /**
