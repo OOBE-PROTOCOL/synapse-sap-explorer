@@ -190,29 +190,43 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
 }
 
 /* ── Truncated Address ───────────────────────── */
-export function Address({ value, className, copy }: { value: string; className?: string; copy?: boolean }) {
+export function Address({
+  value,
+  className,
+  copy,
+  truncate,
+}: {
+  value: string;
+  className?: string;
+  copy?: boolean;
+  truncate?: boolean;
+}) {
   if (!value) return null;
-  const truncated = value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
+  const display = truncate && value.length > 12
+    ? `${value.slice(0, 6)}…${value.slice(-4)}`
+    : value;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(value);
   };
 
+  const wrapClass = truncate ? '' : '[overflow-wrap:anywhere]';
+
   if (copy) {
     return (
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopy(); }}
-        className={cn('font-mono text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer', className)}
+        className={cn('font-mono text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer text-left', wrapClass, className)}
         title={`Copy: ${value}`}
       >
-        {truncated}
+        {display}
       </button>
     );
   }
 
   return (
-    <span className={cn('font-mono text-xs text-primary/70', className)} title={value}>
-      {truncated}
+    <span className={cn('font-mono text-xs text-primary/70', wrapClass, className)} title={value}>
+      {display}
     </span>
   );
 }

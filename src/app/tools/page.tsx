@@ -472,9 +472,9 @@ export default function ToolsPage() {
                           <span className="text-sm font-medium text-foreground block truncate group-hover:text-primary transition-colors">
                             {d.toolName}
                           </span>
-                          <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
-                            <span className="text-[10px] font-mono text-muted-foreground/60 truncate">
-                              {tool.pda.slice(0, 8)}…{tool.pda.slice(-4)}
+                          <div className="mt-0.5 flex items-center gap-1.5 min-w-0 flex-wrap">
+                            <span className="text-[10px] font-mono text-muted-foreground/60 [overflow-wrap:anywhere]">
+                              {tool.pda}
                             </span>
                             {hasInscribedSchema && (
                               <span
@@ -499,6 +499,7 @@ export default function ToolsPage() {
                       <AgentTag
                         address={tool.agentWallet ?? d.agent}
                         className="text-xs"
+                        truncate={false}
                       />
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">

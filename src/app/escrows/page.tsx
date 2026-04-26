@@ -385,9 +385,13 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-foreground truncate max-w-full">
+                  <Link
+                    href={`/agents/${escrow.agent}`}
+                    className="text-sm font-semibold text-foreground hover:text-primary transition-colors [overflow-wrap:anywhere]"
+                    title={escrow.agentName ?? escrow.agent}
+                  >
                     {escrow.agentName ?? 'Unknown Agent'}
-                  </span>
+                  </Link>
                   <Badge className={cn('text-xs gap-1', cfg.className)}>
                     <span className={cn('h-1.5 w-1.5 rounded-full', cfg.dot)} />
                     {cfg.label}
@@ -398,7 +402,7 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <div className="flex items-baseline gap-2 mt-0.5 min-w-0 flex-wrap">
                   <span className="text-xs text-muted-foreground shrink-0">PDA</span>
                   <Address value={escrow.pda} copy />
                 </div>
@@ -406,11 +410,11 @@ function EscrowCard({ escrow, events, expanded, onToggle, walletAgentMap, tokenM
             </div>
 
             {/* Parties */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1">
-              <span className="text-muted-foreground">Agent</span>
-              <Address value={escrow.agent} copy />
-              <span className="text-muted-foreground">Depositor</span>
-              <AgentTag address={escrow.depositor} agentMap={walletAgentMap} className="text-xs" />
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 text-xs mt-2">
+              <span className="text-muted-foreground shrink-0">Agent</span>
+              <AgentTag address={escrow.agent} agentMap={walletAgentMap} className="text-xs" truncate={false} />
+              <span className="text-muted-foreground shrink-0">Depositor</span>
+              <AgentTag address={escrow.depositor} agentMap={walletAgentMap} className="text-xs" truncate={false} />
             </div>
           </div>
 

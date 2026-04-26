@@ -104,19 +104,19 @@ export default function EscrowDetailPage() {
         <CardContent className="pt-6">
           <SectionHeader title="Account Information" />
           <CopyableField label="Escrow PDA" value={escrow.pda} />
-          <CopyableField label="Agent" value={escrow.agent} href={`/address/${escrow.agent}`} truncate />
+          <CopyableField label="Agent" value={escrow.agent} href={`/address/${escrow.agent}`} />
           {agentMap[escrow.agent] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agent} className="text-xs" /></div>
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agent} className="text-xs" truncate={false} /></div>
           )}
-          <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} truncate />
+          <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} />
           {agentMap[escrow.agentWallet] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agentWallet} className="text-xs" /></div>
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.agentWallet} className="text-xs" truncate={false} /></div>
           )}
-          <CopyableField label="Depositor" value={escrow.depositor} href={`/address/${escrow.depositor}`} truncate />
+          <CopyableField label="Depositor" value={escrow.depositor} href={`/address/${escrow.depositor}`} />
           {agentMap[escrow.depositor] && (
-            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.depositor} className="text-xs" /></div>
+            <div className="ml-[120px] -mt-1 mb-2"><AgentTag address={escrow.depositor} className="text-xs" truncate={false} /></div>
           )}
-          {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} truncate />}
+          {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} />}
           <CopyableField label="Token Decimals" value={String(escrow.tokenDecimals)} mono={false} />
           <div className="flex items-start justify-between gap-4 py-2.5 border-b border-border/50">
             <span className="text-xs text-muted-foreground shrink-0 min-w-[120px]">Solscan</span>

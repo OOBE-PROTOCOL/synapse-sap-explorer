@@ -116,15 +116,16 @@ export function CopyableField({
 
   return (
     <div className={cn('flex items-start justify-between gap-4 py-2.5 border-b border-border/50 last:border-0', className)}>
-      <span className="text-xs text-muted-foreground shrink-0 min-w-[120px]">{label}</span>
-      <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+      <span className="text-xs text-muted-foreground shrink-0 min-w-[120px] pt-0.5">{label}</span>
+      <div className="flex items-start gap-2 min-w-0 flex-1 justify-end">
         {href ? (
           <a
             href={href}
             target={external ? '_blank' : undefined}
             rel={external ? 'noopener noreferrer' : undefined}
             className={cn(
-              'text-xs text-primary/80 hover:text-primary transition-colors truncate',
+              'text-xs text-primary/80 hover:text-primary transition-colors',
+              shouldTruncate ? 'truncate' : '[overflow-wrap:anywhere] text-right',
               mono && 'font-mono',
             )}
             title={stringValue ?? undefined}
@@ -135,7 +136,8 @@ export function CopyableField({
         ) : (
           <span
             className={cn(
-              'text-xs text-foreground/80 truncate',
+              'text-xs text-foreground/80',
+              shouldTruncate ? 'truncate' : '[overflow-wrap:anywhere] text-right',
               mono && 'font-mono',
             )}
             title={stringValue ?? undefined}

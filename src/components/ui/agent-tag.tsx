@@ -44,7 +44,13 @@ export function AgentTag({
       title={entry ? `${entry.name} (${address})` : address}
     >
       {showIcon && entry && <Bot className="h-3 w-3 shrink-0" />}
-      <span className="truncate max-w-[140px]">{displayName}</span>
+      <span
+        className={cn(
+          truncate ? 'truncate max-w-[140px]' : '[overflow-wrap:anywhere]',
+        )}
+      >
+        {displayName}
+      </span>
     </Link>
   );
 }
