@@ -286,8 +286,21 @@ async function enumerateAssetsForWallet(
     diagnostics.push(`Synapse DAS lookup failed: ${(e as Error).message}`);
   }
 
-  // Tier 1b — DAS via fallback RPC (Helius). Synapse DAS frequently returns
-  // 0 for wallets with confirmed MPL Core assets; Helius DAS is canonical.
+  // Tier 1a — Synapse `searchAssets` (DAS parity path). Synapse fixed
+  // searchAssets in 2026-04 (grouping array + getAssetBatch alias). On
+  // wallets where `getAssetsByOwner` returns 0, `searchAssets` with
+  // `ownerAddress` frequently returns the full set.
+  try {
+    const searchAssets = await fetchAssetsViaSearch(wallet);
+    if (searchAssets.length > 0) {
+      return { source: 'das', assets: searchAssets, diagnostics };
+    }
+    diagnostics.push('Synapse searchAssets returned 0 assets');
+  } catch (e) {
+    diagnostics.push(`Synapse searchAssets failed: ${(e as Error).message}`);
+  }
+
+  // Tier 1b — DAS via fallback RPC (Helius). Last resort indexed path.
   if (env.SAP_FALLBACK_RPC_URL) {
     try {
       const dasAssets = await fetchAssetsViaDas(wallet, env.SAP_FALLBACK_RPC_URL);
@@ -363,6 +376,60 @@ async function fetchAssetsViaDas(
   if (json.error) throw new Error(`DAS error: ${json.error.message ?? 'unknown'}`);
   const items = json.result?.items ?? [];
   // Keep only MPL Core assets (interface = "MplCoreAsset").
+  const coreIds = items
+    .filter((it) => it.interface === 'MplCoreAsset')
+    .map((it) => it.id);
+  if (coreIds.length === 0) return [];
+
+  const umi = getAuthenticatedUmi();
+  const hydrated = await Promise.allSettled(
+    coreIds.map((id) => fetchAsset(umi, umiPublicKey(id))),
+  );
+  return hydrated
+    .filter((r): r is PromiseFulfilledResult<AssetV1> => r.status === 'fulfilled')
+    .map((r) => r.value);
+}
+
+/**
+ * Tier 1a — Synapse `searchAssets` with `ownerAddress` filter. Synapse's
+ * 2026-04 fix made this the canonical owner-enumeration path on US-1 mainnet:
+ * uses the gpaV2 secondary indexes + DAS parity layer instead of the legacy
+ * `getAssetsByOwner` codepath which has been returning empty for sparse
+ * MPL Core owners.
+ */
+async function fetchAssetsViaSearch(
+  wallet: PublicKey,
+  rpcUrl?: string,
+): Promise<AssetV1[]> {
+  const { url: synapseUrl, headers: synapseHeaders } = getRpcConfig();
+  const url = rpcUrl ?? synapseUrl;
+  const headers: Record<string, string> = rpcUrl
+    ? { 'content-type': 'application/json' }
+    : { 'content-type': 'application/json', ...synapseHeaders };
+  const body = {
+    jsonrpc: '2.0',
+    id: 'sap-explorer-searchAssets',
+    method: 'searchAssets',
+    params: {
+      ownerAddress: wallet.toBase58(),
+      tokenType: 'all',
+      page: 1,
+      limit: 1000,
+    },
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(4_000),
+  });
+  if (!res.ok) throw new Error(`searchAssets HTTP ${res.status}`);
+  const json = (await res.json()) as {
+    result?: { items?: Array<{ id: string; interface?: string }> };
+    error?: { message?: string };
+  };
+  if (json.error) throw new Error(`searchAssets error: ${json.error.message ?? 'unknown'}`);
+  const items = json.result?.items ?? [];
   const coreIds = items
     .filter((it) => it.interface === 'MplCoreAsset')
     .map((it) => it.id);
