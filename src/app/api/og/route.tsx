@@ -18,7 +18,8 @@ import { NextRequest } from 'next/server';
 export const runtime = 'edge';
 const SITE_URL = 'https://explorer.oobeprotocol.ai';
 const OG_BG_SRC = `${SITE_URL}/og-bg.png`;
-const OG_LOGO_SRC = `${SITE_URL}/synapse-metadata-logo.png`;
+const OG_LOGO_SRC = `${SITE_URL}/explorer_logo.png`;
+const BRAND_NAME = 'SAP EXPLORER';
 
 /* ── Inlined 64×64 Synapse logo as data-uri ── */
 // prettier-ignore
@@ -40,9 +41,56 @@ export async function GET(req: NextRequest) {
 function Logo({ size = 48 }: { size?: number }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={OG_LOGO_SRC ?? LOGO_SRC} width={size} height={size} style={{ borderRadius: size * 0.25 }} alt="" />
+    <img src={OG_LOGO_SRC} width={size} height={size} style={{ borderRadius: size * 0.22 }} alt="" />
   );
 }
+
+/* ── Background layers (Satori does not support CSS background:url, must use <img>) ── */
+function Background({ overlayOpacity = 0.78 }: { overlayOpacity?: number }) {
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={OG_BG_SRC}
+        alt=""
+        width={1200}
+        height={630}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '1200px',
+          height: '630px',
+          objectFit: 'cover',
+          filter: 'blur(18px) saturate(120%)',
+          transform: 'scale(1.08)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          background: `linear-gradient(135deg, rgba(3, 13, 25, ${overlayOpacity * 0.85}) 0%, rgba(5, 19, 35, ${overlayOpacity * 0.92}) 52%, rgba(3, 13, 25, ${overlayOpacity}) 100%)`,
+        }}
+      />
+    </>
+  );
+}
+
+/* ── Root container shared style ── */
+const ROOT_STYLE = {
+  width: '1200px',
+  height: '630px',
+  display: 'flex',
+  position: 'relative' as const,
+  fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+  padding: '52px',
+  backgroundColor: '#030d19',
+};
 
 /* ── Transaction OG ── */
 function renderTxOG(p: URLSearchParams) {
@@ -57,22 +105,14 @@ function renderTxOG(p: URLSearchParams) {
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: '1200px',
-          height: '630px',
-          display: 'flex',
-          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
-          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
-          padding: '52px',
-        }}
-      >
-        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+      <div style={ROOT_STYLE}>
+        <Background />
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px', position: 'relative' }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <Logo size={34} />
-              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
-                Synapse Explorer
+              <Logo size={44} />
+              <span style={{ color: '#7dd3fc', fontSize: '20px', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700 }}>
+                {BRAND_NAME}
               </span>
               <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
             </div>
@@ -150,22 +190,14 @@ function renderAgentOG(p: URLSearchParams) {
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: '1200px',
-          height: '630px',
-          display: 'flex',
-          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
-          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
-          padding: '52px',
-        }}
-      >
-        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+      <div style={ROOT_STYLE}>
+        <Background />
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px', position: 'relative' }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <Logo size={34} />
-              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
-                Synapse Explorer
+              <Logo size={44} />
+              <span style={{ color: '#7dd3fc', fontSize: '20px', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700 }}>
+                {BRAND_NAME}
               </span>
               <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
             </div>
@@ -245,22 +277,14 @@ function renderEntityOG(p: URLSearchParams) {
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: '1200px',
-          height: '630px',
-          display: 'flex',
-          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
-          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
-          padding: '52px',
-        }}
-      >
-        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+      <div style={ROOT_STYLE}>
+        <Background />
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px', position: 'relative' }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <Logo size={34} />
-              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
-                Synapse Explorer
+              <Logo size={44} />
+              <span style={{ color: '#7dd3fc', fontSize: '20px', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700 }}>
+                {BRAND_NAME}
               </span>
               <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
             </div>
@@ -318,22 +342,14 @@ function renderDocsOG(p: URLSearchParams) {
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: '1200px',
-          height: '630px',
-          display: 'flex',
-          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
-          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
-          padding: '52px',
-        }}
-      >
-        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px' }}>
+      <div style={ROOT_STYLE}>
+        <Background />
+        <div style={{ display: 'flex', width: '100%', height: '100%', gap: '34px', position: 'relative' }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <Logo size={34} />
-              <span style={{ color: '#7dd3fc', fontSize: '18px', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
-                Synapse Explorer Docs
+              <Logo size={44} />
+              <span style={{ color: '#7dd3fc', fontSize: '20px', letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700 }}>
+                {BRAND_NAME} DOCS
               </span>
               <span style={{ color: '#3f5571', fontSize: '14px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai/docs</span>
             </div>
@@ -383,26 +399,23 @@ function renderPageOG(p: URLSearchParams) {
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: '1200px', height: '630px', display: 'flex', flexDirection: 'column',
-          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
-          fontFamily: 'monospace', padding: '60px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
-          <Logo />
-          <span style={{ color: '#a1a1aa', fontSize: '20px', letterSpacing: '0.2em' }}>SYNAPSE EXPLORER</span>
-          <span style={{ color: '#52525b', fontSize: '18px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
-          <span style={{ color: '#e4e4e7', fontSize: '48px', fontWeight: 700, marginBottom: '16px' }}>{title}</span>
-          <span style={{ color: '#a1a1aa', fontSize: '24px', lineHeight: '1.5' }}>{desc}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '32px', marginTop: '24px' }}>
-          {['Agents', 'Tools', 'Escrows', 'Transactions', 'Network'].map((item) => (
-            <span key={item} style={{ color: '#52525b', fontSize: '14px', letterSpacing: '0.1em' }}>{item}</span>
-          ))}
+      <div style={{ ...ROOT_STYLE, flexDirection: 'column', padding: '60px' }}>
+        <Background />
+        <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
+            <Logo size={56} />
+            <span style={{ color: '#7dd3fc', fontSize: '22px', letterSpacing: '0.2em', fontWeight: 700 }}>{BRAND_NAME}</span>
+            <span style={{ color: '#52525b', fontSize: '18px', marginLeft: 'auto' }}>explorer.oobeprotocol.ai</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
+            <span style={{ color: '#e4e4e7', fontSize: '48px', fontWeight: 700, marginBottom: '16px' }}>{title}</span>
+            <span style={{ color: '#a1a1aa', fontSize: '24px', lineHeight: '1.5' }}>{desc}</span>
+          </div>
+          <div style={{ display: 'flex', gap: '32px', marginTop: '24px' }}>
+            {['Agents', 'Tools', 'Escrows', 'Transactions', 'Network'].map((item) => (
+              <span key={item} style={{ color: '#52525b', fontSize: '14px', letterSpacing: '0.1em' }}>{item}</span>
+            ))}
+          </div>
         </div>
       </div>
     ),
@@ -414,24 +427,30 @@ function renderPageOG(p: URLSearchParams) {
 function renderDefaultOG() {
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: '1200px', height: '630px', display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          background: `linear-gradient(135deg, rgba(3, 13, 25, 0.62) 0%, rgba(5, 19, 35, 0.74) 52%, rgba(3, 13, 25, 0.86) 100%), url(${OG_BG_SRC}) center/cover no-repeat`,
-          fontFamily: 'monospace',
-        }}
-      >
-        <Logo size={100} />
-        <span style={{ color: '#e4e4e7', fontSize: '48px', fontWeight: 700, marginTop: '28px', marginBottom: '12px' }}>
-          Synapse Explorer
-        </span>
-        <span style={{ color: '#a1a1aa', fontSize: '24px' }}>
-          Synapse Agent Protocol — Real-time On-chain State
-        </span>
-        <span style={{ color: '#52525b', fontSize: '16px', marginTop: '28px' }}>
-          explorer.oobeprotocol.ai
-        </span>
+      <div style={{ ...ROOT_STYLE, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+        <Background overlayOpacity={0.7} />
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+          }}
+        >
+          <Logo size={120} />
+          <span style={{ color: '#e4e4e7', fontSize: '64px', fontWeight: 800, marginTop: '32px', marginBottom: '12px', letterSpacing: '0.04em' }}>
+            {BRAND_NAME}
+          </span>
+          <span style={{ color: '#9fb6cf', fontSize: '24px' }}>
+            Synapse Agent Protocol — Real-time On-chain State
+          </span>
+          <span style={{ color: '#52525b', fontSize: '16px', marginTop: '28px' }}>
+            explorer.oobeprotocol.ai
+          </span>
+        </div>
       </div>
     ),
     { width: 1200, height: 630 },
