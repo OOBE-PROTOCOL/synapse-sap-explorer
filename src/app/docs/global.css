@@ -235,7 +235,9 @@ div:has(> svg[id^="d"]) {
   line-height: 1.15 !important;
   font-weight: 700 !important;
   letter-spacing: -0.025em !important;
-  color: var(--fd-foreground) !important;
+  /* 20% primary tint blended with foreground — keeps the heading
+     readable while giving it the brand accent the user requested. */
+  color: color-mix(in srgb, var(--fd-primary) 20%, var(--fd-foreground)) !important;
   margin: 0 0 0.5rem !important;
   text-align: left !important;
   text-wrap: balance;
@@ -252,7 +254,9 @@ div:has(> svg[id^="d"]) {
 .fd-docs-root h1 ~ p:first-of-type {
   font-size: 1.0625rem !important;
   line-height: 1.6 !important;
-  color: var(--fd-muted-foreground) !important;
+  /* 20% primary tint blended with the muted foreground — keeps the
+     subtitle softer than the title but still on-brand. */
+  color: color-mix(in srgb, var(--fd-primary) 20%, var(--fd-muted-foreground)) !important;
   margin: 0 0 2rem !important;
   font-weight: 400 !important;
   text-align: left !important;
