@@ -30,27 +30,11 @@ export const baseOptions: BaseLayoutProps = {
     ),
     transparentMode: "top",
   },
+  // Navbar links are intentionally limited to external destinations only.
+  // CLI / SDK / Core / Examples / Skills are already first-class folders
+  // in the sidebar page tree — duplicating them here caused them to render
+  // twice on narrow viewports (once in the navbar mirror, once in the tree).
   links: [
-    {
-      text: "CLI",
-      url: "/docs/cli/overview",
-    },
-    {
-      text: "SDK",
-      url: "/docs/sdk/overview",
-    },
-    {
-      text: "Core",
-      url: "/docs/core/overview",
-    },
-    {
-      text: "Examples",
-      url: "/docs/examples/register-agent",
-    },
-    {
-      text: "Skills",
-      url: "/docs/skills",
-    },
     {
       text: "GitHub",
       url: "https://github.com/OOBE-PROTOCOL",
