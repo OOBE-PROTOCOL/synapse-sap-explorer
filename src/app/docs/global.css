@@ -550,49 +550,43 @@ aside#nd-sidebar-mobile p.inline-flex {
   background: color-mix(in srgb, var(--fd-muted-foreground) 25%, transparent);
 }
 
-/* Increase nesting indentation. fumadocs default offset is
-   calc(var(--spacing) * 2) at root and grows by * 3 per level
-   (8px -> 24px -> 36px). Visually too subtle on a dark column.
-   Bump root to 12px and per-level step to 20px so children of
-   an opened folder are obviously inset.
-
-   Also add a clearer vertical guide line on nested groups so
-   the parent/child relationship reads at a glance. */
-aside#nd-sidebar [data-radix-scroll-area-viewport] > *,
-aside#nd-sidebar-mobile [data-radix-scroll-area-viewport] > * {
-  --sidebar-item-offset: 0.75rem !important; /* 12px root */
+/* Nesting indentation.
+   fumadocs sets --sidebar-item-offset INLINE on each SidebarFolderContent,
+   which beats any external CSS override (custom-property cascade quirk).
+   So we override `padding-inline-start` directly per nesting depth.
+   No vertical guide line — the indentation alone communicates hierarchy. */
+[data-sidebar] a,
+[data-sidebar] button[data-state],
+aside#nd-sidebar a,
+aside#nd-sidebar button[data-state],
+aside#nd-sidebar-mobile a,
+aside#nd-sidebar-mobile button[data-state] {
+  padding-inline-start: 0.75rem !important; /* root: 12px */
 }
 
-/* Folder content: stronger left guide + bigger per-level step */
-[data-sidebar] [data-state="open"] > div[data-radix-collapsible-content],
-[data-sidebar] div[data-radix-collapsible-content] {
-  position: relative;
+[data-sidebar] div[data-radix-collapsible-content] a,
+[data-sidebar] div[data-radix-collapsible-content] button[data-state] {
+  padding-inline-start: 1.5rem !important; /* level 2: 24px */
 }
 
-[data-sidebar] div[data-radix-collapsible-content]::before {
-  content: "";
-  position: absolute;
-  inset-block: 0.25rem;
-  inset-inline-start: calc(var(--sidebar-item-offset, 0.75rem) - 0.375rem);
-  width: 1px;
-  background: color-mix(in srgb, var(--fd-muted-foreground) 22%, transparent);
+[data-sidebar] div[data-radix-collapsible-content]
+  div[data-radix-collapsible-content] a,
+[data-sidebar] div[data-radix-collapsible-content]
+  div[data-radix-collapsible-content] button[data-state] {
+  padding-inline-start: 2.25rem !important; /* level 3: 36px */
 }
 
-/* Force a generous step at every nested level so children land
-   clearly to the right of their parent folder trigger. */
-[data-sidebar] div[data-radix-collapsible-content] {
-  --sidebar-item-offset: 1.5rem !important; /* 24px level 2 */
-}
-[data-sidebar] div[data-radix-collapsible-content] div[data-radix-collapsible-content] {
-  --sidebar-item-offset: 2.25rem !important; /* 36px level 3 */
-}
-[data-sidebar] div[data-radix-collapsible-content] div[data-radix-collapsible-content] div[data-radix-collapsible-content] {
-  --sidebar-item-offset: 3rem !important; /* 48px level 4 */
+[data-sidebar] div[data-radix-collapsible-content]
+  div[data-radix-collapsible-content]
+  div[data-radix-collapsible-content] a,
+[data-sidebar] div[data-radix-collapsible-content]
+  div[data-radix-collapsible-content]
+  div[data-radix-collapsible-content] button[data-state] {
+  padding-inline-start: 3rem !important; /* level 4: 48px */
 }
 
 /* Item rows (links + folder triggers).
-   IMPORTANT: do NOT override padding — fumadocs uses
-   padding-inline-start: var(--sidebar-item-offset) for indentation. */
+   Padding-inline-start is set above per nesting depth. */
 [data-sidebar] a,
 [data-sidebar] button[data-state],
 aside#nd-sidebar a,

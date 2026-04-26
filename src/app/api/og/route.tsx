@@ -21,9 +21,6 @@ const OG_BG_SRC = `${SITE_URL}/og-bg.png`;
 const OG_LOGO_SRC = `${SITE_URL}/explorer_logo.png`;
 const BRAND_NAME = 'SAP EXPLORER';
 
-/* ── Inlined 64×64 Synapse logo as data-uri ── */
-// prettier-ignore
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get('type') ?? 'default';
