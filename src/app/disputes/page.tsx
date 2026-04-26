@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
+import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import Link from 'next/link';
 import {
   Swords,
@@ -139,8 +140,11 @@ function OutcomeFilter({
 
 export default function DisputesPage() {
   const { data, loading, error } = useDisputes();
-  const [search, setSearch] = useState('');
-  const [outcomeFilter, setOutcomeFilter] = useState<OutcomeKey | null>(null);
+  const [search, setSearch] = useQueryState('q', '', QueryParam.string);
+  const [outcomeFilter, setOutcomeFilter] = useQueryState<OutcomeKey | null>('outcome', null, {
+    parse: (raw) => (raw as OutcomeKey | null) ?? null,
+    serialize: (v) => v,
+  });
 
   const disputes = useMemo(() => data?.disputes ?? [], [data]);
 

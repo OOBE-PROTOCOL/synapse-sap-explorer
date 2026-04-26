@@ -14,6 +14,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { ExplorerPageShell, ExplorerMetric, ExplorerFilterBar, Skeleton, EmptyState, ProtocolBadge, ScoreRing, StatusBadge } from '~/components/ui';
+import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import type { FilterChip } from '~/components/ui/explorer-primitives';
 import { Card } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
@@ -30,9 +31,9 @@ export default function CapabilitiesPage() {
   const router = useRouter();
   const { data: graphData, loading: gLoading, error: graphError, refetch: refetchGraph } = useGraph();
   const { data: agentsData, loading: aLoading, error: agentsError, refetch: refetchAgents } = useAgents({ limit: '200' });
-  const [search, setSearch] = useState('');
-  const [protocolFilter, setProtocolFilter] = useState('all');
-  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [search, setSearch] = useQueryState('q', '', QueryParam.string);
+  const [protocolFilter, setProtocolFilter] = useQueryState('protocol', 'all', QueryParam.string);
+  const [ownerFilter, setOwnerFilter] = useQueryState('owner', 'all', QueryParam.string);
   const [sortKey, setSortKey] = useState<SortKey>('owners');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 

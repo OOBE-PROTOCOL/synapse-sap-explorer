@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Shield, ShieldCheck, Users, FileCheck } from 'lucide-react';
 import { ExplorerPageShell, ExplorerMetric, ExplorerFilterBar, Skeleton, EmptyState, Address, StatusBadge, ExplorerPagination, usePagination } from '~/components/ui';
+import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import type { FilterChip } from '~/components/ui/explorer-primitives';
 import { Card } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
@@ -18,8 +19,8 @@ export default function AttestationsPage() {
   const { data, loading, error } = useAttestations();
   const { data: agentsData } = useAgents({ limit: '100' });
   const { map: walletAgentMap } = useAgentMapCtx();
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
+  const [search, setSearch] = useQueryState('q', '', QueryParam.string);
+  const [typeFilter, setTypeFilter] = useQueryState('type', 'all', QueryParam.string);
   const [onlyActive, setOnlyActive] = useState(false);
 
   const enriched = useMemo(() => {

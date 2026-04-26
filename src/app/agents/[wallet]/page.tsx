@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink, Copy, Zap, Clock, TrendingUp, Shield, Activity, Loader2, DollarSign, Wallet, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, Package, HelpCircle } from 'lucide-react';
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking, useAgentMetaplex, useAgentNfts, useMetaplexRegistry } from '~/hooks/use-sap';
+import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import type { SapEvent, X402PaymentRow, X402Stats } from '~/hooks/use-sap';
 import { toast } from 'sonner';
 import { cn } from '~/lib/utils';
@@ -56,6 +57,16 @@ function safeDateStr(raw: string | number | null | undefined): string {
 }
 
 export default function AgentDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <AgentDetailInner />
+    </Suspense>
+  );
+}
+
+const AGENT_TABS = ['overview', 'revenue', 'tools', 'escrows', 'feedbacks', 'attestations', 'events', 'vault', 'x402', 'metaplex'] as const;
+
+function AgentDetailInner() {
   const { wallet } = useParams<{ wallet: string }>();
   const router = useRouter();
   const { data, loading, error } = useAgent(wallet);
@@ -73,7 +84,7 @@ export default function AgentDetailPage() {
   const { data: metaplexData, loading: metaplexLoading } = useAgentMetaplex(wallet);
   const { data: nftsData } = useAgentNfts(wallet);
   const { data: registryData, loading: registryLoading } = useMetaplexRegistry(wallet);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useQueryState('tab', 'overview' as typeof AGENT_TABS[number], QueryParam.enum('overview', AGENT_TABS));
   const [copied, setCopied] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState(false);
   const [resolveAttempted, setResolveAttempted] = useState(false);
@@ -886,7 +897,7 @@ export default function AgentDetailPage() {
             { value: 'metaplex', label: 'Metaplex', count: metaplexData?.linked ? 1 : 0 },
           ]}
           active={activeTab}
-          onChange={setActiveTab}
+          onChange={(v) => setActiveTab(v as typeof AGENT_TABS[number])}
         />
 
         <div className="rounded-lg rounded-tl-none border border-border/30 bg-card/60 p-4 sm:p-6 space-y-6 -mt-px">

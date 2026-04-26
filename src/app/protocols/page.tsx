@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useQueryState, QueryParam } from "~/hooks/use-query-state";
 import Link from "next/link";
 import {
   Layers,
@@ -64,12 +65,12 @@ export default function ProtocolsPage() {
     refetch: refetchAgents,
   } = useAgents({ limit: "200" });
 
-  const [search, setSearch] = useState("");
-  const [agentFilter, setAgentFilter] = useState("all");
-  const [activityFilter, setActivityFilter] = useState("all");
-  const [capabilityFilter, setCapabilityFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<SortKey>("agents");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [search, setSearch] = useQueryState("q", "", QueryParam.string);
+  const [agentFilter, setAgentFilter] = useQueryState("agent", "all", QueryParam.string);
+  const [activityFilter, setActivityFilter] = useQueryState("activity", "all", QueryParam.enum("all", ["all", "high", "medium", "low"] as const));
+  const [capabilityFilter, setCapabilityFilter] = useQueryState("caps", "all", QueryParam.enum("all", ["all", "with", "without"] as const));
+  const [sortKey, setSortKey] = useQueryState<SortKey>("sortKey", "agents", QueryParam.enum("agents", ["agents", "name", "caps"] as const));
+  const [sortDir, setSortDir] = useQueryState<SortDir>("sortDir", "desc", QueryParam.enum("desc", ["asc", "desc"] as const));
 
   const loading = gLoading || aLoading;
   const error = graphError || agentsError;
@@ -376,7 +377,7 @@ export default function ProtocolsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={activityFilter} onValueChange={setActivityFilter}>
+        <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
           <SelectTrigger className="h-8 w-36 text-xs bg-neutral-900 border-neutral-700 text-neutral-300">
             <SelectValue placeholder="All activity" />
           </SelectTrigger>
@@ -396,7 +397,7 @@ export default function ProtocolsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={capabilityFilter} onValueChange={setCapabilityFilter}>
+        <Select value={capabilityFilter} onValueChange={(v) => setCapabilityFilter(v as typeof capabilityFilter)}>
           <SelectTrigger className="h-8 w-44 text-xs bg-neutral-900 border-neutral-700 text-neutral-300">
             <SelectValue placeholder="Capabilities" />
           </SelectTrigger>

@@ -12,6 +12,7 @@ import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { ExplorerPageShell, ExplorerLiveDot, ExplorerFilterBar, ExplorerPagination, usePagination } from '~/components/ui';
+import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import { useAllEvents, type StreamEvent } from '~/hooks/use-sap';
 import { useAgentMapCtx } from '~/providers/sap-data-provider';
 import { AgentTag } from '~/components/ui/agent-tag';
@@ -273,8 +274,8 @@ function extractAmount(event: StreamEvent): { amount: string; symbol: string } |
 
 export default function EventsPage() {
   const [paused, setPaused] = useState(false);
-  const [catFilter, setCatFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useQueryState<string>('cat', 'all', QueryParam.string);
+  const [search, setSearch] = useQueryState('q', '', QueryParam.string);
   const { events: rawEvents, connected, loading: historyLoading } = useAllEvents();
   const { map: agentMap } = useAgentMapCtx();
   const eventsRef = useRef(rawEvents);

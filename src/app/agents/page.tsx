@@ -20,6 +20,7 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '~/components/ui/tooltip';
 import { useEnrichedAgents, type EnrichedAgent, type TokenBalance, type AgentStakeSummary } from '~/hooks/use-sap';
+import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import type { AgentWellKnown } from '~/lib/sap/well-known';
 import { fmtNum } from '~/lib/format';
 import { cn } from '~/lib/utils';
@@ -186,11 +187,18 @@ export default function AgentsPage() {
 }
 
 function AgentsInner() {
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState('health');
-  const [activeOnly, setActiveOnly] = useState(true);
-  const [mplOnly, setMplOnly] = useState(false);
-  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [search, setSearch] = useQueryState('q', '', QueryParam.string);
+  const [sortBy, setSortBy] = useQueryState(
+    'sort',
+    'health',
+    QueryParam.enum('health', ['health', 'reputation', 'balance', 'staking', 'capabilities'] as const),
+  );
+  const [activeOnly, setActiveOnly] = useQueryState('active', true, {
+    parse: (raw) => (raw == null ? true : raw !== '0' && raw !== 'false'),
+    serialize: (v) => (v ? null : '0'),
+  });
+  const [mplOnly, setMplOnly] = useQueryState('metaplex', false, QueryParam.bool);
+  const [view, setView] = useQueryState('view', 'grid', QueryParam.enum('grid', ['grid', 'list'] as const));
 
   const { data, loading, error } = useEnrichedAgents();
   const agents = useMemo(() => data?.agents ?? [], [data]);
@@ -289,7 +297,7 @@ function AgentsInner() {
         search={search}
         onSearch={setSearch}
         searchPlaceholder="Search by name, PDA, or wallet..."
-        sort={{ value: sortBy, options: SORT_OPTIONS, onChange: setSortBy }}
+        sort={{ value: sortBy, options: SORT_OPTIONS, onChange: (v) => setSortBy(v as typeof sortBy) }}
         filters={filterChips}
       >
         <Button

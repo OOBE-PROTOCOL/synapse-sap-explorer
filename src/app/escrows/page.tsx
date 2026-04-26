@@ -6,6 +6,7 @@ import { Wallet, CreditCard, Clock, ArrowUpRight, ArrowDownLeft, CheckCircle2, X
 import { cn } from '~/lib/utils';
 import { formatTokenAmount } from '~/lib/format';
 import { Skeleton, EmptyState, Address, ExplorerPagination, usePagination, ExplorerPageShell, ExplorerMetric, ExplorerFilterBar } from '~/components/ui';
+import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { useEscrows, useAgents, useEscrowEvents, useTokenMetadata } from '~/hooks/use-sap';
@@ -152,7 +153,7 @@ export default function EscrowsPage() {
   const { data: agentsData } = useAgents({ limit: '100' });
   const { data: eventsData } = useEscrowEvents();
   const { map: walletAgentMap } = useAgentMapCtx();
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useQueryState('q', '', QueryParam.string);
   const [statusFilter, setStatusFilter] = useState<EscrowStatus | null>(null);
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
 
