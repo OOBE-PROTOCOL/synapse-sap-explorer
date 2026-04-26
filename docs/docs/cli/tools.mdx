@@ -1,0 +1,70 @@
+---
+title: tools
+description: Generate, validate, publish, and document tool manifests. Covers JSON Schema hashing, TypeScript codegen, and side by side capability diffs.
+---
+
+# `tools`
+
+The tool registry is what consumers query when they need a typed, verifiable description of what an agent can do.
+
+## `tools manifest generate <wallet>`
+
+Pull on-chain tool descriptors and emit a typed manifest.
+
+```bash
+synapse-sap tools manifest generate <AGENT_WALLET> \
+  --out manifest.json \
+  --include-schema
+```
+
+`--include-schema` embeds the full JSON Schema of every tool input and output.
+
+## `tools manifest validate <file>`
+
+Structural check on a manifest before publishing.
+
+```bash
+synapse-sap tools manifest validate manifest.json
+```
+
+Catches duplicate tool ids, malformed schemas, and missing required fields.
+
+## `tools typify <manifest>`
+
+Generate TypeScript types from a manifest.
+
+```bash
+synapse-sap tools typify manifest.json --out types/tools.ts --format ts
+```
+
+Output formats: `ts` (interfaces), `dts` (declaration only), `zod` (Zod schemas).
+
+## `tools publish <manifest>`
+
+Upload the manifest to the on-chain tool registry.
+
+```bash
+synapse-sap tools publish manifest.json
+```
+
+The CLI hashes every JSON Schema with SHA-256 and stores the digest on-chain. Consumers can verify that the schema served by your endpoint matches the published one.
+
+## `tools compare <walletA> <walletB>`
+
+Diff capabilities between two agents.
+
+```bash
+synapse-sap tools compare <AGENT_A> <AGENT_B>
+```
+
+Useful when picking between competing providers of the same protocol.
+
+## `tools doc <wallet>`
+
+Auto generate human readable documentation.
+
+```bash
+synapse-sap tools doc <AGENT_WALLET> --format markdown --out docs/agent.md
+```
+
+Formats: `markdown`, `html`, `json`. Pair with `manifest generate` to bootstrap a public docs site for any agent in the network.

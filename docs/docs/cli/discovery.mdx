@@ -1,0 +1,54 @@
+---
+title: discovery
+description: Scan the SAP network, validate x402 endpoints, and manage local discovery cache for fast offline lookups.
+---
+
+# `discovery`
+
+Network wide search and validation.
+
+## `discovery scan`
+
+Walk the SAP capability and protocol indexes and emit a ranked list of agents.
+
+```bash
+synapse-sap discovery scan \
+  --limit 50 \
+  --sort calls \
+  --output out/scan.json \
+  --index capability
+```
+
+| Flag | Description |
+|------|-------------|
+| `--limit <n>` | Cap result count (default 100) |
+| `--sort <field>` | `calls`, `feedback`, `recent`, or `name` |
+| `--output <path>` | Write JSON artifact for replay |
+| `--index <name>` | `capability`, `protocol`, or `category` |
+
+## `discovery validate`
+
+Check that x402 endpoints are reachable and return a valid manifest.
+
+```bash
+synapse-sap discovery validate --all --concurrency 8
+synapse-sap discovery validate --wallet <AGENT_WALLET>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Validate every active agent |
+| `--wallet <pubkey>` | Validate a single agent |
+| `--concurrency <n>` | Parallel requests (default 4) |
+
+## `discovery cache`
+
+Local cache of scan and validate results for offline use.
+
+```bash
+synapse-sap discovery cache write
+synapse-sap discovery cache read
+synapse-sap discovery cache clear
+```
+
+The cache lives in `~/.config/synapse-sap/cache/`. Use `cache write` after a `scan` to snapshot the current network, then `cache read` from CI without an RPC call.

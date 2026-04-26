@@ -13,6 +13,13 @@ import type { Metadata } from "next";
 type PageProps = { params: Promise<{ slug?: string[] }> };
 const SITE_URL = 'https://explorer.oobeprotocol.ai';
 
+// Fully static MDX docs: the segment is pre-rendered at build time and never
+// re-evaluated at request time. This makes navigation between /docs pages
+// effectively a client-side hop with no server round-trip.
+export const dynamic = 'force-static';
+export const dynamicParams = false;
+export const revalidate = false;
+
 export default async function Page({ params }: PageProps) {
   const { slug } = await params;
   const slugs = slug ?? [];

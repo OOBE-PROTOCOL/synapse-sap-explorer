@@ -1,0 +1,50 @@
+---
+title: config
+description: Inspect, edit, and reset the merged CLI configuration with type aware coercion and secure storage.
+---
+
+# `config`
+
+The CLI configuration is a layered object: defaults, then file, then env, then flags. Every command resolves the merged view.
+
+## `config show`
+
+```bash
+synapse-sap config show
+synapse-sap config show --raw   # file only, no env or defaults
+```
+
+## `config set <key> <value>`
+
+Type aware setter. Values are coerced to boolean, number, or string based on the key.
+
+```bash
+synapse-sap config set rpcUrl "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=KEY"
+synapse-sap config set retries 3
+synapse-sap config set debug true
+```
+
+## `config edit`
+
+Open the config file in `$EDITOR`.
+
+```bash
+EDITOR=code synapse-sap config edit
+```
+
+## `config reset`
+
+```bash
+synapse-sap config reset --confirm
+```
+
+Drops the file back to defaults. Env and flags still apply.
+
+## `config path`
+
+```bash
+synapse-sap config path
+# /Users/me/.config/synapse-sap/config.json
+```
+
+Use this when you need to back up or sync the config across machines.

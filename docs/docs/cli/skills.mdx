@@ -1,0 +1,113 @@
+---
+title: Skills (Agent Guide)
+description: Machine readable manifest that lets autonomous agents drive the Synapse SAP CLI. Maps user intents to commands, flags, and reference docs.
+---
+
+# CLI Skills
+
+This page is the **operational manifest** for autonomous agents that need to drive `synapse-sap` from natural language. Every entry maps a user intent to a command, the required flags, and the canonical reference doc.
+
+If you are a human, read [Quickstart](/docs/cli/quickstart) instead. This page is optimized for LLM grounding.
+
+## Identity
+
+| Field | Value |
+|-------|-------|
+| Tool name | `synapse-sap` |
+| Package | `@oobe-protocol-labs/synapse-sap-cli` |
+| Runtime | Node.js >= 18.17 |
+| Auth | OOBE Protocol API key in `--rpc-url ?api_key=` |
+| Source of truth | This page plus the per command reference under `/docs/cli/*` |
+
+## Decision rules
+
+1. **Read before write.** `agent info`, `escrow dump`, `discovery scan` are always safe. State mutating commands (`agent register`, `escrow open`, `x402 settle`) require `--simulate` first on mainnet.
+2. **Always `doctor run` first.** If the user reports any failure, run `doctor run --json` and act on the failed checks before guessing.
+3. **Prefer manifest form.** When registering an agent or publishing tools, build a JSON manifest and pass `--manifest`. Inline flags are for ad hoc tasks only.
+4. **Use `--json` in scripts.** Never parse human formatted output. Pipe to `jq` for filtering.
+5. **Persist artifacts.** Use `--save` on every paid call so the user can replay or audit later.
+
+## Intent to command map
+
+### Setup and diagnosis
+
+| User intent | Command | Reference |
+|-------------|---------|-----------|
+| Set up a new machine | `synapse-sap env init --template devnet && synapse-sap doctor run` | [installation](/docs/cli/installation) |
+| Verify environment | `synapse-sap env check` | [env](/docs/cli/env) |
+| Diagnose a failure | `synapse-sap doctor run --json` | [doctor](/docs/cli/doctor) |
+| Generate a keypair | `synapse-sap env keypair generate --out keys/agent.json` | [env](/docs/cli/env) |
+
+### Agent lifecycle
+
+| User intent | Command | Reference |
+|-------------|---------|-----------|
+| Register an agent | `synapse-sap agent register --manifest agent.json --simulate` then drop `--simulate` | [agent](/docs/cli/agent) |
+| Find agents by capability | `synapse-sap agent list --capability <id> --json` | [agent](/docs/cli/agent) |
+| Inspect an agent | `synapse-sap agent info <wallet> --fetch-tools --fetch-endpoints` | [agent](/docs/cli/agent) |
+| Health probe | `synapse-sap agent health <wallet> --retries 3` | [agent](/docs/cli/agent) |
+
+### Discovery
+
+| User intent | Command | Reference |
+|-------------|---------|-----------|
+| Scan the network | `synapse-sap discovery scan --limit 100 --output out/scan.json` | [discovery](/docs/cli/discovery) |
+| Validate all endpoints | `synapse-sap discovery validate --all --concurrency 8` | [discovery](/docs/cli/discovery) |
+
+### Escrow and payments
+
+| User intent | Command | Reference |
+|-------------|---------|-----------|
+| Open an escrow | `synapse-sap escrow open <wallet> --token sol --deposit <amount>` | [escrow](/docs/cli/escrow) |
+| Make a paid call | `synapse-sap x402 call <wallet> <tool> --args '<json>' --save out/call.json` | [x402](/docs/cli/x402) |
+| Verify a settlement | `synapse-sap x402 verify <signature>` | [x402](/docs/cli/x402) |
+| Replay a saved call | `synapse-sap x402 replay <artifact>` | [x402](/docs/cli/x402) |
+| Monitor escrow | `synapse-sap escrow monitor <wallet>` | [escrow](/docs/cli/escrow) |
+
+### Tools and manifests
+
+| User intent | Command | Reference |
+|-------------|---------|-----------|
+| Generate a tool manifest | `synapse-sap tools manifest generate <wallet> --out manifest.json --include-schema` | [tools](/docs/cli/tools) |
+| Validate a manifest | `synapse-sap tools manifest validate manifest.json` | [tools](/docs/cli/tools) |
+| Generate TS types | `synapse-sap tools typify manifest.json --out types/tools.ts` | [tools](/docs/cli/tools) |
+| Publish manifest | `synapse-sap tools publish manifest.json` | [tools](/docs/cli/tools) |
+
+## Output contract
+
+Every command supports `--json`. JSON output is the **source of truth** for agents. Shape:
+
+```json
+{
+  "ok": true,
+  "command": "agent.info",
+  "data": { "...": "..." },
+  "warnings": [],
+  "elapsedMs": 412
+}
+```
+
+On failure:
+
+```json
+{
+  "ok": false,
+  "command": "agent.register",
+  "error": { "code": "VALIDATION", "message": "...", "field": "name" },
+  "elapsedMs": 12
+}
+```
+
+## Hard rules for agents
+
+1. Never hard code an API key. Read from env or pass `--rpc-url` containing the key.
+2. Never skip `--simulate` on mainnet for state mutating commands unless the user has explicitly approved it in the same turn.
+3. Always pass `--save` on `x402 call` so the user has an artifact for audit and replay.
+4. Always check `ok` in JSON output before reporting success.
+5. If `doctor run` fails, surface the failed check verbatim and refuse to proceed.
+
+## Cross references
+
+- [SDK overview](/docs/sdk/overview) for programmatic equivalents.
+- [Core architecture](/docs/core/architecture) for the on-chain model.
+- [Best practices: error handling](/docs/best-practices/error-handling) for failure modes.

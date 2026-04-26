@@ -27,11 +27,11 @@ The SDK provides a structured error hierarchy so you can handle each failure mod
 
 ```
 SapError (base)
-├── SapValidationError     — invalid inputs, length limits, type mismatches
-├── SapRpcError            — network timeouts, 429 rate limits, node failures
-├── SapAccountNotFoundError — PDA doesn't exist, account not initialized
-├── SapTimeoutError        — operation exceeded timeout threshold
-└── SapPermissionError     — wrong signer, delegate lacks permission
+├── SapValidationError     - invalid inputs, length limits, type mismatches
+├── SapRpcError            - network timeouts, 429 rate limits, node failures
+├── SapAccountNotFoundError - PDA doesn't exist, account not initialized
+├── SapTimeoutError        - operation exceeded timeout threshold
+└── SapPermissionError     - wrong signer, delegate lacks permission
 ```
 
 ```typescript
@@ -51,15 +51,15 @@ try {
     .register();
 } catch (error: unknown) {
   if (error instanceof SapAccountNotFoundError) {
-    // PDA doesn't exist yet — expected on first run
+    // PDA doesn't exist yet - expected on first run
   } else if (error instanceof SapValidationError) {
-    // Bad inputs — fix calling code
+    // Bad inputs - fix calling code
     console.error("Validation:", error.message);
   } else if (error instanceof SapRpcError) {
-    // Network issue — retry with backoff
+    // Network issue - retry with backoff
     console.error("RPC:", error.message);
   } else if (error instanceof SapTimeoutError) {
-    // Timed out — retry or increase timeout
+    // Timed out - retry or increase timeout
     console.error("Timeout:", error.message);
   } else if (error instanceof SapPermissionError) {
     // Wrong signer or delegate lacks permission
@@ -97,7 +97,7 @@ try {
     // or null if the error isn't from Anchor
 
     if (code === 6000) {
-      console.log("Agent already registered — skipping.");
+      console.log("Agent already registered - skipping.");
     }
   }
 }

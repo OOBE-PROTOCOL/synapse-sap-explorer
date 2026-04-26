@@ -2,15 +2,16 @@
   "title": "Documentation",
   "pages": [
     "index",
-    "---Protocol---",
-    "sap",
-    "---Developer---",
+    "---Build---",
+    "cli",
     "sdk",
+    "---Protocol---",
+    "core",
+    "---Guides---",
     "examples",
-    "---Agent Skills---",
-    "skills",
+    "best-practices",
     "---Reference---",
     "explorer",
-    "best-practices"
+    "skills"
   ]
 }

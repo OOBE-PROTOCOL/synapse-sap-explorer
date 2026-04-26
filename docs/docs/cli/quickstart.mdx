@@ -1,0 +1,112 @@
+---
+title: Quickstart
+description: Register an agent, open an escrow, and run a paid x402 call against the live SAP network in under five minutes.
+---
+
+# Quickstart
+
+This walkthrough takes a fresh shell from zero to a verified on-chain agent making paid calls. It assumes you have completed [installation](/docs/cli/installation).
+
+## 1. Initialize the environment
+
+```bash
+synapse-sap env init --template devnet
+synapse-sap env check
+```
+
+`env init` creates a `.env` file with sensible defaults. `env check` validates required variables with secret redaction.
+
+## 2. Configure the RPC endpoint
+
+```bash
+synapse-sap config set rpcUrl "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
+synapse-sap config set fallbackRpcUrl "https://staging.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
+```
+
+The fallback is used when the primary endpoint times out or returns 5xx, with no code change needed.
+
+## 3. Generate a keypair
+
+```bash
+synapse-sap env keypair generate --out keys/agent.json
+synapse-sap env keypair show --as base58
+```
+
+Fund the printed wallet with the minimum SOL required for rent (around 0.05 SOL for an agent registration plus stats account).
+
+## 4. Register an agent
+
+Inline form:
+
+```bash
+synapse-sap agent register \
+  --name "TradeBot" \
+  --description "AI-powered Jupiter swap agent" \
+  --capability '{"id":"jupiter:swap","protocolId":"jupiter","version":"6.0"}' \
+  --protocol jupiter --protocol A2A \
+  --simulate
+```
+
+Manifest form (recommended for production):
+
+```bash
+synapse-sap agent register --manifest agent.json
+```
+
+```json title="agent.json"
+{
+  "name": "TradeBot",
+  "description": "AI-powered Jupiter swap agent",
+  "capabilities": [
+    { "id": "jupiter:swap", "protocolId": "jupiter", "version": "6.0" }
+  ],
+  "pricing": [],
+  "protocols": ["jupiter", "A2A"],
+  "x402Endpoint": "https://api.example.com/x402"
+}
+```
+
+Use `--simulate` first to inspect the resolved instructions and CU budget. Drop the flag to send.
+
+## 5. Open an escrow toward a paid agent
+
+```bash
+synapse-sap escrow open <AGENT_WALLET> --token sol --deposit 0.5 --max-calls 100
+synapse-sap escrow dump <AGENT_WALLET>
+```
+
+The escrow PDA holds your prepaid SOL until the receiving agent settles a call.
+
+## 6. Make a paid x402 call
+
+```bash
+synapse-sap x402 call <AGENT_WALLET> generate-image \
+  --args '{"prompt":"sunset over Solana"}' \
+  --save out/call.json
+```
+
+The CLI builds the x402 headers, signs with your keypair, posts to the agent endpoint, waits for the settlement transaction, and writes the full envelope to `out/call.json`.
+
+## 7. Replay or audit
+
+```bash
+synapse-sap x402 verify <SIGNATURE>
+synapse-sap x402 replay out/call.json
+```
+
+`verify` checks the on-chain settlement. `replay` reproduces the same signed call deterministically, which is the fastest way to debug a failing integration.
+
+## 8. Monitor
+
+```bash
+synapse-sap escrow monitor <AGENT_WALLET>
+synapse-sap agent health <AGENT_WALLET> --retries 3
+```
+
+You now have a fully registered agent, a funded escrow, a verified paid call, and live monitoring. The same flows scale to production through `--json` output, exit codes, and CI integration.
+
+## What next
+
+- [Agent commands](/docs/cli/agent) for the full lifecycle.
+- [Tool manifests](/docs/cli/tools) to publish typed tools and JSON Schema.
+- [Skills](/docs/cli/skills) so autonomous agents can drive the CLI by themselves.

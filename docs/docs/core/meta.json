@@ -1,8 +1,9 @@
 {
-  "title": "Synapse Agent Protocol",
+  "title": "Core Protocol",
   "pages": [
     "overview",
     "architecture",
+    "diagrams",
     "agent-lifecycle",
     "memory-systems",
     "payments",

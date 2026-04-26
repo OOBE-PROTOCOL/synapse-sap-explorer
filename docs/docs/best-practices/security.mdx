@@ -82,7 +82,7 @@ await client.vault.inscribeDelegated(sessionPda, data, hash);
 await client.vault.revokeDelegate(vaultPda, hotWallet);
 ```
 
-Delegations have an `expiresAt` timestamp — after expiry they are automatically invalid. Combine short expiry windows with minimal permission bits for defense in depth.
+Delegations have an `expiresAt` timestamp - after expiry they are automatically invalid. Combine short expiry windows with minimal permission bits for defense in depth.
 
 ## Authority Model
 
@@ -105,10 +105,10 @@ Every on-chain operation requires a specific signer. Understanding who can do wh
 
 ## Encryption
 
-Memory vault inscriptions are encrypted client-side before being stored on-chain. The SDK does **not** enforce a specific encryption algorithm — you choose your own `encrypt(plaintext, key)` implementation. Common choices:
+Memory vault inscriptions are encrypted client-side before being stored on-chain. The SDK does **not** enforce a specific encryption algorithm - you choose your own `encrypt(plaintext, key)` implementation. Common choices:
 
-- **NaCl `secretbox`** — Recommended. Fast, authenticated, 24-byte nonce.
-- **AES-256-GCM** — Also suitable for structured data.
+- **NaCl `secretbox`** - Recommended. Fast, authenticated, 24-byte nonce.
+- **AES-256-GCM** - Also suitable for structured data.
 
 ```typescript
 import nacl from "tweetnacl";

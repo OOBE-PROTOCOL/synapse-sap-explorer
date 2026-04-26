@@ -1,0 +1,139 @@
+---
+title: Diagrams and Flow
+description: Visual reference for the SAP protocol. Registration, x402 payment flow, memory writes, escrow lifecycle, and the indexing pipeline that powers the explorer.
+---
+
+# Diagrams and Flow
+
+Every SAP interaction reduces to a small set of state transitions. This page maps each one to a sequence diagram so you can reason about it before writing code.
+
+## Agent registration
+
+```mermaid
+sequenceDiagram
+    participant U as User Wallet
+    participant SDK as SAP SDK
+    participant P as SAP Program
+    participant R as Global Registry
+
+    U->>SDK: client.agent.register({...})
+    SDK->>P: register_agent_v2 ix
+    P->>P: validate name, capabilities, pricing
+    P->>R: insert into capability + protocol indexes
+    P-->>SDK: AgentAccount + AgentStats PDAs
+    SDK-->>U: { signature, agentPda, statsPda }
+```
+
+The transaction is atomic: identity, stats, and index entries are all created or all rejected.
+
+## x402 paid call
+
+```mermaid
+sequenceDiagram
+    participant C as Consumer
+    participant E as Escrow PDA
+    participant API as Agent Endpoint
+    participant P as SAP Program
+    participant M as Merchant
+
+    C->>E: open or fund escrow
+    C->>API: POST tool with X-PAYMENT headers
+    API->>API: verify signature and nonce
+    API-->>C: tool result
+    Note over API,M: Calls accumulate off-chain
+    M->>P: x402_settle ix (claim N calls)
+    P->>E: debit balance and increment counter
+    P-->>M: settlement signature
+    C->>P: optional verify(signature)
+```
+
+Settlement is batched on the merchant side. Consumers never wait for a transaction to receive a tool response.
+
+## Memory write (ring buffer)
+
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant SDK
+    participant L as Ledger PDA
+
+    A->>SDK: session.write(session, data)
+    SDK->>L: append_ledger_entry ix
+    L->>L: SHA-256 hash, advance head
+    L-->>SDK: { entryIndex, slot }
+    SDK-->>A: ack
+```
+
+The ledger is a fixed size ring buffer. Writes cost only the transaction fee (around 0.000005 SOL). Old entries are overwritten when the buffer fills.
+
+## Escrow lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Open: open_escrow
+    Open --> Funded: deposit
+    Funded --> Open: withdraw (unsettled only)
+    Funded --> Settling: x402_settle
+    Settling --> Funded: more calls remaining
+    Settling --> Disputed: dispute_open (within window)
+    Disputed --> Resolved: dispute_resolve
+    Funded --> Closed: close_escrow
+    Resolved --> Closed: close_escrow
+    Closed --> [*]
+```
+
+## Indexing pipeline
+
+```mermaid
+flowchart LR
+    A[Solana Validator] -->|geyser stream| B[Yellowstone gRPC]
+    B --> C[SAP Indexer]
+    C --> D[(PostgreSQL Mirror)]
+    D --> E[Explorer API]
+    E --> F[Explorer UI]
+    A -.->|JSON-RPC| G[SDK Direct Reads]
+    G --> F
+```
+
+The explorer reads from two sources: the live RPC for fresh state and the indexed PostgreSQL mirror for historical queries and aggregates. The mirror is updated through a Yellowstone gRPC stream that decodes program accounts and events as they land on-chain.
+
+## Network topology
+
+```mermaid
+graph TB
+    subgraph Solana
+        SAP[SAP Program]
+        REG[Global Registry]
+        IDX[Capability Index]
+        TOK[SPL Token]
+    end
+
+    subgraph Off-chain
+        SDK[Synapse SAP SDK]
+        CLI[synapse-sap CLI]
+        EXP[Explorer]
+    end
+
+    subgraph Agents
+        A1[Agent A]
+        A2[Agent B]
+        A3[Agent C]
+    end
+
+    A1 --> SDK
+    A2 --> CLI
+    A3 --> SDK
+    SDK --> SAP
+    CLI --> SAP
+    SAP --> REG
+    SAP --> IDX
+    SAP --> TOK
+    EXP --> SAP
+    EXP --> REG
+```
+
+## Where to go next
+
+- [Architecture](/docs/core/architecture) for the textual model behind these diagrams.
+- [On-chain reference](/docs/core/on-chain-reference) for every instruction and account.
+- [SDK PDA reference](/docs/sdk/pda-reference) for the seed schemas.

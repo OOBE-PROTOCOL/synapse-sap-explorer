@@ -1,0 +1,54 @@
+---
+title: doctor
+description: Eight point diagnostic check covering Node, SDK, env vars, keypair, RPC latency, fallback RPC, SAP program, and disk. Run before deploys and after upgrades.
+---
+
+# `doctor`
+
+When something goes wrong, run `doctor` first.
+
+## `doctor run`
+
+```bash
+synapse-sap doctor run
+synapse-sap doctor run --quick     # skip latency probes
+synapse-sap doctor run --save out/doctor.json
+```
+
+The check covers eight areas:
+
+| Check | What it verifies |
+|-------|------------------|
+| Node version | Matches the supported range (>= 18.17) |
+| SDK version | Compatible with the CLI (`@oobe-protocol-labs/synapse-sap-sdk` peer range) |
+| Environment | All required `.env` variables present and non empty |
+| Keypair | File exists, has 0600 permissions, parses to a valid 64 byte secret |
+| RPC reachability | Primary endpoint responds within timeout, with measured latency |
+| Fallback RPC | Secondary endpoint responds and returns the same slot |
+| SAP program | Program account exists at `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` |
+| Disk space | At least 100 MB free for artifacts, cache, and logs |
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | All checks passed |
+| 1 | One or more warnings |
+| 2 | One or more failures (CI should treat as fatal) |
+
+## Output shapes
+
+Human readable table by default. Machine output via `--json`:
+
+```bash
+synapse-sap doctor run --json | jq '.checks[] | select(.status != "ok")'
+```
+
+Each check is `{ id, label, status, detail, durationMs }`. Use this in CI to fail fast and surface the precise failure reason in the build log.
+
+## When to run
+
+- Before the first command on a new machine.
+- After upgrading the CLI or the SDK.
+- As part of a CI pipeline before any state mutating step.
+- During incident response, before assuming the bug is in your code.

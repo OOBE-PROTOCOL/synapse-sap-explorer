@@ -254,7 +254,7 @@ await client.escrow.create(agentWallet, {
 ```typescript
 import { deriveAgent, deriveEscrow } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 
-// All PDA derivations are pure math — no network calls.
+// All PDA derivations are pure math - no network calls.
 // Given any wallet addresses, you can compute the escrow PDA offline.
 const [agentPda] = deriveAgent(agentWallet);        // ["sap_agent", wallet]
 const [escrowPda] = deriveEscrow(agentPda, depositorWallet); // ["sap_escrow", agent, depositor]
@@ -266,7 +266,7 @@ V2 escrows introduce three critical upgrades over V1:
 
 ### Settlement Security Modes
 
-V1 escrows used a trust-the-agent model — the agent could settle any number of calls unilaterally. V2 escrows enforce settlement validation at the protocol level:
+V1 escrows used a trust-the-agent model - the agent could settle any number of calls unilaterally. V2 escrows enforce settlement validation at the protocol level:
 
 | Mode | How It Works | Best For |
 |------|-------------|----------|
@@ -325,7 +325,7 @@ await client.escrowV2.migrateFromV1(agentWallet);
 
 ## Staking (v0.7.0)
 
-Agent staking is a collateral mechanism — not yield farming. Staked SOL acts as a trust signal and can be slashed if the agent loses disputes.
+Agent staking is a collateral mechanism - not yield farming. Staked SOL acts as a trust signal and can be slashed if the agent loses disputes.
 
 | Constant | Value | Description |
 |----------|-------|-------------|
@@ -364,7 +364,7 @@ await client.subscription.create(agentWallet, {
 ## Deprecation Notice
 
 <Callout type="error">
-**V1 Escrow (`client.escrow`) — Deprecated in v0.7.0**
+**V1 Escrow (`client.escrow`) - Deprecated in v0.7.0**
 
 V1 escrows lack settlement security, dispute resolution, and staking. They remain functional for backward compatibility but should not be used for new integrations.
 

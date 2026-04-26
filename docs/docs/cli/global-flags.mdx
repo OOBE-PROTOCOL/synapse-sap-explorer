@@ -1,0 +1,44 @@
+---
+title: Global Flags
+description: Flags that apply to every synapse-sap command. Network selection, output format, dry runs, and verbosity.
+---
+
+# Global flags
+
+These flags work on every command and resolve before the subcommand handler runs.
+
+| Flag | Type | Default | Effect |
+|------|------|---------|--------|
+| `--rpc-url <url>` | string | from config | Override the primary RPC endpoint for this invocation |
+| `--fallback-rpc-url <url>` | string | from config | Override the fallback endpoint |
+| `--keypair <path>` | string | from config | Override the signer keypair file |
+| `--network <name>` | string | `mainnet-beta` | `mainnet-beta`, `devnet`, or `localnet` |
+| `--commitment <level>` | string | `confirmed` | `processed`, `confirmed`, or `finalized` |
+| `--simulate` | bool | false | Resolve and print instructions without sending the transaction |
+| `--json` | bool | false | Emit machine readable JSON to stdout |
+| `--quiet` | bool | false | Suppress non error output |
+| `--verbose` | bool | false | Print detailed traces, timings, and decoded accounts |
+| `--no-color` | bool | false | Disable ANSI color codes |
+| `--timeout <ms>` | number | 30000 | Per request timeout |
+| `--retries <n>` | number | 3 | Retry budget on transient errors |
+| `--config <path>` | string | `~/.config/synapse-sap/config.json` | Load an alternate config file |
+
+## Resolution order
+
+1. Built in defaults
+2. Config file (`config show --raw`)
+3. Environment variables (see [env](/docs/cli/env))
+4. CLI flags (highest priority)
+
+## Examples
+
+```bash
+# Force the EU endpoint just for this call
+synapse-sap agent list --rpc-url "https://staging.oobeprotocol.ai/rpc?api_key=KEY"
+
+# JSON pipeline into jq
+synapse-sap discovery scan --limit 200 --json | jq '.[] | .wallet'
+
+# Preflight without sending
+synapse-sap escrow open <WALLET> --token sol --deposit 0.5 --simulate
+```

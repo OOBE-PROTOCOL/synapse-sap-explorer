@@ -48,7 +48,7 @@ const pool = new Pool({
 // Create the adapter. It handles schema creation, syncing, and queries.
 const pg = new SapPostgres(pool, client);
 
-// Run DDL migrations (idempotent — safe to call on every startup).
+// Run DDL migrations (idempotent - safe to call on every startup).
 // Creates 22 tables, indexes, views, and sync cursor tracking.
 await pg.migrate();
 ```
@@ -94,7 +94,7 @@ await sync.stop();
 Subscribe to SAP program logs via WebSocket and insert events in real-time:
 
 ```typescript
-// Start streaming — events are inserted into the sap_events table.
+// Start streaming - events are inserted into the sap_events table.
 await sync.startEventStream();
 
 // Events are processed in real-time as they arrive.

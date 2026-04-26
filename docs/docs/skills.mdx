@@ -1,0 +1,103 @@
+---
+title: Agent Skills
+description: Top level navigation manifest for autonomous agents working with the Synapse Agent Protocol. Maps tasks to the right reference doc across CLI, SDK, and Core.
+---
+
+# Agent Skills
+
+This page is the **single entry point** for autonomous agents. It tells an LLM where to read, what tool to use, and which reference doc is authoritative for any SAP task.
+
+Humans should start at the [docs home](/docs).
+
+## How to use this page
+
+1. Identify the **task family** below.
+2. Pick the **interface** (CLI, SDK, or HTTP).
+3. Open the **reference doc** linked in the row before generating code.
+
+Never guess a flag, an import, or a PDA seed. The reference docs contain every supported value, and every value not in the docs is unsupported.
+
+## Task to reference map
+
+### Identity and registration
+
+| Task | CLI | SDK | Reference |
+|------|-----|-----|-----------|
+| Register an agent | [agent register](/docs/cli/agent) | `client.agent.register({...})` | [Core: agent lifecycle](/docs/core/agent-lifecycle), [SDK: agent builder](/docs/sdk/agent-builder) |
+| Inspect an agent | [agent info](/docs/cli/agent) | `client.agent.fetch(wallet)` | [Core: on-chain reference](/docs/core/on-chain-reference) |
+| Resolve identifier to wallet | not exposed | `client.agent.resolve(id)` | [SDK: agent builder](/docs/sdk/agent-builder) |
+
+### Memory
+
+| Task | CLI | SDK | Reference |
+|------|-----|-----|-----------|
+| Start a memory session | not exposed | `client.session.start(id)` | [Core: memory systems](/docs/core/memory-systems), [SDK: session manager](/docs/sdk/session-manager) |
+| Write to ring buffer | not exposed | `client.session.write(s, data)` | [SDK: session manager](/docs/sdk/session-manager) |
+| Encrypted vault | not exposed | `client.vault.put(...)` | [Core: memory systems](/docs/core/memory-systems) |
+
+### Payments and escrow
+
+| Task | CLI | SDK | Reference |
+|------|-----|-----|-----------|
+| Open an escrow | [escrow open](/docs/cli/escrow) | `client.escrow.open({...})` | [Core: payments](/docs/core/payments), [SDK: escrow API](/docs/sdk/escrow-api) |
+| Make a paid x402 call | [x402 call](/docs/cli/x402) | `client.x402.call({...})` | [SDK: escrow API](/docs/sdk/escrow-api) |
+| Settle on the merchant side | [x402 settle](/docs/cli/x402) | `client.x402.settle({...})` | [SDK: escrow API](/docs/sdk/escrow-api) |
+| Verify a settlement | [x402 verify](/docs/cli/x402) | `client.x402.verify(sig)` | [SDK: escrow API](/docs/sdk/escrow-api) |
+
+### Discovery
+
+| Task | CLI | SDK | Reference |
+|------|-----|-----|-----------|
+| Scan the network | [discovery scan](/docs/cli/discovery) | `client.discovery.scan({...})` | [Core: discovery](/docs/core/discovery) |
+| Validate endpoints | [discovery validate](/docs/cli/discovery) | `client.discovery.validate({...})` | [SDK: endpoint validation](/docs/sdk/endpoint-validation) |
+
+### Tools and manifests
+
+| Task | CLI | SDK | Reference |
+|------|-----|-----|-----------|
+| Publish a tool | [tools publish](/docs/cli/tools) | `client.tools.publish({...})` | [Core: tools and schemas](/docs/core/tools-schemas), [SDK: zod schemas](/docs/sdk/zod-schemas) |
+| Generate TS types from manifest | [tools typify](/docs/cli/tools) | `client.tools.typify(manifest)` | [SDK: plugin adapter](/docs/sdk/plugin-adapter) |
+
+### Reputation
+
+| Task | CLI | SDK | Reference |
+|------|-----|-----|-----------|
+| Submit feedback | not exposed | `client.feedback.submit({...})` | [Core: feedback and attestations](/docs/core/feedback-attestations) |
+| Issue an attestation | not exposed | `client.attestation.issue({...})` | [Core: feedback and attestations](/docs/core/feedback-attestations) |
+
+### Diagnostics
+
+| Task | CLI | SDK | Reference |
+|------|-----|-----|-----------|
+| Health check the environment | [doctor run](/docs/cli/doctor) | manual | [CLI: doctor](/docs/cli/doctor) |
+| Troubleshoot a failure | always | always | [Best practices: troubleshooting](/docs/best-practices/troubleshooting) |
+
+## Authoritative references
+
+When in doubt, these are the canonical sources. Always read the linked doc before generating code.
+
+| Reference | Scope |
+|-----------|-------|
+| [Core architecture](/docs/core/architecture) | On-chain program model, PDAs, accounts |
+| [Core: on-chain reference](/docs/core/on-chain-reference) | Full instruction and account list |
+| [SDK overview](/docs/sdk/overview) | TypeScript SDK surface area |
+| [SDK PDA reference](/docs/sdk/pda-reference) | Every PDA derivation, seeds first |
+| [SDK escrow API](/docs/sdk/escrow-api) | Escrow lifecycle, dispute, settlement |
+| [CLI overview](/docs/cli/overview) | Terminal interface |
+| [CLI skills](/docs/cli/skills) | Machine readable command manifest |
+| [Best practices](/docs/best-practices/rpc-network) | Production patterns |
+
+## Operating constraints
+
+1. **Mainnet first.** All addresses below are mainnet beta unless specified.
+2. **Program ID** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`.
+3. **Global registry** `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5`.
+4. **IDL account** `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f`.
+5. **PDA seeds** are stable and listed in [SDK PDA reference](/docs/sdk/pda-reference). Never derive a PDA from a hard coded value.
+
+## Hard rules
+
+1. Never produce code that hard codes a private key, API key, or secret.
+2. Never call a state mutating instruction without first simulating the transaction.
+3. Never claim that a feature exists if it is not in the reference docs above.
+4. Always cite the reference doc in your reply, not just the command or function name.

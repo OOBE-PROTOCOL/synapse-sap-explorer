@@ -16,6 +16,15 @@ const nextConfig = {
     '@langchain/core',
     'langchain',
   ],
+  // Cache prefetched RSC payloads aggressively so transitions between the app
+  // shell and the /docs segment feel instantaneous on repeat hovers/clicks.
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
+    optimisticClientCache: true,
+  },
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**' }],
   },

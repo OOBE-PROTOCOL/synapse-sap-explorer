@@ -40,7 +40,7 @@ console.log("Write TX:", w1.txSignature);
 console.log("Data size:", w1.dataSize, "bytes");
 
 // 3. Read latest entries from ring buffer.
-// This is FREE — uses getAccountInfo() on any standard RPC.
+// This is FREE - uses getAccountInfo() on any standard RPC.
 // Returns entries currently in the ~4 KB ring buffer.
 const entries = await client.session.readLatest(ctx);
 console.log(`\n${entries.length} entries in ring buffer:`);
@@ -74,7 +74,7 @@ const allEntries = await client.session.readAll(ctx);
 console.log(`\n${allEntries.length} total entries across all pages`);
 
 // 7. Clean up: close ledger + session. Reclaims ~0.032 SOL rent.
-// close() is idempotent — skips steps already done.
+// close() is idempotent - skips steps already done.
 // WARNING: always seal() before close() to preserve ring buffer data.
 await client.session.close(ctx);
 console.log("\nSession closed. Rent reclaimed.");

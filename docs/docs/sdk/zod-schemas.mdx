@@ -5,7 +5,7 @@ description: Validate agent manifests, environment variables, and SDK inputs at 
 
 # Zod Runtime Schemas
 
-Added in v0.6.0. The SDK provides 9 Zod schema factories for runtime validation of inputs, manifests, and environment variables. Zod is a **peer dependency** — schemas are tree-shaken away if not imported.
+Added in v0.6.0. The SDK provides 9 Zod schema factories for runtime validation of inputs, manifests, and environment variables. Zod is a **peer dependency** - schemas are tree-shaken away if not imported.
 
 ## Installation
 
@@ -161,7 +161,7 @@ Use environment validation as the first line of defense. If required variables a
 // src/lib/env.ts
 import { createEnvSchema, validateOrThrow } from "@oobe-protocol-labs/synapse-sap-sdk";
 
-// This runs at import time — fails fast if env is misconfigured.
+// This runs at import time - fails fast if env is misconfigured.
 export const env = validateOrThrow(
   createEnvSchema(),
   process.env,

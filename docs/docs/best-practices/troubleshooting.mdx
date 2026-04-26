@@ -17,7 +17,7 @@ description: Common errors, debugging strategies, and frequently asked questions
 ```typescript
 const agent = await client.agent.fetchNullable(agentPda);
 if (!agent) {
-  // Agent doesn't exist — register it
+  // Agent doesn't exist - register it
   await client.builder
     .agent("MyAgent")
     .description("Service agent")
@@ -216,7 +216,7 @@ Mainnet-beta, devnet, and localnet. Custom clusters work if you provide the RPC 
 
 **Q: Do I need PostgreSQL?**
 
-No. PostgreSQL is optional. The `pg` package is a peer dependency — only install it if you want off-chain mirroring and analytics. See the [PostgreSQL Mirror](../sdk/postgres-mirror) guide.
+No. PostgreSQL is optional. The `pg` package is a peer dependency - only install it if you want off-chain mirroring and analytics. See the [PostgreSQL Mirror](../sdk/postgres-mirror) guide.
 
 **Q: How much SOL does registration cost?**
 

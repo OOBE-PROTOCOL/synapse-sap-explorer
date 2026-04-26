@@ -152,7 +152,7 @@ import { AnchorProvider } from "@coral-xyz/anchor";
 const client = SapClient.from(AnchorProvider.env());
 
 // vaultNonce: 32 random bytes used as encryption salt.
-// Generate once and store securely — you need this nonce to
+// Generate once and store securely - you need this nonce to
 // derive the same vault PDA in future sessions.
 const vaultNonce = Array.from(crypto.getRandomValues(new Uint8Array(32)));
 await client.vault.initVault(vaultNonce);

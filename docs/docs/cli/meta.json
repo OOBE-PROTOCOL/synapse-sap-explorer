@@ -1,0 +1,20 @@
+{
+  "title": "CLI",
+  "pages": [
+    "overview",
+    "installation",
+    "quickstart",
+    "---Commands---",
+    "agent",
+    "discovery",
+    "escrow",
+    "x402",
+    "tools",
+    "env",
+    "config",
+    "doctor",
+    "---Reference---",
+    "global-flags",
+    "skills"
+  ]
+}

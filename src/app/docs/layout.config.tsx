@@ -32,20 +32,24 @@ export const baseOptions: BaseLayoutProps = {
   },
   links: [
     {
-      text: "Protocol",
-      url: "/docs/sap/overview",
+      text: "CLI",
+      url: "/docs/cli/overview",
     },
     {
       text: "SDK",
       url: "/docs/sdk/overview",
     },
     {
+      text: "Core",
+      url: "/docs/core/overview",
+    },
+    {
       text: "Examples",
       url: "/docs/examples/register-agent",
     },
     {
-      text: "Explorer",
-      url: "/docs/explorer/overview",
+      text: "Skills",
+      url: "/docs/skills",
     },
     {
       text: "GitHub",

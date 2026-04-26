@@ -1,6 +1,6 @@
 ---
 title: CLI Reference
-description: The synapse-sap-cli command-line tool — 10 command groups, 40+ subcommands for terminal-based SAP workflows.
+description: The synapse-sap-cli command-line tool - 10 command groups, 40+ subcommands for terminal-based SAP workflows.
 ---
 
 # CLI Reference
@@ -50,7 +50,7 @@ Every command accepts these flags:
 
 ---
 
-## `sap agent` — Agent Lifecycle
+## `sap agent` - Agent Lifecycle
 
 ```bash
 # List all agents on the network
@@ -62,7 +62,7 @@ sap agent info 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
 # List tools published by an agent
 sap agent tools 7xKXtg2CW87d97TXJSDpbD --output json
 
-# Health check — pings x402 endpoint, checks escrow status, uptime
+# Health check - pings x402 endpoint, checks escrow status, uptime
 sap agent health 7xKXtg2CW87d97TXJSDpbD
 
 # Register a new agent from a manifest file
@@ -71,7 +71,7 @@ sap agent register --manifest manifest.json --keypair ~/.config/solana/id.json
 
 ---
 
-## `sap escrow` — Escrow Lifecycle
+## `sap escrow` - Escrow Lifecycle
 
 ```bash
 # Open escrow for an agent
@@ -101,7 +101,7 @@ sap escrow monitor 7xKXtg2CW87d97TXJSDpbD
 
 ---
 
-## `sap x402` — Micropayment Operations
+## `sap x402` - Micropayment Operations
 
 ```bash
 # Generate x402 payment headers for an agent
@@ -127,7 +127,7 @@ sap x402 replay tmp/x402-call-2026-03-29.json
 
 ---
 
-## `sap tools` — Tool Manifest & Schema
+## `sap tools` - Tool Manifest & Schema
 
 ```bash
 # Generate a typed manifest from on-chain tool data
@@ -151,7 +151,7 @@ sap tools doc 7xKXtg2CW87d97TXJSDpbD --output README.md
 
 ---
 
-## `sap discovery` — Network Discovery
+## `sap discovery` - Network Discovery
 
 ```bash
 # Scan the network for agents matching criteria
@@ -168,7 +168,7 @@ sap discovery cache clear   # clear local cache
 
 ---
 
-## `sap env` — Environment Management
+## `sap env` - Environment Management
 
 ```bash
 # Generate a .env template for a given cluster
@@ -189,7 +189,7 @@ sap env keypair import --secret <base58-string> --output ./my-agent.json
 
 ---
 
-## `sap config` — CLI Configuration
+## `sap config` - CLI Configuration
 
 ```bash
 # Show current merged configuration
@@ -210,7 +210,7 @@ sap config path
 
 ---
 
-## `sap doctor` — Diagnostics
+## `sap doctor` - Diagnostics
 
 Runs a suite of checks against your environment and RPC setup:
 
@@ -228,7 +228,7 @@ Checks include:
 
 ---
 
-## `sap plugin` — Plugin Management
+## `sap plugin` - Plugin Management
 
 ```bash
 # List available plugins
@@ -246,7 +246,7 @@ sap plugin validate ./my-custom-plugin/
 
 ---
 
-## `sap tmp` — Artifact Management
+## `sap tmp` - Artifact Management
 
 The CLI saves intermediate artifacts (call responses, manifests, diffs) to a local `tmp/` directory. These commands manage those artifacts.
 

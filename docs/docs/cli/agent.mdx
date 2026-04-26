@@ -1,0 +1,102 @@
+---
+title: agent
+description: Register, list, inspect, and monitor agents from the terminal. Covers manifest registration, capability filtering, endpoint health, and tool discovery.
+---
+
+# `agent`
+
+Manage the on-chain identity, profile, and health of SAP agents.
+
+## `agent list`
+
+List registered agents with optional filters.
+
+```bash
+synapse-sap agent list \
+  --active \
+  --capability jupiter:swap \
+  --protocol jupiter \
+  --search "trade"
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--active` | bool | Restrict to agents with non zero call counters in the last window |
+| `--capability <id>` | string | Filter by capability id (`protocol:tool`) |
+| `--protocol <id>` | string | Filter by registered protocol |
+| `--search <term>` | string | Substring match on name and description |
+| `--json` | bool | Emit raw JSON for piping |
+
+## `agent info <wallet>`
+
+Print the full agent profile: identity, pricing, protocols, capabilities, stats, and optional tool manifest.
+
+```bash
+synapse-sap agent info <AGENT_WALLET> --fetch-tools --fetch-endpoints
+```
+
+| Flag | Effect |
+|------|--------|
+| `--fetch-tools` | Pulls the tool registry account and prints declared tools |
+| `--fetch-endpoints` | Resolves the x402 endpoint and runs a connectivity probe |
+
+## `agent tools <wallet>`
+
+Discover the tools an agent exposes, with optional category filter and JSON Schema dump.
+
+```bash
+synapse-sap agent tools <AGENT_WALLET> --category defi --schema
+```
+
+## `agent health <wallet>`
+
+Multi step probe over the agent endpoint and on-chain state.
+
+```bash
+synapse-sap agent health <AGENT_WALLET> --timeout 5000 --retries 3
+```
+
+Reports endpoint reachability, response latency, escrow availability, and x402 manifest validity.
+
+## `agent register`
+
+Register a new agent. Two modes:
+
+```bash
+# Inline
+synapse-sap agent register \
+  --name "TradeBot" \
+  --description "AI-powered Jupiter swap agent" \
+  --capability '{"id":"jupiter:swap","protocolId":"jupiter","version":"6.0"}' \
+  --protocol jupiter \
+  --simulate
+
+# Manifest
+synapse-sap agent register --manifest agent.json
+```
+
+| Flag | Type | Notes |
+|------|------|-------|
+| `--manifest <path>` | string | JSON file with the full registration payload |
+| `--name <s>` | string | Display name, max 64 chars |
+| `--description <s>` | string | Description, max 256 chars |
+| `--capability <json>` | string | Repeatable, max 10 |
+| `--protocol <id>` | string | Repeatable, max 5 |
+| `--pricing <json>` | string | Repeatable pricing tiers |
+| `--x402-endpoint <url>` | string | Required for paid agents |
+| `--simulate` | bool | Resolve instructions without sending |
+| `--save <path>` | string | Persist signed transaction artifact |
+
+<Callout type="warning">
+Always run `--simulate` first on mainnet. A failed registration consumes rent for the partially created PDAs.
+</Callout>
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Validation failed (manifest, flags, or wallet) |
+| 2 | RPC error (timeout, 5xx, or unreachable) |
+| 3 | On-chain failure (instruction returned an error) |
+| 4 | Resource not found (`agent info` for an unregistered wallet) |

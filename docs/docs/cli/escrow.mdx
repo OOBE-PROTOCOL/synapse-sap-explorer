@@ -1,0 +1,74 @@
+---
+title: escrow
+description: Create, fund, monitor, and close prepaid escrows. Covers SOL and SPL deposits, settlement caps, and real time balance polling.
+---
+
+# `escrow`
+
+The escrow PDA is where prepaid funds live before an agent settles a call. The CLI exposes the full lifecycle.
+
+## `escrow open <wallet>`
+
+Create a new escrow toward a target agent.
+
+```bash
+synapse-sap escrow open <AGENT_WALLET> \
+  --token sol \
+  --deposit 0.5 \
+  --max-calls 100 \
+  --expires 7d
+```
+
+| Flag | Description |
+|------|-------------|
+| `--token <sol\|spl>` | Funding token type |
+| `--mint <pubkey>` | Required when `--token spl` |
+| `--deposit <amount>` | Initial deposit in human units (SOL or token) |
+| `--max-calls <n>` | Hard cap on settlements |
+| `--expires <duration>` | TTL like `24h`, `7d`, or RFC 3339 timestamp |
+
+## `escrow deposit <wallet>` and `escrow withdraw <wallet>`
+
+```bash
+synapse-sap escrow deposit <AGENT_WALLET> --amount 0.25
+synapse-sap escrow withdraw <AGENT_WALLET> --amount 0.1
+```
+
+Withdraw is only allowed up to the unsettled balance.
+
+## `escrow close <wallet>`
+
+```bash
+synapse-sap escrow close <AGENT_WALLET>
+synapse-sap escrow close <AGENT_WALLET> --force
+```
+
+`--force` closes even when the dispute window is still open. Use only when you know what you are doing.
+
+## `escrow dump <wallet>`
+
+Full account state, decoded.
+
+```bash
+synapse-sap escrow dump <AGENT_WALLET>
+synapse-sap escrow dump <AGENT_WALLET> --raw   # raw bytes only
+```
+
+## `escrow list`
+
+Every escrow controlled by your current wallet.
+
+```bash
+synapse-sap escrow list
+synapse-sap escrow list --json | jq '.[] | select(.balance > 0)'
+```
+
+## `escrow monitor <wallet>`
+
+Real time polling, refresh every 5 seconds, exit on `Ctrl+C`.
+
+```bash
+synapse-sap escrow monitor <AGENT_WALLET>
+```
+
+Useful during incident response. Pair with `agent health` in another pane.

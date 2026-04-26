@@ -29,21 +29,21 @@ Machine-readable description of an agent's HTTP endpoint.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `url` | `string` | — | Full URL (e.g. `https://api.example.com/x402`) |
+| `url` | `string` | - | Full URL (e.g. `https://api.example.com/x402`) |
 | `method` | `"GET" \| "POST" \| "PUT" \| "DELETE"` | `"POST"` | HTTP method |
 | `contentType` | `string` | `"application/json"` | Expected response Content-Type |
 | `requiresAuth` | `boolean` | `false` | Whether `Authorization` header is needed |
-| `authType` | `"bearer" \| "api-key" \| "x402" \| "none"` | — | Auth type if `requiresAuth` |
+| `authType` | `"bearer" \| "api-key" \| "x402" \| "none"` | - | Auth type if `requiresAuth` |
 | `requiresCSRF` | `boolean` | `false` | Requires CSRF tokens |
 | `requiresCookies` | `boolean` | `false` | Requires browser cookies |
-| `corsOrigins` | `string[]` | — | Required CORS origins |
-| `requiredHeaders` | `Record<string, string>` | — | Additional required headers |
+| `corsOrigins` | `string[]` | - | Required CORS origins |
+| `requiredHeaders` | `Record<string, string>` | - | Additional required headers |
 
 ### HealthCheckDescriptor
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `url` | `string` | — | Health-check URL |
+| `url` | `string` | - | Health-check URL |
 | `expectedStatus` | `number` | `200` | Expected HTTP status code |
 | `timeoutMs` | `number` | `5000` | Timeout in milliseconds |
 | `method` | `"GET" \| "HEAD"` | `"GET"` | HTTP method |
@@ -93,7 +93,7 @@ if (!result.reachable) {
 }
 if (!result.isSapCapable) {
   console.warn("Not SAP-capable:", result.warnings);
-  // e.g. ["Endpoint returns HTML — may require CSRF or browser session"]
+  // e.g. ["Endpoint returns HTML - may require CSRF or browser session"]
 }
 console.log("Latency:", result.latencyMs, "ms");
 ```
@@ -146,9 +146,9 @@ const results = await validateAgentEndpoints({
 });
 
 // Results keyed by label:
-//   "primary"           — primary endpoint
-//   "health"            — health check
-//   "tool:jupiter-swap" — tool-specific endpoint
+//   "primary"           - primary endpoint
+//   "health"            - health check
+//   "tool:jupiter-swap" - tool-specific endpoint
 for (const [label, result] of results) {
   console.log(`${label}: ${result.isSapCapable ? "OK" : "FAIL"} (${result.latencyMs}ms)`);
 }

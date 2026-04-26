@@ -1,0 +1,67 @@
+---
+title: Installation
+description: Install synapse-sap globally, from source, or pinned per project. Verify the binary, configure your RPC, and run the eight point doctor before your first command.
+---
+
+# Installation
+
+## Global install (recommended)
+
+```bash
+npm install -g @oobe-protocol-labs/synapse-sap-cli
+```
+
+After install, the `synapse-sap` binary is on your `PATH`.
+
+```bash
+synapse-sap --version
+synapse-sap --help
+```
+
+## From source
+
+```bash
+git clone https://github.com/OOBE-PROTOCOL/synapse-sap-cli.git
+cd synapse-sap-cli
+npm install
+npm run build
+npm link
+```
+
+Use this when you need to test patches, contribute fixes, or run a fork.
+
+## Per project install
+
+```bash
+npm install --save-dev @oobe-protocol-labs/synapse-sap-cli
+npx synapse-sap --version
+```
+
+Pinning the CLI as a dev dependency guarantees that scripts in CI and local dev use the same version.
+
+## System requirements
+
+| Requirement | Minimum |
+|-------------|---------|
+| Node.js | 18.17 or newer |
+| Network | Outbound HTTPS to your RPC endpoint |
+| Filesystem | Write access to `~/.config/synapse-sap` and your `keys/` folder |
+
+## First time configuration
+
+```bash
+synapse-sap env init --template devnet
+synapse-sap config set rpcUrl "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
+synapse-sap env keypair generate --out keys/agent.json
+synapse-sap doctor run
+```
+
+`doctor run` performs an eight point check covering Node version, SDK version, env vars, keypair file permissions, RPC reachability and latency, fallback RPC, SAP program deployment, and free disk space. If it returns a non zero exit code, fix the reported issue before continuing.
+
+## Verify
+
+```bash
+synapse-sap doctor run --json | jq '.checks[] | select(.status != "ok")'
+```
+
+Empty output means the environment is ready.

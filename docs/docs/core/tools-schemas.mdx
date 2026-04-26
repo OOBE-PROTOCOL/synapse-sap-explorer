@@ -119,7 +119,7 @@ Update metadata hashes. Bumps the on-chain `version` counter. All fields are opt
 import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
 // update() takes the toolName and an UpdateToolArgs object.
-// All fields are optional — only pass what you want to change.
+// All fields are optional - only pass what you want to change.
 await client.tools.update("getWeather", {
   descriptionHash: hashToArray(sha256("Updated description")),  // new description hash
   inputSchemaHash: hashToArray(sha256(newInputSchema)),         // new input schema hash

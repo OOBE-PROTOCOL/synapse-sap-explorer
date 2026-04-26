@@ -1,0 +1,50 @@
+---
+title: CLI Overview
+description: synapse-sap is the official command line for the Solana Agent Protocol. Register agents, fund escrows, run x402 payments, publish tool manifests, and diagnose your environment without writing SDK boilerplate.
+---
+
+# Synapse SAP CLI
+
+`synapse-sap` is the operator console for the Solana Agent Protocol. It wraps the `@oobe-protocol-labs/synapse-sap-sdk` and exposes the full lifecycle of an on-chain agent through 40+ subcommands across 10 command groups.
+
+If the SDK is the programmatic interface, the CLI is the keyboard-driven one. Both speak the same protocol, both produce the same on-chain state.
+
+## What you can do from the terminal
+
+| Task | Command |
+|------|---------|
+| Register an agent on mainnet | `synapse-sap agent register --manifest agent.json` |
+| Open a prepaid escrow toward another agent | `synapse-sap escrow open <wallet> --token sol --deposit 0.5` |
+| Run a paid x402 call end to end | `synapse-sap x402 call <wallet> <tool> --args '{...}'` |
+| Publish a tool manifest with JSON Schema hashing | `synapse-sap tools publish manifest.json` |
+| Audit your local setup before going live | `synapse-sap doctor run` |
+
+## Design principles
+
+1. **One command, one effect.** Every subcommand has a single purpose. Composition happens in your shell, not in flags.
+2. **Artifacts everywhere.** Use `--save` and `--out` to persist signed transactions, manifests, x402 payloads, and replay them later with `x402 replay` or `tools manifest validate`.
+3. **Dry runs by default for destructive ops.** Pair any state mutating command with `--simulate` to get the resolved instructions and compute budget without sending the transaction.
+4. **JSON for machines, tables for humans.** Add `--json` to any command to pipe output into `jq`, agents, or CI.
+5. **OOBE Protocol RPC first class.** Region aware endpoints, automatic fallback, and live latency probes via `doctor run`.
+
+## When to reach for the CLI
+
+| Scenario | Why CLI fits |
+|----------|--------------|
+| First time setup of a new agent | `env init` plus `agent register` is faster than scaffolding a project |
+| Operations and on-call work | `escrow monitor` and `agent health` give live feedback in your shell |
+| CI pipelines and scripts | JSON output and exit codes plug into any orchestrator |
+| Debugging a failing settlement | `x402 replay` reproduces a signed payload deterministically |
+| Onboarding teammates | Diagnostic flows (`doctor run`) cut hours of setup help |
+
+## Read this section in order
+
+1. [Installation](/docs/cli/installation) - install globally, from source, or pin a version per project.
+2. [Quickstart](/docs/cli/quickstart) - register an agent, fund an escrow, and make a paid call in under five minutes.
+3. **Commands** - one page per command group with every flag, exit code, and JSON shape.
+4. [Global flags](/docs/cli/global-flags) - flags that apply to every command.
+5. [Skills](/docs/cli/skills) - the machine readable manifest that lets autonomous agents drive the CLI.
+
+<Callout type="info">
+The CLI is a thin wrapper over the SDK. Anything you can do in the CLI is also available in code, and vice versa. See the [SDK overview](/docs/sdk/overview) when you need programmatic control.
+</Callout>

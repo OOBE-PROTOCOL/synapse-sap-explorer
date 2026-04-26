@@ -48,7 +48,7 @@ console.log(`${mcpAgents.length} agents support MCP`);
 
 ```typescript
 // Find agents that support ANY of these swap capabilities.
-// Uses OR logic — returns agents that have at least one match.
+// Uses OR logic - returns agents that have at least one match.
 // Each capability string is looked up in its own CapabilityIndex PDA.
 const swapAgents = await client.discovery.findAgentsByCapabilities([
   "jupiter:swap",
@@ -97,9 +97,9 @@ const agentWallet = new PublicKey("...");
 const profile = await client.discovery.getAgentProfile(agentWallet);
 
 if (profile) {
-  // profile.identity — raw on-chain AgentIdentity account
+  // profile.identity - raw on-chain AgentIdentity account
   console.log("Name:", profile.identity.name);
-  // profile.computed — pre-computed convenience fields
+  // profile.computed - pre-computed convenience fields
   console.log("Active:", profile.computed.isActive);
   console.log("Reputation:", profile.computed.reputationScore);  // 0–100
   console.log("Total calls:", profile.computed.totalCalls);      // BN.toString()

@@ -1,0 +1,73 @@
+---
+title: x402
+description: Run end to end x402 payment flows from the terminal. Generate signed headers, replay artifacts, verify settlements, and run agent side settlement.
+---
+
+# `x402`
+
+The x402 group covers everything related to the per call payment protocol.
+
+## `x402 headers <wallet>`
+
+Generate the HTTP headers required to make a paid call against an agent.
+
+```bash
+synapse-sap x402 headers <AGENT_WALLET> --network mainnet --output headers.json
+```
+
+The output contains `X-PAYMENT`, `X-PAYMENT-NONCE`, and `X-PAYMENT-SIG`, ready to forward to any HTTP client.
+
+## `x402 call <wallet> <tool>`
+
+Full end to end paid call: build headers, sign, POST, wait for settlement.
+
+```bash
+synapse-sap x402 call <AGENT_WALLET> generate-image \
+  --args '{"prompt":"sunset"}' \
+  --endpoint https://api.example.com/x402 \
+  --retries 3 \
+  --save out/call.json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--args <json>` | Tool input payload |
+| `--endpoint <url>` | Override the agent declared endpoint |
+| `--retries <n>` | Retry on 5xx with exponential backoff |
+| `--save <path>` | Persist the signed envelope for replay |
+
+## `x402 sign`
+
+Generate a payment signature with the current keypair, no network call.
+
+```bash
+synapse-sap x402 sign --wallet <AGENT_WALLET> --amount 0.001
+```
+
+Useful when integrating with an external HTTP layer.
+
+## `x402 verify <signature>`
+
+Verify a settlement transaction is on-chain and matches the expected payer, agent, amount, and call counter.
+
+```bash
+synapse-sap x402 verify 5eykt4Uu...
+```
+
+## `x402 settle <wallet>`
+
+Agent side settlement. Run this from the merchant agent to claim accumulated calls.
+
+```bash
+synapse-sap x402 settle <PAYER_WALLET> --calls 12 --service my-tool
+```
+
+## `x402 replay <artifact>`
+
+Reproduce a saved x402 call deterministically.
+
+```bash
+synapse-sap x402 replay out/call.json
+```
+
+Replay is the fastest way to reproduce a bug without paying twice. Combine with `--simulate` to skip the actual settlement.
