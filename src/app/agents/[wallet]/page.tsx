@@ -71,7 +71,7 @@ function AgentDetailInner() {
   const { wallet } = useParams<{ wallet: string }>();
   const router = useRouter();
   const { data, loading, error } = useAgent(wallet);
-  const canonicalWallet = data?.profile?.identity?.wallet ?? wallet;
+  const canonicalWallet = data?.profile?.identity?.wallet ?? null;
   const { data: toolsData } = useTools();
   const { data: escrowsData } = useEscrows();
   const { data: feedbacksData } = useFeedbacks();

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { getSynapseConnection, getRpcConfig } from '~/lib/sap/discovery';
+import { getSynapseConnection, getRpcConfig, getSapClient } from '~/lib/sap/discovery';
 
 export interface TokenMeta {
   name: string;
@@ -193,30 +193,48 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ wallet: string }> },
 ) {
+  const emptyResponse = (wallet: string): WalletBalancesResponse => ({
+    wallet,
+    sol: 0,
+    solUsd: null,
+    usdc: 0,
+    tokens: [],
+    totalUsd: null,
+    deployedTokens: [],
+  });
+
   try {
-    const { wallet } = await params;
+    const { wallet: walletOrId } = await params;
+    const { url: rpcUrl } = getRpcConfig();
+    const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
+      identifier: walletOrId,
+      rpcUrl,
+    }).catch(() => null);
+    const wallet = resolved?.wallet?.toBase58() ?? walletOrId;
 
     let pubkey: PublicKey;
     try {
       pubkey = new PublicKey(wallet);
     } catch {
-      return NextResponse.json({ error: 'Invalid wallet address' }, { status: 400 });
+      return NextResponse.json(emptyResponse(walletOrId), {
+        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+      });
     }
 
     const connection = getSynapseConnection();
 
     const [solBalance, tokenAccounts, solPrice] = await Promise.all([
-      connection.getBalance(pubkey),
+      connection.getBalance(pubkey).catch(() => 0),
       connection.getParsedTokenAccountsByOwner(pubkey, {
         programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-      }),
+      }).catch(() => null),
       fetchSolPrice(),
     ]);
 
     const rawTokens: { mint: string; amount: string; decimals: number; uiAmount: number }[] = [];
     let usdc = 0;
 
-    for (const ta of tokenAccounts.value) {
+    for (const ta of tokenAccounts?.value ?? []) {
       const info = ta.account.data.parsed?.info as TokenAccountInfo | undefined;
       if (!info || !info.tokenAmount?.amount || info.tokenAmount.amount === '0') continue;
       if (USDC_MINTS.has(info.mint)) {
@@ -292,8 +310,8 @@ export async function GET(
   } catch (err) {
     console.error('[balances] Error fetching wallet balances:', err);
     return NextResponse.json(
-      { error: 'Failed to fetch wallet balances' },
-      { status: 500 },
+      emptyResponse((await params).wallet),
+      { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' } },
     );
   }
 }
