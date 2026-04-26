@@ -24,6 +24,85 @@ const RATE_LIMIT_COOLDOWN_MS = 60_000;
 const listCache = new Map<string, { at: number; value: MetaplexRegistryListResponse }>();
 let rateLimitedUntil = 0;
 
+/**
+ * Shared raw-pages cache. The upstream `walletAddress=` filter is
+ * unreliable (returns the global agent set). Rather than letting every
+ * wallet lookup walk all 7 pages independently — which causes 429
+ * thundering herd in batch contexts — we fetch the global list once and
+ * filter client-side for every wallet from a shared snapshot.
+ */
+const GLOBAL_PAGES_TTL_MS = 5 * 60_000;
+const globalPagesCache = new Map<MetaplexRegistryNetwork, {
+  at: number;
+  agents: MetaplexRegistryAgent[];
+}>();
+const globalPagesInflight = new Map<MetaplexRegistryNetwork, Promise<MetaplexRegistryAgent[]>>();
+
+async function fetchAllRegistryAgents(
+  network: MetaplexRegistryNetwork,
+): Promise<MetaplexRegistryAgent[]> {
+  const cached = globalPagesCache.get(network);
+  if (cached && Date.now() - cached.at < GLOBAL_PAGES_TTL_MS) return cached.agents;
+  if (Date.now() < rateLimitedUntil) return cached?.agents ?? [];
+
+  const inflight = globalPagesInflight.get(network);
+  if (inflight) return inflight;
+
+  const task = (async () => {
+    const all: MetaplexRegistryAgent[] = [];
+    const firstUrl = `${BASE_URL}/agents?network=${network}&pageSize=${PAGE_SIZE}&page=1`;
+    const firstRes = await timedFetch(firstUrl);
+    if (!firstRes) return cached?.agents ?? [];
+    if (firstRes.status === 429) {
+      rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+      return cached?.agents ?? [];
+    }
+    if (!firstRes.ok) return cached?.agents ?? [];
+    let firstJson: {
+      success?: boolean;
+      data?: { agents?: MetaplexRegistryAgent[]; totalPages?: number };
+    };
+    try {
+      firstJson = await firstRes.json();
+    } catch {
+      return cached?.agents ?? [];
+    }
+    if (!firstJson?.success || !Array.isArray(firstJson.data?.agents)) {
+      return cached?.agents ?? [];
+    }
+    all.push(...firstJson.data.agents);
+    const totalPages = Math.min(firstJson.data.totalPages ?? 1, 20);
+
+    for (let page = 2; page <= totalPages; page++) {
+      if (Date.now() < rateLimitedUntil) break;
+      const url = `${BASE_URL}/agents?network=${network}&pageSize=${PAGE_SIZE}&page=${page}`;
+      const r = await timedFetch(url);
+      if (!r) break;
+      if (r.status === 429) {
+        rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+        break;
+      }
+      if (!r.ok) break;
+      try {
+        const j = (await r.json()) as { success?: boolean; data?: { agents?: MetaplexRegistryAgent[] } };
+        if (j?.success && Array.isArray(j.data?.agents)) all.push(...j.data.agents);
+      } catch {
+        break;
+      }
+    }
+
+    globalPagesCache.set(network, { at: Date.now(), agents: all });
+    return all;
+  })();
+
+  globalPagesInflight.set(network, task);
+  try {
+    return await task;
+  } finally {
+    globalPagesInflight.delete(network);
+  }
+}
+
 export type MetaplexRegistryNetwork = 'solana-mainnet' | 'solana-devnet';
 
 export type MetaplexRegistryAgent = {
@@ -110,85 +189,21 @@ export async function listRegistryAgentsForWallet(
   if (cached && Date.now() - cached.at < LIST_CACHE_TTL_MS) {
     return cached.value;
   }
-  if (Date.now() < rateLimitedUntil) {
-    return empty('api.metaplex.com rate-limited (cooldown)');
+
+  const all = await fetchAllRegistryAgents(network);
+  if (all.length === 0) {
+    const reason = Date.now() < rateLimitedUntil
+      ? 'api.metaplex.com rate-limited (cooldown)'
+      : 'Registry snapshot unavailable';
+    return empty(reason);
   }
 
-  const url = `${BASE_URL}/agents?walletAddress=${encodeURIComponent(wallet)}&network=${network}&pageSize=${PAGE_SIZE}`;
-  const res = await timedFetch(url);
-  if (!res) return empty('Network error contacting api.metaplex.com');
-  if (res.status === 429) {
-    rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
-    return empty('api.metaplex.com responded 429');
-  }
-  if (!res.ok) return empty(`api.metaplex.com responded ${res.status}`);
-
-  let parsed: unknown;
-  try {
-    parsed = await res.json();
-  } catch {
-    return empty('Invalid JSON from api.metaplex.com');
-  }
-
-  const body = parsed as {
-    success?: boolean;
-    data?: {
-      agents?: unknown[];
-      total?: number;
-      page?: number;
-      pageSize?: number;
-      totalPages?: number;
-    };
-  };
-  if (!body?.success || !Array.isArray(body.data?.agents)) {
-    return empty('Unexpected response shape');
-  }
-
-  const upstream = body.data.agents as MetaplexRegistryAgent[];
-  // Defensive client-side filter. The upstream `walletAddress=` filter is
-  // unreliable (frequently ignored by api.metaplex.com — returns the whole
-  // global page). We accept any of `walletAddress`, `authority`, `owner`
-  // matching, because Metaplex stores the *holder* in walletAddress while
-  // the SAP-side wallet usually appears as `authority` / `owner`.
+  // Match across walletAddress / authority / owner — Metaplex stores
+  // the holder in walletAddress while the SAP-side wallet usually
+  // appears as `authority` (or `owner` for some agent types).
   const matches = (a: MetaplexRegistryAgent & { authority?: string | null; owner?: string | null }) =>
     a.walletAddress === wallet || a.authority === wallet || (a as { owner?: string }).owner === wallet;
-  let filtered = upstream.filter(matches);
-  const clientSideFiltered = filtered.length !== upstream.length;
-
-  // The upstream `walletAddress=` filter is unreliable, so when page 1 yields
-  // no matches we walk subsequent pages up to MAX_PAGE_SCAN. We bail
-  // immediately on 429 to avoid amplifying rate-limit pressure.
-  const totalPages = body.data.totalPages ?? 1;
-  const MAX_PAGE_SCAN = 10;
-  if (filtered.length === 0 && totalPages > 1) {
-    const pagesToScan = Math.min(totalPages, MAX_PAGE_SCAN);
-    for (let page = 2; page <= pagesToScan; page++) {
-      if (Date.now() < rateLimitedUntil) break;
-      const pageUrl = `${BASE_URL}/agents?walletAddress=${encodeURIComponent(wallet)}&network=${network}&pageSize=${PAGE_SIZE}&page=${page}`;
-      const pageRes = await timedFetch(pageUrl);
-      if (!pageRes) break;
-      if (pageRes.status === 429) {
-        rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
-        break;
-      }
-      if (!pageRes.ok) break;
-      try {
-        const pageJson = (await pageRes.json()) as {
-          success?: boolean;
-          data?: { agents?: unknown[] };
-        };
-        if (pageJson?.success && Array.isArray(pageJson.data?.agents)) {
-          const pageAgents = (pageJson.data.agents as MetaplexRegistryAgent[]).filter(matches);
-          if (pageAgents.length > 0) {
-            filtered = filtered.concat(pageAgents);
-            break; // Match found — stop scanning.
-          }
-        }
-      } catch {
-        // Best effort only.
-      }
-    }
-  }
+  let filtered = all.filter(matches);
 
   // De-duplicate by mintAddress to keep stable counts/UI.
   if (filtered.length > 1) {
@@ -203,13 +218,13 @@ export async function listRegistryAgentsForWallet(
   const result: MetaplexRegistryListResponse = {
     agents: filtered,
     total: filtered.length,
-    page: body.data.page ?? 1,
-    pageSize: body.data.pageSize ?? PAGE_SIZE,
-    totalPages,
+    page: 1,
+    pageSize: PAGE_SIZE,
+    totalPages: 1,
     walletAddress: wallet,
     network,
     fetchedAt: Date.now(),
-    clientSideFiltered,
+    clientSideFiltered: true,
     error: null,
   };
   listCache.set(cacheKey, { at: Date.now(), value: result });
