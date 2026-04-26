@@ -302,18 +302,9 @@ async function enumerateAssetsForWallet(
     diagnostics.push(`Synapse searchAssets failed: ${(e as Error).message}`);
   }
 
-  // Tier 1b — DAS via fallback RPC (Helius). Last resort indexed path.
-  if (env.SAP_FALLBACK_RPC_URL) {
-    try {
-      const dasAssets = await fetchAssetsViaDas(wallet, env.SAP_FALLBACK_RPC_URL);
-      if (dasAssets.length > 0) {
-        return { source: 'das', assets: dasAssets, diagnostics };
-      }
-      diagnostics.push('Fallback DAS returned 0 assets');
-    } catch (e) {
-      diagnostics.push(`Fallback DAS lookup failed: ${(e as Error).message}`);
-    }
-  }
+  // Tier 1b removed (2026-04): we serve exclusively from Synapse RPC.
+  // Previously a Helius fallback ran here; it is now disabled to avoid
+  // mixed-source asset reads.
 
   // Tier 2 — direct on-chain enumeration via Synapse RPC.
   // `fetchAssetsByOwner` does `getProgramAccounts` against MPL Core; it can
