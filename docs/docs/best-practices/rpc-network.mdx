@@ -13,7 +13,7 @@ This guide covers connection setup, cluster selection, rate limiting strategies,
 
 For readers new to Solana: an RPC node is a server that provides access to the blockchain. When you call `client.agent.fetch()`, the SDK sends an HTTP request to an RPC node, which reads the blockchain and returns the data. When you call `client.agent.register()`, the SDK sends a signed transaction to the RPC node, which forwards it to the Solana network for processing.
 
-Public RPC nodes (like `api.devnet.solana.com`) are free but rate-limited. For production applications, dedicated RPC providers (Helius, Triton, QuickNode) offer higher throughput, lower latency, and better reliability.
+Public RPC nodes (like `api.devnet.solana.com`) are free but rate-limited. For production applications, dedicated RPC providers like **Synapse Gateway**, **Triton**, or **QuickNode** offer higher throughput, lower latency, and better reliability. Synapse Gateway is the recommended endpoint for SAP workloads because it ships pre-tuned for the program's account-heavy read patterns.
 
 ## Connection Factories
 
@@ -49,7 +49,7 @@ const client = SapClient.from(AnchorProvider.env());
 | Mainnet | `https://api.mainnet-beta.solana.com` | Production (rate limited) |
 | Custom | Provider URL | Dedicated RPC nodes |
 
-The public Solana RPC endpoints enforce strict rate limits. For production use, configure a dedicated RPC provider (Helius, Triton, QuickNode).
+The public Solana RPC endpoints enforce strict rate limits. For production use, configure a dedicated RPC provider (Synapse Gateway, Triton, QuickNode).
 
 ## Environment-Based Configuration
 
@@ -62,7 +62,7 @@ SYNAPSE_REGION=us-east
 // src/lib/env.ts
 const config = {
   rpcUrl: process.env.SYNAPSE_NETWORK === "mainnet"
-    ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_KEY}`
+    ? `https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=${process.env.SYNAPSE_API_KEY}`
     : "https://api.devnet.solana.com",
   commitment: "confirmed" as const,
 };

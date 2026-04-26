@@ -17,7 +17,7 @@ import type { SapNetworkId } from "@oobe-protocol-labs/synapse-sap-sdk";
 | Constant | Value | Used By |
 |----------|-------|---------|
 | `SapNetwork.SOLANA_MAINNET` | `"solana:mainnet-beta"` | Coinbase, Phantom |
-| `SapNetwork.SOLANA_MAINNET_GENESIS` | `"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"` | Kamiyo, Helius x402 |
+| `SapNetwork.SOLANA_MAINNET_GENESIS` | `"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"` | Kamiyo, x402 facilitators |
 | `SapNetwork.SOLANA_DEVNET` | `"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"` | Devnet providers |
 | `SapNetwork.SOLANA_DEVNET_NAMED` | `"solana:devnet"` | Local / test flows |
 
@@ -68,7 +68,7 @@ isNetworkEquivalent("solana:mainnet-beta", "solana:devnet");
 
 ### `getNetworkGenesisHash(networkId)`
 
-Get the genesis-hash form (CAIP-2). Required by Kamiyo, Helius x402.
+Get the genesis-hash form (CAIP-2). Required by Kamiyo and most x402 facilitators.
 
 ```typescript
 getNetworkGenesisHash("mainnet");

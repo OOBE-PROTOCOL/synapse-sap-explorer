@@ -2,24 +2,17 @@
    with our Tailwind v3 setup. We skip the import and rely on the main
    app's Tailwind base + the custom properties below for docs styling. */
 
-/* ── Font override: the root <body> uses font-mono globally for the
-   explorer. Inside the docs root we want a clean sans-serif for prose
-   while keeping monospace for inline code and code blocks. ────────── */
-.fd-docs-root,
-.fd-docs-root * {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji";
-}
-
+/* ── Font: inherit from <body> (GeistMono via the app shell). The app
+   uses GeistMono everywhere, and the docs match that aesthetic. We
+   only enforce a true monospace stack inside <code>/<pre> to ensure
+   ligatures and tabular alignment for code samples. ────────────────── */
 .fd-docs-root code,
 .fd-docs-root pre,
 .fd-docs-root pre *,
 .fd-docs-root kbd,
-.fd-docs-root samp,
-.fd-docs-root [class*="font-mono"] {
-  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular,
-    Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+.fd-docs-root samp {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 /* ── Layout: balanced content + visible TOC ── */
@@ -484,18 +477,174 @@ article[data-page] {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Sidebar: responsive + collapsible ────────────────────────
-   - Mobile (<md): sidebar becomes a drawer (fumadocs handles
-     this via its Mobile prop). Ensure the SidebarTrigger in the
-     navbar is visible, and the drawer overlays content cleanly.
-   - Desktop (>=md): sidebar is sticky, width set per breakpoint
-     by sidebar.className (260 → 280 → 300 → 320). The
-     CollapsibleControl floating button lets users hide it.
+/* ── Sidebar: matches the app's main sidebar style ─────────────
+   - Uppercase section labels with letter-spacing 0.2em + thin
+     divider line on the right (mirrors NAV_SECTIONS in app-layout).
+   - Rounded pill items, gap-3 with icon, active = solid primary
+     background, hover = accent background.
+   - Sticky on desktop, drawer on mobile (built-in fumadocs).
    ────────────────────────────────────────────────────────── */
 
+/* Sidebar surface */
+[data-sidebar] {
+  background: var(--fd-card);
+  border-right: 1px solid var(--fd-border);
+}
+
+:root:not(.dark) [data-sidebar] {
+  background: #f7f9fc;
+  border-right: 1px solid #d8dde4;
+}
+
+/* Sidebar header (logo + version pill) */
+[data-sidebar] [data-sidebar-header],
+[data-sidebar] header {
+  padding: 0.875rem 0.875rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--fd-border) 60%, transparent);
+}
+
+/* Sidebar inner padding */
+[data-sidebar] nav,
+[data-sidebar] [data-sidebar-content] {
+  padding: 0.5rem 0.625rem;
+}
+
+/* Section labels: UPPERCASE TRACKED, with thin divider on the right.
+   This is the exact look of the app's NavScrollable sections. */
+[data-sidebar] [data-sidebar-section-title],
+[data-sidebar] h3,
+[data-sidebar] [data-folder-trigger] > span:first-child {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  margin: 0.875rem 0.25rem 0.375rem !important;
+  padding: 0 !important;
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.2em !important;
+  color: color-mix(in srgb, var(--fd-muted-foreground) 80%, transparent) !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+[data-sidebar] [data-sidebar-section-title]::after,
+[data-sidebar] h3::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--fd-muted-foreground) 30%, transparent);
+}
+
+/* Item rows: rounded pills, 12px font, gap with icon */
+[data-sidebar] a,
+[data-sidebar] [data-sidebar-item] {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.625rem !important;
+  padding: 0.5rem 0.75rem !important;
+  margin: 0.125rem 0 !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  color: var(--fd-muted-foreground) !important;
+  background: transparent !important;
+  text-decoration: none !important;
+  transition: background-color 0.15s, color 0.15s !important;
+  border: none !important;
+}
+
+[data-sidebar] a:hover,
+[data-sidebar] [data-sidebar-item]:hover {
+  background: color-mix(in srgb, var(--fd-foreground) 6%, transparent) !important;
+  color: var(--fd-foreground) !important;
+}
+
+/* Active item: solid primary fill (matches app's bg-primary/text-primary-foreground) */
+[data-sidebar] a[data-active="true"],
+[data-sidebar] a[aria-current="page"],
+[data-sidebar] [data-sidebar-item][data-active="true"] {
+  background: var(--fd-primary) !important;
+  color: var(--fd-primary-foreground) !important;
+  font-weight: 600 !important;
+}
+
+[data-sidebar] a[data-active="true"]:hover {
+  background: color-mix(in srgb, var(--fd-primary) 90%, black) !important;
+}
+
+/* Icons inside sidebar items */
+[data-sidebar] a svg,
+[data-sidebar] [data-sidebar-item] svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+[data-sidebar] a[data-active="true"] svg {
+  opacity: 1;
+}
+
+/* Folder/group toggles: chevron stays subtle */
+[data-sidebar] [data-folder-trigger] svg {
+  opacity: 0.5;
+  transition: transform 0.15s;
+}
+
+[data-sidebar] [data-folder-trigger][data-state="open"] svg {
+  transform: rotate(90deg);
+}
+
+/* Search bar inside sidebar */
+[data-sidebar] [data-search-toggle],
+[data-sidebar] button[aria-label*="Search"] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--fd-border);
+  background: color-mix(in srgb, var(--fd-foreground) 4%, transparent);
+  font-size: 0.8125rem;
+  color: var(--fd-muted-foreground);
+}
+
+[data-sidebar] [data-search-toggle]:hover {
+  background: color-mix(in srgb, var(--fd-foreground) 7%, transparent);
+  color: var(--fd-foreground);
+}
+
+/* Sidebar footer (BackToExplorer, theme toggle) */
+[data-sidebar] [data-sidebar-footer],
+[data-sidebar] > div:last-child {
+  padding: 0.625rem 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--fd-border) 60%, transparent);
+}
+
+/* Custom scrollbar */
+[data-sidebar]::-webkit-scrollbar {
+  width: 6px;
+}
+
+[data-sidebar]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-sidebar]::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--fd-muted-foreground) 25%, transparent);
+  border-radius: 3px;
+}
+
+[data-sidebar]::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--fd-muted-foreground) 45%, transparent);
+}
+
 /* Make sure the mobile sidebar trigger button in the navbar is
-   visible on small screens (it can be hidden if base styles fail
-   to load). */
+   visible on small screens. */
 button[aria-label="Open Sidebar"],
 button[data-sidebar-trigger] {
   display: inline-flex !important;
@@ -508,7 +657,7 @@ button[data-sidebar-trigger] {
   }
 }
 
-/* Mobile drawer: animate in from the left, full height, scrollable */
+/* Mobile drawer */
 [data-sidebar][data-mobile="true"],
 aside[data-mobile="true"] {
   position: fixed !important;
@@ -516,13 +665,10 @@ aside[data-mobile="true"] {
   width: min(85vw, 320px) !important;
   max-width: 320px !important;
   z-index: 50 !important;
-  background: var(--fd-card) !important;
-  border-right: 1px solid var(--fd-border);
   box-shadow: 4px 0 24px -8px rgba(0, 0, 0, 0.35);
   overflow-y: auto;
 }
 
-/* Backdrop for mobile drawer */
 [data-sidebar-backdrop] {
   position: fixed !important;
   inset: 0 !important;
@@ -531,15 +677,7 @@ aside[data-mobile="true"] {
   backdrop-filter: blur(2px);
 }
 
-/* CollapsibleControl: the floating chevron button on desktop that
-   reopens the sidebar after the user collapses it. Make it visible
-   and unobtrusive. */
-[data-collapsible-control],
-button[data-collapse] {
-  z-index: 30;
-}
-
-/* Desktop: sidebar is sticky and scrolls independently */
+/* Desktop: sticky scroll */
 @media (min-width: 768px) {
   aside[data-sidebar],
   [data-sidebar]:not([data-mobile="true"]) {
@@ -550,22 +688,4 @@ button[data-collapse] {
     overflow-x: hidden;
     flex-shrink: 0;
   }
-}
-
-/* Sidebar inner spacing & section labels */
-[data-sidebar] [data-sidebar-section-title],
-[data-sidebar] h3 {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--fd-muted-foreground);
-  padding: 0.75rem 0.75rem 0.25rem;
-  margin: 0;
-}
-
-[data-sidebar] a {
-  font-size: 0.875rem;
-  line-height: 1.4;
-  border-radius: 0.375rem;
 }

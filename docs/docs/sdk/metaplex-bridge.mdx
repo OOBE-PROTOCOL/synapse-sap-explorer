@@ -128,7 +128,7 @@ Drive next-step actions from partial passes:
 
 ## Authenticated RPC reads
 
-Every read method accepts an optional `rpcHeaders?: Record<string, string>` that the bridge injects into `umi`'s HTTP client. This is required when your RPC enforces auth (Synapse RPC, Helius, QuickNode, etc.). Without it `fetchAsset` silently returns 401 and the read layers report `false`.
+Every read method accepts an optional `rpcHeaders?: Record<string, string>` that the bridge injects into `umi`'s HTTP client. This is required when your RPC enforces auth (Synapse Gateway, Triton, QuickNode, etc.). Without it `fetchAsset` silently returns 401 and the read layers report `false`.
 
 ```ts
 import { getRpcConfig } from "@/lib/sap/discovery";
