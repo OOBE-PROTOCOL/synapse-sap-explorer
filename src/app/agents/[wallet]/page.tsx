@@ -56,6 +56,18 @@ function safeDateStr(raw: string | number | null | undefined): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/**
+ * Safely truncate an address-like value for display.
+ * Returns '—' for non-string inputs (objects, numbers, null, undefined),
+ * which can leak into the metaplex tab from foreign EIP-8004 JSON files
+ * whose schema is not enforced.
+ */
+function shortAddr(value: unknown, head = 12, tail = 6): string {
+  if (typeof value !== 'string' || value.length === 0) return '—';
+  if (value.length <= head + tail + 1) return value;
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
+}
+
 export default function AgentDetailPage() {
   return (
     <Suspense fallback={null}>
@@ -2382,7 +2394,7 @@ function AgentMetaplexTab({
                             isCanonical ? 'text-amber-300/80' : 'text-neutral-400',
                           )}
                         >
-                          {n.asset.slice(0, 12)}…{n.asset.slice(-6)}
+                          {shortAddr(n.asset, 12, 6)}
                           <ExternalLink className="h-3 w-3" />
                         </Link>
                         <button onClick={() => onCopy(n.asset)} className="text-neutral-600 hover:text-neutral-300">
@@ -2413,7 +2425,8 @@ function AgentMetaplexTab({
 
                   {/* EIP-8004 JSON content (foreign or canonical) */}
                   {reg ? (() => {
-                    const regOwner = reg.owner ?? reg.authority ?? null;
+                    const rawOwner = reg.owner ?? reg.authority ?? null;
+                    const regOwner = typeof rawOwner === 'string' && rawOwner.length > 0 ? rawOwner : null;
                     const services = Array.isArray(reg.services) ? reg.services : [];
                     const registrations = Array.isArray(reg.registrations) ? reg.registrations : [];
                     const trust = Array.isArray(reg.supportedTrust) ? reg.supportedTrust : [];
@@ -2462,7 +2475,7 @@ function AgentMetaplexTab({
                               <Link
                                 href={`/agents/${regOwner}`}
                                 className="font-mono text-neutral-300 hover:text-amber-300 truncate"
-                              >
+                              >shortAddr(regOwner, 12, 
                                 {regOwner.slice(0, 12)}…{regOwner.slice(-6)}
                               </Link>
                               <button onClick={() => onCopy(regOwner)} className="text-neutral-600 hover:text-neutral-300">
