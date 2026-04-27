@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@oobe-protocol-labs/synapse-sap-sdk': link:../synapse-agent-sap/synapse-sap-sdk
-
 importers:
 
   .:
@@ -34,10 +31,10 @@ importers:
         version: 1.5.1(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
       '@oobe-protocol-labs/synapse-client-sdk':
         specifier: ^2.0.5
-        version: 2.0.5(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@oobe-protocol-labs/synapse-sap-sdk@synapse-agent-sap+synapse-sap-sdk)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(pg@8.20.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6)
+        version: 2.0.5(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@oobe-protocol-labs/synapse-sap-sdk@0.9.3(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@metaplex-foundation/mpl-core@1.10.0(@metaplex-foundation/umi@1.5.1)(@noble/hashes@1.8.0))(@metaplex-foundation/umi-bundle-defaults@1.5.1(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)))(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@triton-one/yellowstone-grpc@5.0.5(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(pg@8.20.0)(zod@4.3.6))(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(pg@8.20.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6)
       '@oobe-protocol-labs/synapse-sap-sdk':
-        specifier: link:../synapse-agent-sap/synapse-sap-sdk
-        version: link:../synapse-agent-sap/synapse-sap-sdk
+        specifier: ^0.9.3
+        version: 0.9.3(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@metaplex-foundation/mpl-core@1.10.0(@metaplex-foundation/umi@1.5.1)(@noble/hashes@1.8.0))(@metaplex-foundation/umi-bundle-defaults@1.5.1(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)))(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@triton-one/yellowstone-grpc@5.0.5(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(pg@8.20.0)(zod@4.3.6)
       '@solana/spl-token':
         specifier: ^0.4.14
         version: 0.4.14(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -1106,6 +1103,32 @@ packages:
       '@solana/web3.js':
         optional: true
       ioredis:
+        optional: true
+      pg:
+        optional: true
+      zod:
+        optional: true
+
+  '@oobe-protocol-labs/synapse-sap-sdk@0.9.3':
+    resolution: {integrity: sha512-oGwx4JqRA2b8cCiLnhGCRqHnX5duJAVkywcyuwBg/Npr+TxD5QuxRTj/2qZW1UfhtOiyyAiVHFMujXM8zPfNZg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@coral-xyz/anchor': '>=0.30.0'
+      '@metaplex-foundation/mpl-core': '>=1.9.0'
+      '@metaplex-foundation/umi': '>=0.9.0'
+      '@metaplex-foundation/umi-bundle-defaults': '>=0.9.0'
+      '@solana/web3.js': '>=1.90.0'
+      '@triton-one/yellowstone-grpc': '>=1.0.0'
+      pg: '>=8.0.0'
+      zod: '>=3.20.0'
+    peerDependenciesMeta:
+      '@metaplex-foundation/mpl-core':
+        optional: true
+      '@metaplex-foundation/umi':
+        optional: true
+      '@metaplex-foundation/umi-bundle-defaults':
+        optional: true
+      '@triton-one/yellowstone-grpc':
         optional: true
       pg:
         optional: true
@@ -6405,7 +6428,7 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
-  '@oobe-protocol-labs/synapse-client-sdk@2.0.5(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@oobe-protocol-labs/synapse-sap-sdk@synapse-agent-sap+synapse-sap-sdk)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(pg@8.20.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6)':
+  '@oobe-protocol-labs/synapse-client-sdk@2.0.5(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@oobe-protocol-labs/synapse-sap-sdk@0.9.3(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@metaplex-foundation/mpl-core@1.10.0(@metaplex-foundation/umi@1.5.1)(@noble/hashes@1.8.0))(@metaplex-foundation/umi-bundle-defaults@1.5.1(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)))(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@triton-one/yellowstone-grpc@5.0.5(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(pg@8.20.0)(zod@4.3.6))(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(pg@8.20.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6)':
     dependencies:
       '@solana/kit': 6.5.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
       eventemitter3: 5.0.4
@@ -6413,7 +6436,7 @@ snapshots:
       ws: 8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optionalDependencies:
       '@coral-xyz/anchor': 0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
-      '@oobe-protocol-labs/synapse-sap-sdk': link:../synapse-agent-sap/synapse-sap-sdk
+      '@oobe-protocol-labs/synapse-sap-sdk': 0.9.3(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@metaplex-foundation/mpl-core@1.10.0(@metaplex-foundation/umi@1.5.1)(@noble/hashes@1.8.0))(@metaplex-foundation/umi-bundle-defaults@1.5.1(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)))(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@triton-one/yellowstone-grpc@5.0.5(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(pg@8.20.0)(zod@4.3.6)
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       pg: 8.20.0
       zod: 4.3.6
@@ -6421,6 +6444,18 @@ snapshots:
       - bufferutil
       - fastestsmallesttextencoderdecoder
       - utf-8-validate
+
+  '@oobe-protocol-labs/synapse-sap-sdk@0.9.3(@coral-xyz/anchor@0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@metaplex-foundation/mpl-core@1.10.0(@metaplex-foundation/umi@1.5.1)(@noble/hashes@1.8.0))(@metaplex-foundation/umi-bundle-defaults@1.5.1(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)))(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@triton-one/yellowstone-grpc@5.0.5(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(pg@8.20.0)(zod@4.3.6)':
+    dependencies:
+      '@coral-xyz/anchor': 0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+    optionalDependencies:
+      '@metaplex-foundation/mpl-core': 1.10.0(@metaplex-foundation/umi@1.5.1)(@noble/hashes@1.8.0)
+      '@metaplex-foundation/umi': 1.5.1
+      '@metaplex-foundation/umi-bundle-defaults': 1.5.1(@metaplex-foundation/umi@1.5.1)(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
+      '@triton-one/yellowstone-grpc': 5.0.5(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
+      pg: 8.20.0
+      zod: 4.3.6
 
   '@orama/orama@3.1.18': {}
 
