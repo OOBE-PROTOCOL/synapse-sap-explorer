@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synapse SAP Explorer — Public API v1 Docs</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #09090f;
+      --surface-0: rgba(16, 16, 24, 0.92);
+      --surface-1: rgba(19, 19, 31, 0.92);
+      --surface-2: rgba(29, 29, 45, 0.92);
+      --surface-3: rgba(44, 44, 68, 0.92);
+      --border: rgba(255,255,255,0.09);
+      --border-strong: rgba(255,255,255,0.16);
+      --text: #e7edf9;
+      --text-muted: #a4b0c3;
+      --text-soft: #738198;
+      --glow: 124,58,237;
+      --cyan: 6,182,212;
+      --emerald: 16,185,129;
+      --amber: 245,158,11;
+      --rose: 244,63,94;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 18px 50px rgba(0,0,0,0.32);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(var(--glow),0.17), transparent 28%),
+        radial-gradient(circle at top left, rgba(var(--cyan),0.11), transparent 24%),
+        linear-gradient(180deg, #0a0a11 0%, #0a0b13 100%);
+    }
+
+    a { color: inherit; }
+    code, pre { font-family: var(--mono); }
+    button, input, select { font: inherit; }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 22px 18px 28px;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(10,10,18,0.97) 0%, rgba(12,12,19,0.94) 100%);
+      backdrop-filter: blur(18px);
+    }
+    .sidebar::-webkit-scrollbar,
+    .content::-webkit-scrollbar,
+    .response-pre::-webkit-scrollbar,
+    .code-block pre::-webkit-scrollbar { width: 8px; height: 8px; }
+    .sidebar::-webkit-scrollbar-thumb,
+    .content::-webkit-scrollbar-thumb,
+    .response-pre::-webkit-scrollbar-thumb,
+    .code-block pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .brand-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgb(var(--glow));
+      box-shadow: 0 0 0 6px rgba(var(--glow),0.12), 0 0 18px rgba(var(--glow),0.5);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.84); opacity: 0.72; }
+    }
+    .brand-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+    .brand-subtitle { font-size: 12px; color: var(--text-soft); }
+
+    .hero-card,
+    .sidebar-card,
+    .panel,
+    .endpoint-card,
+    .overview-card,
+    .metric-card,
+    .request-card,
+    .response-card,
+    .sticky-toolbar {
+      background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .sidebar-card {
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .sidebar-card h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: var(--mono);
+    }
+    .sidebar-card p,
+    .sidebar-card li { color: var(--text-soft); font-size: 13px; line-height: 1.6; }
+    .sidebar-card ul { padding-left: 18px; margin: 10px 0 0; }
+
+    .search-input,
+    .toolbar-input,
+    .param-input,
+    .toolbar-select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .search-input:focus,
+    .toolbar-input:focus,
+    .param-input:focus,
+    .toolbar-select:focus {
+      border-color: rgba(var(--glow),0.6);
+      box-shadow: 0 0 0 3px rgba(var(--glow),0.13);
+      background: rgba(255,255,255,0.06);
+    }
+
+    .nav-section { margin-top: 18px; }
+    .nav-label {
+      margin: 0 0 8px;
+      padding: 0 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-soft);
+    }
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .nav-item {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: inherit;
+      padding: 11px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .nav-item:hover {
+      transform: translateX(2px);
+      border-color: var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    .nav-item.active {
+      border-color: rgba(var(--glow),0.55);
+      background: linear-gradient(180deg, rgba(var(--glow),0.14), rgba(var(--glow),0.06));
+      box-shadow: 0 0 0 1px rgba(var(--glow),0.2) inset, 0 0 16px rgba(var(--glow),0.14);
+    }
+    .nav-item-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .nav-item-title { font-weight: 600; font-size: 13px; }
+    .nav-item-path {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-soft);
+      word-break: break-word;
+    }
+
+    .method-badge,
+    .status-badge,
+    .tiny-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      line-height: 1;
+      font-weight: 700;
+      border: 1px solid transparent;
+      font-family: var(--mono);
+      letter-spacing: 0.03em;
+    }
+    .method-get,
+    .status-ok,
+    .tiny-cyan { color: rgb(var(--cyan)); border-color: rgba(var(--cyan),0.35); background: rgba(var(--cyan),0.12); }
+    .status-pending,
+    .tiny-amber { color: rgb(var(--amber)); border-color: rgba(var(--amber),0.35); background: rgba(var(--amber),0.12); }
+    .status-error,
+    .tiny-rose { color: rgb(var(--rose)); border-color: rgba(var(--rose),0.35); background: rgba(var(--rose),0.12); }
+    .tiny-violet { color: rgb(var(--glow)); border-color: rgba(var(--glow),0.35); background: rgba(var(--glow),0.12); }
+    .tiny-emerald { color: rgb(var(--emerald)); border-color: rgba(var(--emerald),0.35); background: rgba(var(--emerald),0.12); }
+
+    .content {
+      min-width: 0;
+      overflow: auto;
+      padding: 26px;
+    }
+
+    .sticky-toolbar {
+      position: sticky;
+      top: 20px;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 0.9fr auto;
+      gap: 12px;
+      padding: 14px;
+      margin-bottom: 22px;
+    }
+    .toolbar-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .toolbar-actions {
+      display: flex;
+      align-items: end;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: 12px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      transition: transform .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+      background: rgba(255,255,255,0.06);
+    }
+    .btn-primary {
+      border-color: rgba(var(--glow),0.46);
+      background: linear-gradient(180deg, rgba(var(--glow),0.95), rgba(106,40,210,0.92));
+      color: white;
+      box-shadow: 0 10px 24px rgba(var(--glow),0.28);
+    }
+    .btn-primary:hover { box-shadow: 0 14px 34px rgba(var(--glow),0.35); }
+
+    .hero-card {
+      padding: 28px;
+      margin-bottom: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-card::after {
+      content: '';
+      position: absolute;
+      inset: auto -40px -40px auto;
+      width: 200px;
+      height: 200px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(var(--glow),0.28), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-kicker {
+      margin-bottom: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgb(var(--cyan));
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .hero-title {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+    .gradient-text {
+      background: linear-gradient(90deg, rgb(var(--glow)), rgb(var(--cyan)));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero-subtitle {
+      margin: 14px 0 20px;
+      max-width: 900px;
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .hero-actions,
+    .badge-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    .metrics-grid,
+    .overview-grid,
+    .detail-grid,
+    .try-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .metrics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 22px; }
+    .overview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 22px; }
+    .detail-grid { grid-template-columns: 1.2fr 0.8fr; }
+    .try-grid { grid-template-columns: 1fr 1fr; margin-top: 18px; }
+
+    .metric-card,
+    .overview-card,
+    .panel,
+    .request-card,
+    .response-card {
+      padding: 18px;
+    }
+    .metric-label,
+    .section-kicker,
+    .subheading {
+      margin: 0 0 8px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .metric-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: 6px;
+    }
+    .metric-help,
+    .overview-card p,
+    .panel p,
+    .endpoint-description,
+    .muted {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .overview-card h3,
+    .panel h3,
+    .request-card h3,
+    .response-card h3,
+    .endpoint-card h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+    .panel + .panel { margin-top: 16px; }
+    .panel ul { margin: 10px 0 0; padding-left: 18px; color: var(--text-muted); }
+    .panel li { margin: 6px 0; }
+
+    .endpoint-card {
+      padding: 22px;
+      margin-top: 22px;
+    }
+    .endpoint-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .endpoint-path {
+      margin: 8px 0 0;
+      font-size: 14px;
+      color: var(--text-soft);
+      font-family: var(--mono);
+      word-break: break-word;
+    }
+    .endpoint-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.12), rgba(255,255,255,0));
+      margin: 20px 0;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.02);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      text-align: left;
+      font-size: 13px;
+    }
+    th {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-family: var(--mono);
+      letter-spacing: 0.08em;
+      color: var(--text-soft);
+      background: rgba(255,255,255,0.03);
+    }
+    tr:last-child td { border-bottom: none; }
+    .param-name { font-family: var(--mono); color: var(--text); }
+    .param-chip {
+      display: inline-flex;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 11px;
+      border: 1px solid var(--border);
+      color: var(--text-soft);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .code-block {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(10,10,18,0.86);
+      overflow: hidden;
+    }
+    .code-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.035);
+      color: var(--text-soft);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: var(--mono);
+    }
+    .code-block pre,
+    .response-pre {
+      margin: 0;
+      padding: 16px;
+      overflow: auto;
+      font-size: 12.5px;
+      line-height: 1.75;
+      color: #dce6f8;
+    }
+
+    .json-key { color: #c4b5fd; }
+    .json-string { color: #86efac; }
+    .json-number { color: #67e8f9; }
+    .json-boolean { color: #fbbf24; }
+    .json-null { color: #94a3b8; }
+    .json-punct { color: #7c8aa1; }
+
+    .request-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .url-box {
+      flex: 1 1 420px;
+      min-height: 46px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .param-field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: var(--text-soft);
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .param-help {
+      display: block;
+      margin-top: 5px;
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    .response-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .response-meta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--text-soft);
+      font-size: 12px;
+      font-family: var(--mono);
+    }
+    .headers-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .header-item {
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    .header-name {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .header-value {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .empty-state {
+      padding: 28px;
+      border: 1px dashed rgba(255,255,255,0.16);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.02);
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .footer-note {
+      margin-top: 28px;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    #toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      max-width: 360px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      background: rgba(15,15,22,0.96);
+      box-shadow: var(--shadow);
+      transform: translateY(10px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+      z-index: 50;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 1280px) {
+      .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .overview-grid { grid-template-columns: 1fr; }
+      .detail-grid,
+      .try-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 1080px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .sticky-toolbar {
+        position: static;
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 720px) {
+      .content { padding: 16px; }
+      .hero-card,
+      .endpoint-card,
+      .panel,
+      .metric-card,
+      .overview-card,
+      .request-card,
+      .response-card { padding: 16px; }
+      .metrics-grid { grid-template-columns: 1fr; }
+      .params-grid,
+      .headers-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-dot" aria-hidden="true"></div>
+        <div>
+          <div class="brand-title">Synapse SAP Explorer</div>
+          <div class="brand-subtitle">Public API v1 docs &amp; playground</div>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>What this page is</h3>
+        <p>Interactive documentation for the stable public surface under <code>/api/v1</code>. Every documented endpoint below can be inspected, copied as <code>curl</code>, and executed live.</p>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Quick facts</h3>
+        <ul>
+          <li><strong>17 endpoints</strong> documented</li>
+          <li>All routes return <strong>JSON</strong></li>
+          <li>Optional auth via <code>x-api-key</code></li>
+          <li>Standard success/error envelope</li>
+          <li>Per-request rate limit headers</li>
+        </ul>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Find endpoint</h3>
+        <input id="navSearch" class="search-input" type="search" placeholder="Search by path, name, capability…" aria-label="Search endpoints" />
+      </div>
+
+      <nav id="sidebarNav" aria-label="Public API endpoints"></nav>
+    </aside>
+
+    <main class="content">
+      <section class="sticky-toolbar" aria-label="Playground controls">
+        <div class="toolbar-group">
+          <label for="baseUrlInput">Base URL</label>
+          <input id="baseUrlInput" class="toolbar-input" type="text" placeholder="https://explorer.oobeprotocol.ai" />
+        </div>
+        <div class="toolbar-group">
+          <label for="apiKeyInput">x-api-key (optional)</label>
+          <input id="apiKeyInput" class="toolbar-input" type="text" placeholder="sk-live-or-pro-key" autocomplete="off" />
+        </div>
+        <div class="toolbar-group">
+          <label for="requestIdInput">x-request-id (optional)</label>
+          <input id="requestIdInput" class="toolbar-input" type="text" placeholder="client-correlation-id" autocomplete="off" />
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn" id="copyBaseCurlBtn" type="button">Copy base curl</button>
+          <a class="btn btn-primary" href="#endpointSection">Jump to endpoint</a>
+        </div>
+      </section>
+
+      <section class="hero-card" id="overviewTop">
+        <div class="hero-kicker">Public API • stable external surface</div>
+        <h1 class="hero-title">Use the <span class="gradient-text">Synapse SAP Explorer API</span> as live docs, reference, and test console.</h1>
+        <p class="hero-subtitle">This page is designed for external integrators. It explains authentication, rate limits, response envelopes, standard headers, and every route under <code>/api/v1</code>. You can also run each request live against any environment by changing the base URL above.</p>
+        <div class="hero-actions">
+          <span class="tiny-badge tiny-violet">JSON over HTTPS</span>
+          <span class="tiny-badge tiny-cyan">17 documented endpoints</span>
+          <span class="tiny-badge tiny-emerald">Live try-it support</span>
+          <span class="tiny-badge tiny-amber">Rate limited by tier</span>
+        </div>
+      </section>
+
+      <section class="metrics-grid" aria-label="API summary">
+        <article class="metric-card">
+          <div class="metric-label">Public routes</div>
+          <div class="metric-value" id="metricEndpoints">17</div>
+          <div class="metric-help">Complete coverage of the current <code>/api/v1</code> surface.</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">HTTP methods</div>
+          <div class="metric-value">GET</div>
+          <div class="metric-help">Current public API is read-only and safe to explore.</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Public rate limit</div>
+          <div class="metric-value">30/min</div>
+          <div class="metric-help">Without API key. Free and Pro tiers raise this cap.</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Envelope</div>
+          <div class="metric-value">Stable</div>
+          <div class="metric-help">Success uses <code>data + meta</code>, errors use <code>error</code>.</div>
+        </article>
+      </section>
+
+      <section class="overview-grid">
+        <article class="overview-card">
+          <p class="section-kicker">Quick start</p>
+          <h3>Minimal request</h3>
+          <div class="code-block">
+            <div class="code-block-header">
+              <span>curl</span>
+              <button class="btn" type="button" data-copy="quickStartCurl">Copy</button>
+            </div>
+            <pre id="quickStartCurl"></pre>
+          </div>
+        </article>
+
+        <article class="overview-card">
+          <p class="section-kicker">Authentication</p>
+          <h3>Optional API key via header</h3>
+          <p>Send <code>x-api-key</code> to move from the default <strong>public</strong> tier to a configured <strong>free</strong> or <strong>pro</strong> tier. No key is required for basic reads.</p>
+          <ul>
+            <li><strong>public</strong>: 30 req/min</li>
+            <li><strong>free</strong>: 120 req/min</li>
+            <li><strong>pro</strong>: 600 req/min</li>
+          </ul>
+        </article>
+
+        <article class="overview-card">
+          <p class="section-kicker">Standard response headers</p>
+          <h3>Observability built in</h3>
+          <ul>
+            <li><code>X-Request-Id</code> — request correlation id</li>
+            <li><code>X-Data-Source</code> — <code>db | cache | rpc | mixed | internal</code></li>
+            <li><code>X-Data-Age</code> — server-reported data age in ms</li>
+            <li><code>X-RateLimit-Limit / Remaining / Reset</code> — request window telemetry</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="detail-grid">
+        <article class="panel">
+          <p class="section-kicker">Success envelope</p>
+          <h3>Every successful response has the same outer shape</h3>
+          <div class="code-block">
+            <div class="code-block-header">
+              <span>JSON</span>
+              <button class="btn" type="button" data-copy="successEnvelopeCode">Copy</button>
+            </div>
+            <pre id="successEnvelopeCode"></pre>
+          </div>
+        </article>
+
+        <article class="panel">
+          <p class="section-kicker">Error envelope</p>
+          <h3>Errors are stable and easy to branch on</h3>
+          <div class="code-block">
+            <div class="code-block-header">
+              <span>JSON</span>
+              <button class="btn" type="button" data-copy="errorEnvelopeCode">Copy</button>
+            </div>
+            <pre id="errorEnvelopeCode"></pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel" style="margin-top:22px">
+        <p class="section-kicker">Common integration notes</p>
+        <h3>How to consume the API safely</h3>
+        <ul>
+          <li>Prefer reading pagination data from <code>meta</code> instead of inferring it client-side.</li>
+          <li>Use <code>X-Request-Id</code> for support/debugging and optionally send your own <code>x-request-id</code>.</li>
+          <li>Dynamic path parameters such as <code>wallet</code>, <code>address</code>, and <code>pda</code> are validated as Solana public keys by the server.</li>
+          <li>For <code>/api/v1/transactions</code>, the query key is <code>perPage</code> (camelCase), not <code>per_page</code>.</li>
+          <li>Numeric query parameters are clamped to server-side maximums instead of failing when above the cap, but invalid negative numbers still return <code>INVALID_PARAM</code>.</li>
+          <li>All currently documented public endpoints are read-only <code>GET</code> requests.</li>
+        </ul>
+      </section>
+
+      <section class="endpoint-card" id="endpointSection">
+        <div class="endpoint-header">
+          <div>
+            <p class="section-kicker">Endpoint reference</p>
+            <h2 id="endpointTitle">Select an endpoint from the left</h2>
+            <div class="endpoint-path" id="endpointPath">Use the navigation to inspect parameters, copy example requests, and run live tests.</div>
+          </div>
+          <div class="badge-row" id="endpointBadges"></div>
+        </div>
+
+        <p class="endpoint-description" id="endpointDescription">The reference panel below updates for the selected endpoint and doubles as a playground.</p>
+
+        <div class="endpoint-meta" id="endpointMeta"></div>
+
+        <div class="divider"></div>
+
+        <div class="panel">
+          <p class="section-kicker">What it returns</p>
+          <h3>Endpoint purpose</h3>
+          <p id="endpointPurpose" class="muted">Choose an endpoint to see its documented output shape and usage constraints.</p>
+        </div>
+
+        <div class="panel" style="margin-top:16px">
+          <p class="section-kicker">Parameters</p>
+          <h3>Path and query contract</h3>
+          <div id="paramsTableWrap" class="empty-state">No endpoint selected.</div>
+        </div>
+
+        <div class="try-grid">
+          <section class="request-card">
+            <p class="section-kicker">Request builder</p>
+            <h3>Try it live</h3>
+            <div class="request-row">
+              <span id="requestMethodBadge" class="method-badge method-get">GET</span>
+              <div id="requestUrl" class="url-box">—</div>
+              <button class="btn btn-primary" id="sendRequestBtn" type="button" disabled>Send request</button>
+            </div>
+            <div class="request-row">
+              <button class="btn" id="fillExampleBtn" type="button" disabled>Use example values</button>
+              <button class="btn" id="copyCurlBtn" type="button" disabled>Copy curl</button>
+              <button class="btn" id="copyUrlBtn" type="button" disabled>Copy URL</button>
+            </div>
+            <div id="requestNotes" class="muted" style="margin-bottom:12px">Select an endpoint to build a request.</div>
+            <div id="paramsForm" class="params-grid"></div>
+          </section>
+
+          <section class="response-card">
+            <p class="section-kicker">Live response</p>
+            <h3>Response payload &amp; headers</h3>
+            <div class="response-toolbar">
+              <div id="responseStatus"></div>
+              <div class="response-meta">
+                <span id="responseTime">—</span>
+                <span id="responseSize">—</span>
+              </div>
+              <button class="btn" id="copyResponseBtn" type="button" style="display:none">Copy JSON</button>
+            </div>
+            <div class="code-block">
+              <div class="code-block-header">
+                <span>Body</span>
+                <span id="responseHint">No request sent yet</span>
+              </div>
+              <pre class="response-pre" id="responseBody">Select an endpoint and click “Send request”.</pre>
+            </div>
+            <div id="responseHeadersWrap" style="margin-top:14px"></div>
+          </section>
+        </div>
+
+        <div class="detail-grid" style="margin-top:18px">
+          <section class="panel">
+            <p class="section-kicker">Example request</p>
+            <h3>Ready-to-run curl</h3>
+            <div class="code-block">
+              <div class="code-block-header">
+                <span>curl</span>
+                <button class="btn" id="copyEndpointCurlBtn" type="button" disabled>Copy</button>
+              </div>
+              <pre id="endpointCurlCode">Select an endpoint to generate a ready-to-run request.</pre>
+            </div>
+          </section>
+
+          <section class="panel">
+            <p class="section-kicker">Example response</p>
+            <h3>Shape you can expect</h3>
+            <div class="code-block">
+              <div class="code-block-header">
+                <span>JSON</span>
+                <button class="btn" id="copyExampleResponseBtn" type="button" disabled>Copy</button>
+              </div>
+              <pre id="exampleResponseCode">Select an endpoint to inspect a representative success payload.</pre>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" style="margin-top:18px">
+          <p class="section-kicker">Known error cases</p>
+          <h3>What to handle client-side</h3>
+          <div id="errorCasesWrap" class="empty-state">Select an endpoint to view its common failure modes.</div>
+        </section>
+      </section>
+
+      <p class="footer-note">Tip: if you host this file from the same domain as the API, requests use same-origin by default. If you point it to a different base URL, the target environment must allow cross-origin browser requests for live testing.</p>
+    </main>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const GROUPS = [
+      { id: 'system', label: 'System' },
+      { id: 'entities', label: 'Entities' },
+      { id: 'lookup', label: 'Lookup' },
+      { id: 'network', label: 'Network' },
+      { id: 'analytics', label: 'Analytics' },
+    ];
+
+    const COMMON_ERRORS = {
+      INVALID_PARAM: '400 — invalid path or query parameter',
+      NOT_FOUND: '404 — resource not found',
+      RATE_LIMITED: '429 — too many requests for the active tier',
+      INTERNAL_ERROR: '500 — unexpected server-side issue',
+    };
+
+    const ENDPOINTS = [
+      {
+        id: 'status',
+        group: 'system',
+        title: 'Status',
+        path: '/api/v1/status',
+        method: 'GET',
+        summary: 'Returns current API health and component status.',
+        purpose: 'Use this endpoint for uptime checks, readiness probes, and operational dashboards.',
+        notes: 'No parameters. Useful as the first request when configuring a client.',
+        auth: 'Optional x-api-key',
+        params: [],
+        exampleValues: {},
+        sampleResponse: {
+          data: {
+            status: 'ok',
+            version: 'v1',
+            timestamp: '2026-04-27T12:00:00.000Z',
+            components: {
+              database: { status: 'ok', latencyMs: 14 },
+              rpc: { status: 'ok', latencyMs: 120 },
+              indexer: {
+                status: 'ok',
+                cursors: [{ entity: 'transactions', lastSyncAgoSec: 8, stale: false, maxAgeSec: 60 }],
+              },
+            },
+          },
+          meta: { requestId: 'req_status_demo', source: 'internal', dataAgeMs: 0 },
+        },
+        errors: ['RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'agents',
+        group: 'entities',
+        title: 'List agents',
+        path: '/api/v1/agents',
+        method: 'GET',
+        summary: 'Lists public SAP agents with optional capability and protocol filters.',
+        purpose: 'Use it to build explorer views, directories, search indexes, or bootstrap detail lookups.',
+        notes: 'The server clamps limit to 200. Response meta includes total, limit, and hasMore.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'capability', in: 'query', type: 'string', required: false, description: 'Filter agents by capability tag.', example: 'text-generation' },
+          { name: 'protocol', in: 'query', type: 'string', required: false, description: 'Filter agents by protocol.', example: 'openai-v1' },
+          { name: 'limit', in: 'query', type: 'integer', required: false, description: 'Maximum number of records, capped server-side at 200.', default: 50, example: 5 },
+        ],
+        exampleValues: { limit: '5', capability: 'text-generation' },
+        sampleResponse: {
+          data: [{ pda: 'AgentPda111', identity: { wallet: 'Wallet111' }, name: 'Atlas', protocol: 'openai-v1' }],
+          meta: { requestId: 'req_agents_demo', source: 'db', dataAgeMs: 0, total: 128, limit: 5, hasMore: true },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'agent-wallet',
+        group: 'entities',
+        title: 'Agent by wallet',
+        path: '/api/v1/agents/:wallet',
+        method: 'GET',
+        summary: 'Returns a single agent profile by Solana wallet.',
+        purpose: 'Use it to resolve a wallet address into agent metadata and profile information.',
+        notes: 'The wallet path parameter is validated as a Solana public key.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'wallet', in: 'path', type: 'solana-public-key', required: true, description: 'Agent wallet address.', example: '8B9z4fExampleWallet11111111111111111111111111' },
+        ],
+        exampleValues: { wallet: '8B9z4fExampleWallet11111111111111111111111111' },
+        sampleResponse: {
+          data: { pda: 'AgentPda111', identity: { wallet: '8B9z4fExampleWallet11111111111111111111111111' }, name: 'Atlas', reputation: 98.4 },
+          meta: { requestId: 'req_agent_detail', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['INVALID_PARAM', 'NOT_FOUND', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'tools',
+        group: 'entities',
+        title: 'List tools',
+        path: '/api/v1/tools',
+        method: 'GET',
+        summary: 'Returns public tool definitions plus the category list.',
+        purpose: 'Use it to populate tool catalog pages or capability pickers.',
+        notes: 'Unlike list endpoints returning arrays directly, this endpoint returns an object with tools and categories.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'category', in: 'query', type: 'string', required: false, description: 'Filter tools by category.', example: 'vision' },
+        ],
+        exampleValues: { category: 'vision' },
+        sampleResponse: {
+          data: { tools: [{ pda: 'ToolPda111', name: 'OCR Reader', category: 'vision' }], categories: ['vision', 'nlp'] },
+          meta: { requestId: 'req_tools_demo', source: 'db', dataAgeMs: 0, total: 42 },
+        },
+        errors: ['RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'escrows',
+        group: 'entities',
+        title: 'List escrows',
+        path: '/api/v1/escrows',
+        method: 'GET',
+        summary: 'Lists escrow accounts visible through the public API.',
+        purpose: 'Use it for escrow dashboards, monitoring tools, and batch detail discovery.',
+        notes: 'The server clamps limit to 500. Response meta includes total, limit, and hasMore.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'limit', in: 'query', type: 'integer', required: false, description: 'Maximum number of escrow rows, capped at 500.', default: 100, example: 10 },
+        ],
+        exampleValues: { limit: '10' },
+        sampleResponse: {
+          data: [{ pda: 'EscrowPda111', agentPda: 'AgentPda111', balanceLamports: '1200000000', status: 'active' }],
+          meta: { requestId: 'req_escrows_demo', source: 'db', dataAgeMs: 0, total: 512, limit: 10, hasMore: true },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'escrow-pda',
+        group: 'entities',
+        title: 'Escrow by PDA',
+        path: '/api/v1/escrows/:pda',
+        method: 'GET',
+        summary: 'Fetches one escrow by its PDA.',
+        purpose: 'Use it when you already know the escrow address and need its latest public state.',
+        notes: 'The pda path parameter is validated as a Solana public key.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'pda', in: 'path', type: 'solana-public-key', required: true, description: 'Escrow PDA.', example: '5S3rowExamplePda11111111111111111111111111111' },
+        ],
+        exampleValues: { pda: '5S3rowExamplePda11111111111111111111111111111' },
+        sampleResponse: {
+          data: { pda: '5S3rowExamplePda11111111111111111111111111111', agentPda: 'AgentPda111', balanceLamports: '3200000000', expiresAt: 1770000123 },
+          meta: { requestId: 'req_escrow_detail', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['INVALID_PARAM', 'NOT_FOUND', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'escrow-alerts',
+        group: 'analytics',
+        title: 'Escrow alerts',
+        path: '/api/v1/escrows/alerts',
+        method: 'GET',
+        summary: 'Returns expiring and low-balance escrows.',
+        purpose: 'Use it for alerting surfaces, operational widgets, and cron-based monitoring.',
+        notes: 'The hours query is clamped to 720. Response meta.limit mirrors the effective hours window.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'hours', in: 'query', type: 'integer', required: false, description: 'Look-ahead window for expiring escrows, capped at 720.', default: 48, example: 48 },
+        ],
+        exampleValues: { hours: '48' },
+        sampleResponse: {
+          data: {
+            expiringEscrows: [{ pda: 'EscrowPda111', balanceSol: '1.250000', expiresAt: 1770000123, status: 'active' }],
+            lowBalanceEscrows: [{ pda: 'EscrowPda222', balanceSol: '0.000120', expiresAt: 1771000123, status: 'active' }],
+          },
+          meta: { requestId: 'req_alerts_demo', source: 'db', dataAgeMs: 0, total: 2, limit: 48 },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'transactions',
+        group: 'entities',
+        title: 'List transactions',
+        path: '/api/v1/transactions',
+        method: 'GET',
+        summary: 'Lists public transactions with page-based pagination.',
+        purpose: 'Use it for ledger views, activity feeds, and signature discovery before calling tx detail.',
+        notes: 'Uses page + perPage. perPage is clamped to 200. Response meta includes total, page, limit, and hasMore.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'page', in: 'query', type: 'integer', required: false, description: '1-based page number.', default: 1, example: 1 },
+          { name: 'perPage', in: 'query', type: 'integer', required: false, description: 'Items per page, capped at 200.', default: 25, example: 10 },
+        ],
+        exampleValues: { page: '1', perPage: '10' },
+        sampleResponse: {
+          data: [{ signature: '5YtxExample111', slot: 299999999, success: true, timestamp: '2026-04-27T12:00:00.000Z' }],
+          meta: { requestId: 'req_txs_demo', source: 'db', dataAgeMs: 0, total: 12000, page: 1, limit: 10, hasMore: true },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'tx',
+        group: 'lookup',
+        title: 'Transaction by signature',
+        path: '/api/v1/tx/:signature',
+        method: 'GET',
+        summary: 'Returns detail for a single transaction signature.',
+        purpose: 'Use it to inspect transaction metadata after discovering the signature from the list endpoint or your own event pipeline.',
+        notes: 'Signature is required as a non-empty string path parameter.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'signature', in: 'path', type: 'string', required: true, description: 'Transaction signature.', example: '5YtxExample1111111111111111111111111111111111111111111111' },
+        ],
+        exampleValues: { signature: '5YtxExample1111111111111111111111111111111111111111111111' },
+        sampleResponse: {
+          data: { signature: '5YtxExample1111111111111111111111111111111111111111111111', slot: 299999999, success: true, programIds: ['SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ'] },
+          meta: { requestId: 'req_tx_detail', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['INVALID_PARAM', 'NOT_FOUND', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'address',
+        group: 'lookup',
+        title: 'Address lookup',
+        path: '/api/v1/address/:address',
+        method: 'GET',
+        summary: 'Resolves a Solana address into a public entity result.',
+        purpose: 'Use it when you only know an address and need to determine whether it maps to an agent, escrow, tool, or related entity.',
+        notes: 'The address path parameter is validated as a Solana public key.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'address', in: 'path', type: 'solana-public-key', required: true, description: 'Address to resolve.', example: '8B9z4fExampleWallet11111111111111111111111111' },
+        ],
+        exampleValues: { address: '8B9z4fExampleWallet11111111111111111111111111' },
+        sampleResponse: {
+          data: { type: 'agent', address: '8B9z4fExampleWallet11111111111111111111111111', label: 'Atlas', pda: 'AgentPda111' },
+          meta: { requestId: 'req_address_lookup', source: 'mixed', dataAgeMs: 0 },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'search',
+        group: 'lookup',
+        title: 'Search',
+        path: '/api/v1/search',
+        method: 'GET',
+        summary: 'Searches public entities by free text.',
+        purpose: 'Use it for command palettes, explorer search bars, and fuzzy discovery UIs.',
+        notes: 'q can be empty, though most clients send a non-empty term. limit is clamped to 50.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'q', in: 'query', type: 'string', required: false, description: 'Search text. Usually non-empty in real clients.', example: 'agent' },
+          { name: 'limit', in: 'query', type: 'integer', required: false, description: 'Maximum results, capped at 50.', default: 20, example: 10 },
+        ],
+        exampleValues: { q: 'agent', limit: '10' },
+        sampleResponse: {
+          data: [{ type: 'agent', label: 'Atlas', address: 'Wallet111' }, { type: 'tool', label: 'OCR Reader', address: 'ToolPda111' }],
+          meta: { requestId: 'req_search_demo', source: 'db', dataAgeMs: 0, total: 2, limit: 10, hasMore: false },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'network-metrics',
+        group: 'network',
+        title: 'Network metrics',
+        path: '/api/v1/network/metrics',
+        method: 'GET',
+        summary: 'Returns aggregated explorer/network metrics.',
+        purpose: 'Use it for dashboards and KPI cards where you want an already-aggregated snapshot.',
+        notes: 'No parameters.',
+        auth: 'Optional x-api-key',
+        params: [],
+        exampleValues: {},
+        sampleResponse: {
+          data: { agents: 128, activeAgents: 94, tools: 42, escrows: 512, tx24h: 1204 },
+          meta: { requestId: 'req_network_metrics', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'network-graph',
+        group: 'network',
+        title: 'Network graph',
+        path: '/api/v1/network/graph',
+        method: 'GET',
+        summary: 'Returns graph nodes and links for ecosystem visualization.',
+        purpose: 'Use it for force-directed network views, relationship maps, and ecosystem visualizations.',
+        notes: 'Optional protocol and capability filters can narrow the graph before rendering.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'protocol', in: 'query', type: 'string', required: false, description: 'Limit graph to a protocol.', example: 'openai-v1' },
+          { name: 'capability', in: 'query', type: 'string', required: false, description: 'Limit graph to a capability.', example: 'text-generation' },
+        ],
+        exampleValues: { protocol: 'openai-v1', capability: 'text-generation' },
+        sampleResponse: {
+          data: { nodes: [{ id: 'AgentPda111', type: 'agent', label: 'Atlas' }], links: [{ source: 'AgentPda111', target: 'ToolPda111', type: 'uses' }] },
+          meta: { requestId: 'req_graph_demo', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'network-snapshots',
+        group: 'network',
+        title: 'Network snapshots',
+        path: '/api/v1/network/snapshots',
+        method: 'GET',
+        summary: 'Returns historical network snapshots for a day window.',
+        purpose: 'Use it for timeline charts and historical growth analysis.',
+        notes: 'days is clamped to 365. Response meta.limit reflects the effective day window.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'days', in: 'query', type: 'integer', required: false, description: 'Snapshot history window in days, capped at 365.', default: 30, example: 30 },
+        ],
+        exampleValues: { days: '30' },
+        sampleResponse: {
+          data: [{ day: '2026-04-27', agents: 128, activeAgents: 94, escrows: 512, volumeLamports: '12000000000' }],
+          meta: { requestId: 'req_snapshots_demo', source: 'db', dataAgeMs: 0, total: 30, limit: 30 },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'network-health',
+        group: 'network',
+        title: 'Network health',
+        path: '/api/v1/network/health',
+        method: 'GET',
+        summary: 'Returns high-level protocol health, growth, and expiring escrow indicators.',
+        purpose: 'Use it for ops dashboards, public status surfaces, or higher-level protocol reporting.',
+        notes: 'No parameters.',
+        auth: 'Optional x-api-key',
+        params: [],
+        exampleValues: {},
+        sampleResponse: {
+          data: {
+            agents: { total: 128, active: 94, activePercent: 73, avgReputation: 92.8 },
+            escrows: { total: 512, active: 380, utilisationPercent: 62, expiringSoon: 12 },
+            tools: 42,
+            vaults: 16,
+            growth: { agents: { thisWeek: 8, lastWeek: 5, deltaPercent: 60 } },
+            expiringEscrows: [{ pda: 'EscrowPda111', expiresAt: 1770000123 }],
+          },
+          meta: { requestId: 'req_network_health', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'volume',
+        group: 'analytics',
+        title: 'Aggregated volume',
+        path: '/api/v1/volume',
+        method: 'GET',
+        summary: 'Returns aggregated settlement and utilization metrics.',
+        purpose: 'Use it for revenue dashboards, protocol usage statistics, and rankings.',
+        notes: 'No parameters.',
+        auth: 'Optional x-api-key',
+        params: [],
+        exampleValues: {},
+        sampleResponse: {
+          data: {
+            totalSettledLamports: '980000000000',
+            totalSettledSol: '980.000000000',
+            totalCallsSettled: '14420',
+            utilizationPercent: 62.5,
+            topAgentsByRevenue: [{ agentPda: 'AgentPda111', agentName: 'Atlas', totalSettledSol: '120.340000', sharePercent: 12.3 }],
+          },
+          meta: { requestId: 'req_volume_demo', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+      {
+        id: 'volume-daily',
+        group: 'analytics',
+        title: 'Volume time series',
+        path: '/api/v1/volume/daily',
+        method: 'GET',
+        summary: 'Returns a daily or hourly volume series.',
+        purpose: 'Use it for charts, spark lines, and historical analytics widgets.',
+        notes: 'bucket must be daily or hourly. days is capped at 90, hours at 168.',
+        auth: 'Optional x-api-key',
+        params: [
+          { name: 'bucket', in: 'query', type: 'enum(daily|hourly)', required: false, description: 'Series bucket type.', default: 'daily', example: 'daily' },
+          { name: 'days', in: 'query', type: 'integer', required: false, description: 'Daily window, only relevant when bucket=daily. Capped at 90.', default: 30, example: 30 },
+          { name: 'hours', in: 'query', type: 'integer', required: false, description: 'Hourly window, only relevant when bucket=hourly. Capped at 168.', default: 24, example: 24 },
+        ],
+        exampleValues: { bucket: 'daily', days: '30', hours: '24' },
+        sampleResponse: {
+          data: {
+            bucket: 'daily',
+            days: 30,
+            series: [{ bucket: '2026-04-27', lamports: '12000000000', sol: '12.000000', calls: 220, txCount: 120 }],
+          },
+          meta: { requestId: 'req_volume_daily_demo', source: 'db', dataAgeMs: 0 },
+        },
+        errors: ['INVALID_PARAM', 'RATE_LIMITED', 'INTERNAL_ERROR'],
+      },
+    ];
+
+    const endpointMap = new Map(ENDPOINTS.map((endpoint) => [endpoint.id, endpoint]));
+    let activeEndpointId = null;
+    let lastResponsePayload = null;
+
+    const sidebarNav = document.getElementById('sidebarNav');
+    const navSearch = document.getElementById('navSearch');
+    const baseUrlInput = document.getElementById('baseUrlInput');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const requestIdInput = document.getElementById('requestIdInput');
+    const metricEndpoints = document.getElementById('metricEndpoints');
+    const quickStartCurl = document.getElementById('quickStartCurl');
+    const successEnvelopeCode = document.getElementById('successEnvelopeCode');
+    const errorEnvelopeCode = document.getElementById('errorEnvelopeCode');
+
+    const endpointTitle = document.getElementById('endpointTitle');
+    const endpointPath = document.getElementById('endpointPath');
+    const endpointBadges = document.getElementById('endpointBadges');
+    const endpointDescription = document.getElementById('endpointDescription');
+    const endpointMeta = document.getElementById('endpointMeta');
+    const endpointPurpose = document.getElementById('endpointPurpose');
+    const paramsTableWrap = document.getElementById('paramsTableWrap');
+    const requestMethodBadge = document.getElementById('requestMethodBadge');
+    const requestUrl = document.getElementById('requestUrl');
+    const requestNotes = document.getElementById('requestNotes');
+    const paramsForm = document.getElementById('paramsForm');
+    const sendRequestBtn = document.getElementById('sendRequestBtn');
+    const fillExampleBtn = document.getElementById('fillExampleBtn');
+    const copyCurlBtn = document.getElementById('copyCurlBtn');
+    const copyUrlBtn = document.getElementById('copyUrlBtn');
+    const copyBaseCurlBtn = document.getElementById('copyBaseCurlBtn');
+    const responseStatus = document.getElementById('responseStatus');
+    const responseTime = document.getElementById('responseTime');
+    const responseSize = document.getElementById('responseSize');
+    const responseHint = document.getElementById('responseHint');
+    const responseBody = document.getElementById('responseBody');
+    const responseHeadersWrap = document.getElementById('responseHeadersWrap');
+    const copyResponseBtn = document.getElementById('copyResponseBtn');
+    const endpointCurlCode = document.getElementById('endpointCurlCode');
+    const exampleResponseCode = document.getElementById('exampleResponseCode');
+    const errorCasesWrap = document.getElementById('errorCasesWrap');
+    const copyEndpointCurlBtn = document.getElementById('copyEndpointCurlBtn');
+    const copyExampleResponseBtn = document.getElementById('copyExampleResponseBtn');
+
+    function inferBaseUrl() {
+      const origin = window.location.origin;
+      if (origin && origin !== 'null') return origin;
+      return 'https://explorer.oobeprotocol.ai';
+    }
+
+    baseUrlInput.value = inferBaseUrl();
+    metricEndpoints.textContent = String(ENDPOINTS.length);
+
+    quickStartCurl.textContent = buildBaseCurl('/api/v1/status');
+    successEnvelopeCode.innerHTML = syntaxHighlight(JSON.stringify({
+      data: { anything: 'endpoint-specific-payload' },
+      meta: {
+        requestId: 'req_123',
+        source: 'db',
+        dataAgeMs: 0,
+        page: 1,
+        limit: 25,
+        total: 128,
+        hasMore: true,
+        warnings: ['optional-warning'],
+      },
+    }, null, 2));
+    errorEnvelopeCode.innerHTML = syntaxHighlight(JSON.stringify({
+      error: {
+        code: 'INVALID_PARAM',
+        message: 'bucket must be "daily" or "hourly"',
+        requestId: 'req_123',
+        retryAfter: 27,
+      },
+    }, null, 2));
+
+    function buildBaseCurl(path) {
+      const base = sanitizeBaseUrl(baseUrlInput.value);
+      const apiKey = apiKeyInput.value.trim();
+      const reqId = requestIdInput.value.trim();
+      const parts = ['curl -s'];
+      if (apiKey) parts.push(`-H ${shellQuote('x-api-key: ' + apiKey)}`);
+      if (reqId) parts.push(`-H ${shellQuote('x-request-id: ' + reqId)}`);
+      parts.push(shellQuote(base + path));
+      return parts.join(' ');
+    }
+
+    function shellQuote(text) {
+      return `'${String(text).replace(/'/g, `'"'"'`)}'`;
+    }
+
+    function sanitizeBaseUrl(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return inferBaseUrl();
+      return trimmed.replace(/\/$/, '');
+    }
+
+    function renderSidebar(filter = '') {
+      const query = filter.trim().toLowerCase();
+      sidebarNav.innerHTML = '';
+
+      GROUPS.forEach((group) => {
+        const items = ENDPOINTS.filter((endpoint) => endpoint.group === group.id).filter((endpoint) => {
+          if (!query) return true;
+          const haystack = [endpoint.title, endpoint.path, endpoint.summary, endpoint.notes].join(' ').toLowerCase();
+          return haystack.includes(query);
+        });
+
+        if (!items.length) return;
+
+        const section = document.createElement('section');
+        section.className = 'nav-section';
+        section.innerHTML = `<div class="nav-label">${escapeHtml(group.label)}</div><div class="nav-list"></div>`;
+        const list = section.querySelector('.nav-list');
+
+        items.forEach((endpoint) => {
+          const button = document.createElement('button');
+          button.className = `nav-item${endpoint.id === activeEndpointId ? ' active' : ''}`;
+          button.type = 'button';
+          button.dataset.endpointId = endpoint.id;
+          button.innerHTML = `
+            <div class="nav-item-top">
+              <span class="method-badge method-get">GET</span>
+              <span class="nav-item-title">${escapeHtml(endpoint.title)}</span>
+            </div>
+            <div class="nav-item-path">${escapeHtml(endpoint.path)}</div>
+          `;
+          button.addEventListener('click', () => selectEndpoint(endpoint.id));
+          list.appendChild(button);
+        });
+
+        sidebarNav.appendChild(section);
+      });
+    }
+
+    function selectEndpoint(endpointId) {
+      activeEndpointId = endpointId;
+      renderSidebar(navSearch.value);
+      const endpoint = endpointMap.get(endpointId);
+      if (!endpoint) return;
+
+      window.location.hash = endpoint.id;
+      endpointTitle.textContent = endpoint.title;
+      endpointPath.textContent = endpoint.path;
+      endpointDescription.textContent = endpoint.summary;
+      endpointPurpose.textContent = endpoint.purpose;
+      requestNotes.textContent = endpoint.notes;
+      requestMethodBadge.textContent = endpoint.method;
+      endpointBadges.innerHTML = `
+        <span class="method-badge method-get">GET</span>
+        <span class="tiny-badge tiny-violet">${escapeHtml(endpoint.group)}</span>
+        <span class="tiny-badge tiny-emerald">${escapeHtml(endpoint.auth)}</span>
+      `;
+
+      endpointMeta.innerHTML = '';
+      [
+        ['Path', endpoint.path],
+        ['Auth', endpoint.auth],
+        ['Params', endpoint.params.length ? String(endpoint.params.length) : 'none'],
+      ].forEach(([label, value]) => {
+        const node = document.createElement('div');
+        node.className = 'header-item';
+        node.innerHTML = `<div class="header-name">${escapeHtml(label)}</div><div class="header-value">${escapeHtml(value)}</div>`;
+        endpointMeta.appendChild(node);
+      });
+
+      renderParamsTable(endpoint);
+      renderParamForm(endpoint);
+      renderExampleBlocks(endpoint);
+      renderErrorCases(endpoint);
+      refreshRequestUrl();
+      sendRequestBtn.disabled = false;
+      fillExampleBtn.disabled = false;
+      copyCurlBtn.disabled = false;
+      copyUrlBtn.disabled = false;
+      copyEndpointCurlBtn.disabled = false;
+      copyExampleResponseBtn.disabled = false;
+    }
+
+    function renderParamsTable(endpoint) {
+      if (!endpoint.params.length) {
+        paramsTableWrap.innerHTML = '<div class="empty-state">This endpoint does not require path or query parameters.</div>';
+        return;
+      }
+
+      const rows = endpoint.params.map((param) => `
+        <tr>
+          <td><span class="param-name">${escapeHtml(param.name)}</span></td>
+          <td><span class="param-chip">${escapeHtml(param.in)}</span></td>
+          <td>${escapeHtml(param.type)}</td>
+          <td>${param.required ? 'Yes' : 'No'}</td>
+          <td>${param.default === undefined ? '—' : escapeHtml(String(param.default))}</td>
+          <td>${escapeHtml(param.description)}</td>
+          <td>${param.example === undefined ? '—' : `<code>${escapeHtml(String(param.example))}</code>`}</td>
+        </tr>
+      `).join('');
+
+      paramsTableWrap.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>In</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Default</th>
+                <th>Description</th>
+                <th>Example</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderParamForm(endpoint) {
+      paramsForm.innerHTML = '';
+      if (!endpoint.params.length) return;
+
+      endpoint.params.forEach((param) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'param-field';
+
+        let inputHtml;
+        if (param.name === 'bucket') {
+          inputHtml = `
+            <select class="toolbar-select endpoint-param-input" id="param-${param.name}" data-name="${param.name}" data-location="${param.in}">
+              <option value="">(use server default)</option>
+              <option value="daily">daily</option>
+              <option value="hourly">hourly</option>
+            </select>
+          `;
+        } else {
+          inputHtml = `
+            <input
+              class="param-input endpoint-param-input"
+              id="param-${param.name}"
+              data-name="${param.name}"
+              data-location="${param.in}"
+              type="${param.type.includes('integer') ? 'number' : 'text'}"
+              placeholder="${escapeHtml(String(param.example ?? param.default ?? ''))}"
+              autocomplete="off"
+            />
+          `;
+        }
+
+        wrapper.innerHTML = `
+          <label for="param-${param.name}">${escapeHtml(param.name)} ${param.required ? '<span class="tiny-badge tiny-rose">required</span>' : ''}</label>
+          ${inputHtml}
+          <span class="param-help">${escapeHtml(param.description)}</span>
+        `;
+        paramsForm.appendChild(wrapper);
+      });
+
+      document.querySelectorAll('.endpoint-param-input').forEach((input) => {
+        input.addEventListener('input', refreshRequestUrl);
+        input.addEventListener('change', refreshRequestUrl);
+      });
+    }
+
+    function renderExampleBlocks(endpoint) {
+      endpointCurlCode.textContent = buildEndpointCurl(endpoint, endpoint.exampleValues || {});
+      exampleResponseCode.innerHTML = syntaxHighlight(JSON.stringify(endpoint.sampleResponse, null, 2));
+    }
+
+    function renderErrorCases(endpoint) {
+      if (!endpoint.errors.length) {
+        errorCasesWrap.innerHTML = '<div class="empty-state">No documented special cases.</div>';
+        return;
+      }
+      errorCasesWrap.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${endpoint.errors.map((code) => `<tr><td><code>${escapeHtml(code)}</code></td><td>${escapeHtml(COMMON_ERRORS[code] || 'Possible error response')}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function collectCurrentValues() {
+      const values = {};
+      document.querySelectorAll('.endpoint-param-input').forEach((input) => {
+        const value = input.value.trim();
+        if (value) values[input.dataset.name] = value;
+      });
+      return values;
+    }
+
+    function buildResolvedUrl(endpoint, values) {
+      const base = sanitizeBaseUrl(baseUrlInput.value);
+      let path = endpoint.path;
+      const query = new URLSearchParams();
+
+      endpoint.params.forEach((param) => {
+        const value = values[param.name];
+        if (value === undefined || value === '') return;
+        if (param.in === 'path') {
+          path = path.replace(`:${param.name}`, encodeURIComponent(value));
+        } else {
+          query.set(param.name, value);
+        }
+      });
+
+      return base + path + (String(query) ? `?${String(query)}` : '');
+    }
+
+    function buildEndpointCurl(endpoint, values) {
+      const headers = [];
+      const apiKey = apiKeyInput.value.trim();
+      const reqId = requestIdInput.value.trim();
+      if (apiKey) headers.push(`-H ${shellQuote('x-api-key: ' + apiKey)}`);
+      if (reqId) headers.push(`-H ${shellQuote('x-request-id: ' + reqId)}`);
+      headers.push(`-H ${shellQuote('accept: application/json')}`);
+      return ['curl -s', ...headers, shellQuote(buildResolvedUrl(endpoint, values))].join(' ');
+    }
+
+    function refreshRequestUrl() {
+      if (!activeEndpointId) {
+        requestUrl.textContent = '—';
+        return;
+      }
+      const endpoint = endpointMap.get(activeEndpointId);
+      const values = collectCurrentValues();
+      const url = buildResolvedUrl(endpoint, values);
+      requestUrl.textContent = url;
+      endpointCurlCode.textContent = buildEndpointCurl(endpoint, values);
+      quickStartCurl.textContent = buildBaseCurl('/api/v1/status');
+    }
+
+    function fillExampleValues() {
+      if (!activeEndpointId) return;
+      const endpoint = endpointMap.get(activeEndpointId);
+      Object.entries(endpoint.exampleValues || {}).forEach(([name, value]) => {
+        const input = document.getElementById(`param-${name}`);
+        if (input) input.value = value;
+      });
+      refreshRequestUrl();
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    async function copyText(text, message = 'Copied') {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast(message);
+      } catch {
+        showToast('Copy failed');
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function syntaxHighlight(json) {
+      return escapeHtml(json).replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?=\s*:)?|"(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}\[\],:])/g,
+        (match) => {
+          if (/^".*"$/.test(match)) return `<span class="json-string">${match}</span>`;
+          if (/^".*"(?=\s*:)/.test(match)) return `<span class="json-key">${match}</span>`;
+          if (match === 'true' || match === 'false') return `<span class="json-boolean">${match}</span>`;
+          if (match === 'null') return `<span class="json-null">${match}</span>`;
+          if (/^-?\d/.test(match)) return `<span class="json-number">${match}</span>`;
+          return `<span class="json-punct">${match}</span>`;
+        }
+      ).replace(/<span class="json-string">(&quot;[^&]*&quot;)<\/span>(?=<span class="json-punct">:<\/span>)/g, '<span class="json-key">$1</span>');
+    }
+
+    async function sendCurrentRequest() {
+      if (!activeEndpointId) return;
+      const endpoint = endpointMap.get(activeEndpointId);
+      const values = collectCurrentValues();
+
+      for (const param of endpoint.params) {
+        if (param.required && !values[param.name]) {
+          showToast(`Missing required parameter: ${param.name}`);
+          const input = document.getElementById(`param-${param.name}`);
+          if (input) input.focus();
+          return;
+        }
+      }
+
+      const url = buildResolvedUrl(endpoint, values);
+      const headers = { accept: 'application/json' };
+      const apiKey = apiKeyInput.value.trim();
+      const reqId = requestIdInput.value.trim();
+      if (apiKey) headers['x-api-key'] = apiKey;
+      if (reqId) headers['x-request-id'] = reqId;
+
+      sendRequestBtn.disabled = true;
+      responseStatus.innerHTML = '<span class="status-badge status-pending">Loading</span>';
+      responseTime.textContent = '—';
+      responseSize.textContent = '—';
+      responseHint.textContent = 'Waiting for response';
+      responseBody.textContent = 'Loading…';
+      responseHeadersWrap.innerHTML = '';
+      copyResponseBtn.style.display = 'none';
+      lastResponsePayload = null;
+
+      const startedAt = performance.now();
+      try {
+        const response = await fetch(url, { method: endpoint.method, headers });
+        const rawText = await response.text();
+        const elapsedMs = Math.round(performance.now() - startedAt);
+        const bytes = new TextEncoder().encode(rawText).length;
+        let parsed;
+        try {
+          parsed = rawText ? JSON.parse(rawText) : null;
+        } catch {
+          parsed = rawText;
+        }
+
+        lastResponsePayload = parsed;
+        responseStatus.innerHTML = `<span class="status-badge ${response.ok ? 'status-ok' : 'status-error'}">${response.status} ${escapeHtml(response.statusText || '')}</span>`;
+        responseTime.textContent = `${elapsedMs} ms`;
+        responseSize.textContent = `${bytes} bytes`;
+        responseHint.textContent = response.ok ? 'Parsed JSON/body' : 'Error response';
+
+        if (typeof parsed === 'string') {
+          responseBody.textContent = parsed || '(empty body)';
+        } else {
+          responseBody.innerHTML = syntaxHighlight(JSON.stringify(parsed, null, 2));
+        }
+
+        const headerEntries = [
+          ['X-Request-Id', response.headers.get('x-request-id')],
+          ['X-Data-Source', response.headers.get('x-data-source')],
+          ['X-Data-Age', response.headers.get('x-data-age')],
+          ['X-RateLimit-Limit', response.headers.get('x-ratelimit-limit')],
+          ['X-RateLimit-Remaining', response.headers.get('x-ratelimit-remaining')],
+          ['X-RateLimit-Reset', response.headers.get('x-ratelimit-reset')],
+          ['Cache-Control', response.headers.get('cache-control')],
+          ['Retry-After', response.headers.get('retry-after')],
+        ].filter(([, value]) => value !== null);
+
+        if (headerEntries.length) {
+          responseHeadersWrap.innerHTML = `
+            <div class="subheading">Response headers</div>
+            <div class="headers-grid">
+              ${headerEntries.map(([name, value]) => `
+                <div class="header-item">
+                  <div class="header-name">${escapeHtml(name)}</div>
+                  <div class="header-value">${escapeHtml(value)}</div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        copyResponseBtn.style.display = typeof parsed !== 'undefined' ? 'inline-flex' : 'none';
+      } catch (error) {
+        responseStatus.innerHTML = '<span class="status-badge status-error">Network error</span>';
+        responseHint.textContent = 'The browser could not complete the request';
+        responseBody.textContent = String(error);
+      } finally {
+        sendRequestBtn.disabled = false;
+      }
+    }
+
+    navSearch.addEventListener('input', () => renderSidebar(navSearch.value));
+    baseUrlInput.addEventListener('input', refreshRequestUrl);
+    apiKeyInput.addEventListener('input', refreshRequestUrl);
+    requestIdInput.addEventListener('input', refreshRequestUrl);
+    sendRequestBtn.addEventListener('click', sendCurrentRequest);
+    fillExampleBtn.addEventListener('click', fillExampleValues);
+    copyCurlBtn.addEventListener('click', () => activeEndpointId && copyText(endpointCurlCode.textContent, 'curl copied'));
+    copyUrlBtn.addEventListener('click', () => activeEndpointId && copyText(requestUrl.textContent, 'URL copied'));
+    copyBaseCurlBtn.addEventListener('click', () => copyText(buildBaseCurl('/api/v1/status'), 'Base curl copied'));
+    copyResponseBtn.addEventListener('click', () => {
+      if (lastResponsePayload === null) return;
+      const text = typeof lastResponsePayload === 'string' ? lastResponsePayload : JSON.stringify(lastResponsePayload, null, 2);
+      copyText(text, 'Response copied');
+    });
+    copyEndpointCurlBtn.addEventListener('click', () => activeEndpointId && copyText(endpointCurlCode.textContent, 'Endpoint curl copied'));
+    copyExampleResponseBtn.addEventListener('click', () => activeEndpointId && copyText(JSON.stringify(endpointMap.get(activeEndpointId).sampleResponse, null, 2), 'Example response copied'));
+
+    document.querySelectorAll('[data-copy]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const target = document.getElementById(button.dataset.copy);
+        if (target) copyText(target.textContent || target.innerText || '', 'Copied');
+      });
+    });
+
+    renderSidebar();
+
+    const hashId = window.location.hash.replace(/^#/, '');
+    if (endpointMap.has(hashId)) {
+      selectEndpoint(hashId);
+    } else {
+      selectEndpoint('status');
+    }
+  </script>
+</body>
+</html>
+
