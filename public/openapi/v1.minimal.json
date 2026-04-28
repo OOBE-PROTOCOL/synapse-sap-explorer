@@ -1,0 +1,704 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Synapse SAP Explorer Public API",
+    "version": "1.0.0",
+    "description": "Minimal OpenAPI export for the public /api/v1 surface (17 GET endpoints)."
+  },
+  "servers": [
+    {
+      "url": "https://explorer.oobeprotocol.ai",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    { "name": "System" },
+    { "name": "Entities" },
+    { "name": "Lookup" },
+    { "name": "Network" },
+    { "name": "Analytics" }
+  ],
+  "security": [
+    {},
+    { "ApiKeyAuth": [] }
+  ],
+  "paths": {
+    "/api/v1/status": {
+      "get": {
+        "tags": ["System"],
+        "summary": "API status",
+        "operationId": "getStatus",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/agents": {
+      "get": {
+        "tags": ["Entities"],
+        "summary": "List agents",
+        "operationId": "listAgents",
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "protocol",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 200, "default": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessArray"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{wallet}": {
+      "get": {
+        "tags": ["Entities"],
+        "summary": "Get agent by wallet",
+        "operationId": "getAgentByWallet",
+        "parameters": [
+          {
+            "name": "wallet",
+            "in": "path",
+            "required": true,
+            "description": "Solana wallet public key",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/tools": {
+      "get": {
+        "tags": ["Entities"],
+        "summary": "List tools",
+        "operationId": "listTools",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/escrows": {
+      "get": {
+        "tags": ["Entities"],
+        "summary": "List escrows",
+        "operationId": "listEscrows",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 500, "default": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessArray"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/escrows/{pda}": {
+      "get": {
+        "tags": ["Entities"],
+        "summary": "Get escrow by PDA",
+        "operationId": "getEscrowByPda",
+        "parameters": [
+          {
+            "name": "pda",
+            "in": "path",
+            "required": true,
+            "description": "Solana PDA public key",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/escrows/alerts": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get escrow alerts",
+        "operationId": "getEscrowAlerts",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 720, "default": 48 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/transactions": {
+      "get": {
+        "tags": ["Entities"],
+        "summary": "List transactions",
+        "operationId": "listTransactions",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "perPage",
+            "in": "query",
+            "required": false,
+            "description": "CamelCase parameter used by backend",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 25 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessArray"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/tx/{signature}": {
+      "get": {
+        "tags": ["Lookup"],
+        "summary": "Get transaction by signature",
+        "operationId": "getTransactionBySignature",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/address/{address}": {
+      "get": {
+        "tags": ["Lookup"],
+        "summary": "Lookup address",
+        "operationId": "lookupAddress",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "description": "Solana address",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "tags": ["Lookup"],
+        "summary": "Search entities",
+        "operationId": "searchEntities",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 50, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessArray"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/network/metrics": {
+      "get": {
+        "tags": ["Network"],
+        "summary": "Get network metrics",
+        "operationId": "getNetworkMetrics",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/network/graph": {
+      "get": {
+        "tags": ["Network"],
+        "summary": "Get network graph",
+        "operationId": "getNetworkGraph",
+        "parameters": [
+          {
+            "name": "protocol",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "capability",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/network/snapshots": {
+      "get": {
+        "tags": ["Network"],
+        "summary": "Get network snapshots",
+        "operationId": "getNetworkSnapshots",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 365, "default": 30 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessArray"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/network/health": {
+      "get": {
+        "tags": ["Network"],
+        "summary": "Get network health",
+        "operationId": "getNetworkHealth",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/volume": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get aggregated volume",
+        "operationId": "getVolume",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/volume/daily": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get volume time series",
+        "operationId": "getVolumeDaily",
+        "parameters": [
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["daily", "hourly"],
+              "default": "daily"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 90, "default": 30 }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0, "maximum": 168, "default": 24 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SuccessObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "429": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Optional API key for higher rate limits"
+      }
+    },
+    "schemas": {
+      "PublicDataSource": {
+        "type": "string",
+        "enum": ["db", "cache", "rpc", "mixed", "internal"]
+      },
+      "Meta": {
+        "type": "object",
+        "required": ["requestId"],
+        "properties": {
+          "requestId": { "type": "string" },
+          "source": { "$ref": "#/components/schemas/PublicDataSource" },
+          "dataAgeMs": { "type": "integer" },
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "total": { "type": "integer" },
+          "hasMore": { "type": "boolean" },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": true
+      },
+      "SuccessObject": {
+        "type": "object",
+        "required": ["data", "meta"],
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "meta": { "$ref": "#/components/schemas/Meta" }
+        }
+      },
+      "SuccessArray": {
+        "type": "object",
+        "required": ["data", "meta"],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "meta": { "$ref": "#/components/schemas/Meta" }
+        }
+      },
+      "PublicApiErrorCode": {
+        "type": "string",
+        "enum": [
+          "DB_UNAVAILABLE",
+          "RPC_UNAVAILABLE",
+          "NOT_FOUND",
+          "INVALID_PARAM",
+          "RATE_LIMITED",
+          "UNAUTHORIZED",
+          "FORBIDDEN",
+          "INTERNAL_ERROR",
+          "STALE_DATA"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message", "requestId"],
+            "properties": {
+              "code": { "$ref": "#/components/schemas/PublicApiErrorCode" },
+              "message": { "type": "string" },
+              "requestId": { "type": "string" },
+              "retryAfter": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "headers": {
+      "XRequestId": {
+        "description": "Unique request correlation ID",
+        "schema": { "type": "string" }
+      },
+      "XDataSource": {
+        "description": "Data source used to build the payload",
+        "schema": { "$ref": "#/components/schemas/PublicDataSource" }
+      },
+      "XDataAge": {
+        "description": "Reported data age in milliseconds",
+        "schema": { "type": "integer" }
+      },
+      "XRateLimitLimit": {
+        "description": "Rate limit ceiling for current window",
+        "schema": { "type": "integer" }
+      },
+      "XRateLimitRemaining": {
+        "description": "Remaining requests in current window",
+        "schema": { "type": "integer" }
+      },
+      "XRateLimitReset": {
+        "description": "Unix timestamp (seconds) when window resets",
+        "schema": { "type": "integer" }
+      },
+      "RetryAfter": {
+        "description": "Seconds until retry is allowed",
+        "schema": { "type": "integer" }
+      }
+    },
+    "responses": {
+      "SuccessObject": {
+        "description": "Success envelope with object payload",
+        "headers": {
+          "X-Request-Id": { "$ref": "#/components/headers/XRequestId" },
+          "X-Data-Source": { "$ref": "#/components/headers/XDataSource" },
+          "X-Data-Age": { "$ref": "#/components/headers/XDataAge" },
+          "X-RateLimit-Limit": { "$ref": "#/components/headers/XRateLimitLimit" },
+          "X-RateLimit-Remaining": { "$ref": "#/components/headers/XRateLimitRemaining" },
+          "X-RateLimit-Reset": { "$ref": "#/components/headers/XRateLimitReset" }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/SuccessObject" }
+          }
+        }
+      },
+      "SuccessArray": {
+        "description": "Success envelope with array payload",
+        "headers": {
+          "X-Request-Id": { "$ref": "#/components/headers/XRequestId" },
+          "X-Data-Source": { "$ref": "#/components/headers/XDataSource" },
+          "X-Data-Age": { "$ref": "#/components/headers/XDataAge" },
+          "X-RateLimit-Limit": { "$ref": "#/components/headers/XRateLimitLimit" },
+          "X-RateLimit-Remaining": { "$ref": "#/components/headers/XRateLimitRemaining" },
+          "X-RateLimit-Reset": { "$ref": "#/components/headers/XRateLimitReset" }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/SuccessArray" }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "description": "Error envelope",
+        "headers": {
+          "X-Request-Id": { "$ref": "#/components/headers/XRequestId" },
+          "X-Data-Source": { "$ref": "#/components/headers/XDataSource" },
+          "X-Data-Age": { "$ref": "#/components/headers/XDataAge" },
+          "X-RateLimit-Limit": { "$ref": "#/components/headers/XRateLimitLimit" },
+          "X-RateLimit-Remaining": { "$ref": "#/components/headers/XRateLimitRemaining" },
+          "X-RateLimit-Reset": { "$ref": "#/components/headers/XRateLimitReset" },
+          "Retry-After": { "$ref": "#/components/headers/RetryAfter" }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      }
+    }
+  }
+}
+
