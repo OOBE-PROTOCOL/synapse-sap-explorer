@@ -53,7 +53,7 @@ async function fetchHolders(mint: string): Promise<BondingCurveData | null> {
     const tokenProgram: TokenProgramKind =
       tokenProgramId.equals(TOKEN_2022_PROGRAM_ID) ? 'token-2022' : 'spl-token';
 
-    const parsedData = mintInfo.value.data as any;
+    const parsedData = mintInfo.value.data as { type?: string; parsed?: { info?: { supply?: string; decimals?: number } } };
     if (parsedData.type !== 'mint' || !parsedData.parsed?.info) return null;
 
     const supply = parseInt(parsedData.parsed.info.supply || '0');
@@ -83,7 +83,7 @@ async function fetchHolders(mint: string): Promise<BondingCurveData | null> {
     // Parse and sort holders by balance
     const holders: Holder[] = tokenAccounts
       .map((acc) => {
-        const data = acc.account.data as any;
+        const data = acc.account.data as { type?: string; parsed?: { info?: { tokenAmount?: { amount?: string } } } };
         if (data.type !== 'account' || !data.parsed?.info) return null;
         
         const amount = parseInt(data.parsed.info.tokenAmount?.amount || '0');

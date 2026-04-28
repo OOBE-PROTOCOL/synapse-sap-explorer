@@ -154,10 +154,8 @@ async function buildLaunchTokens(
   //     heuristics so this signal always wins on de-dup.
   const profileFallbackMint = profilePda;
   const genesisGpaMints = new Set<string>();
-  let genesisAuthorityHits = 0;
   try {
     const launches = await fetchGenesisLaunchesByAuthority(wallet);
-    genesisAuthorityHits = launches.length;
     for (const l of launches) {
       // Name comes from Genesis API enrichment downstream; placeholder
       // here is fine — it gets overwritten in step 4.

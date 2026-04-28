@@ -1,0 +1,4 @@
+
+> synapse-sap-explorer@1.0.0 typecheck /Users/keepeeto/Desktop/synapse-sap-explorer
+> tsc --noEmit
+
