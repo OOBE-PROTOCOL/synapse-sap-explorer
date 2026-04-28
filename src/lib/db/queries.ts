@@ -18,6 +18,8 @@ import {
   settlementLedger,
   x402DirectPayments,
   agentMetaplex,
+  apiKeys,
+  apiRateWindows,
 } from '~/db/schema';
 
 /* ── Agents ───────────────────────────────────── */
@@ -488,6 +490,63 @@ export async function upsertSyncCursor(entity: string, lastSlot?: number, lastSi
     });
 }
 
+/* ── Public API security ──────────────────────── */
+
+export async function selectApiKeyByHash(keyHash: string) {
+  const rows = await db
+    .select()
+    .from(apiKeys)
+    .where(eq(apiKeys.keyHash, keyHash))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function touchApiKeyLastUsed(id: number) {
+  await db
+    .update(apiKeys)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(apiKeys.id, id));
+}
+
+export async function incrementApiRateWindow(identityKey: string, tier: string, windowStart: Date): Promise<number> {
+  const rows = await db
+    .select()
+    .from(apiRateWindows)
+    .where(
+      and(
+        eq(apiRateWindows.identityKey, identityKey),
+        eq(apiRateWindows.tier, tier),
+        eq(apiRateWindows.windowStart, windowStart),
+      ),
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) {
+    await db.insert(apiRateWindows).values({
+      identityKey,
+      tier,
+      windowStart,
+      requestCount: 1,
+      updatedAt: new Date(),
+    });
+    return 1;
+  }
+
+  const nextCount = row.requestCount + 1;
+  await db
+    .update(apiRateWindows)
+    .set({ requestCount: nextCount, updatedAt: new Date() })
+    .where(
+      and(
+        eq(apiRateWindows.identityKey, identityKey),
+        eq(apiRateWindows.tier, tier),
+        eq(apiRateWindows.windowStart, windowStart),
+      ),
+    );
+  return nextCount;
+}
+
 /* ── Protocol Volume Aggregates ───────────────── */
 
 /**
@@ -693,6 +752,17 @@ export async function getExpiringEscrows(hoursAhead = 48) {
       ),
     )
     .orderBy(escrows.expiresAt);
+}
+
+export async function getLowBalanceEscrows(limit = 50) {
+  return db.select()
+    .from(escrows)
+    .where(
+      sql`${escrows.balance}::numeric > 0
+        AND ${escrows.pricePerCall}::numeric > 0
+        AND ${escrows.balance}::numeric / ${escrows.pricePerCall}::numeric < 3`,
+    )
+    .limit(limit);
 }
 
 /* ── Protocol Growth Rate ─────────────────────── */

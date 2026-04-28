@@ -14,4 +14,5 @@
 export * from './sap';
 export * from './db';
 export * from './api';
+export * from './public-api';
 export * from './indexer';

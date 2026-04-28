@@ -398,6 +398,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="text-[13px] font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
             <span className="text-xs font-medium text-primary uppercase tracking-widest hidden xs:inline">Explorer</span>
           </Link>
+          <a
+            href="/api-playground.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-primary hover:bg-accent transition-colors shrink-0"
+            aria-label="Open API docs"
+            title="API Docs"
+          >
+            <BookOpen className="h-4 w-4" />
+          </a>
           <span className="flex items-center gap-1 text-xs text-foreground font-medium uppercase tracking-widest shrink-0">
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             Mainnet
@@ -440,6 +450,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-[data-tick_2s_ease-in-out_infinite]" />
               <span className="text-foreground font-medium uppercase tracking-widest">Mainnet</span>
             </div>
+            <a
+              href="/api-playground.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+            >
+              API Docs <ExternalLink className="h-2.5 w-2.5" />
+            </a>
             <a
               href="https://solscan.io/account/SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ"
               target="_blank"

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synapse SAP Explorer - Swagger UI</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0b0d14;
+      color: #e7edf9;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(11, 13, 20, 0.92);
+      backdrop-filter: blur(8px);
+    }
+
+    .title {
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .links a {
+      color: #67e8f9;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .links a:hover { text-decoration: underline; }
+
+    #swagger-ui {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+
+    .swagger-ui .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">Synapse SAP Explorer - Public API v1</div>
+    <nav class="links">
+      <a href="/openapi/v1.minimal.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
+      <a href="/api-playground.html" target="_blank" rel="noreferrer">Interactive playground</a>
+    </nav>
+  </header>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: '/openapi/v1.minimal.json',
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      docExpansion: 'list',
+      filter: true,
+      displayRequestDuration: true,
+      showExtensions: true,
+      tryItOutEnabled: true,
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset,
+      ],
+      layout: 'BaseLayout',
+    });
+  </script>
+</body>
+</html>
+

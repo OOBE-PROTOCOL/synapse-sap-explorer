@@ -1,7 +1,7 @@
 // src/db/schema.ts
 import {
     pgSchema, text, boolean, smallint, integer, bigint,
-    real, doublePrecision, numeric, timestamp, jsonb, serial,
+    real, doublePrecision, numeric, timestamp, jsonb, serial, primaryKey,
 } from 'drizzle-orm/pg-core';
 
 /* ═══════════════════════════════════════════════
@@ -527,4 +527,42 @@ export const agentMetaplex = sapExpSchema.table('agent_metaplex', {
     refreshedAt:      timestamp('refreshed_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt:        timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* ═══════════════════════════════════════════════
+ * api_keys — Public API key registry (hash-only)
+ * ═══════════════════════════════════════════════ */
+
+export type ApiKeyTier = 'free' | 'pro';
+
+export const apiKeys = sapExpSchema.table('api_keys', {
+    id:            serial('id').primaryKey(),
+    keyPrefix:     text('key_prefix').notNull().default(''),
+    keyHash:       text('key_hash').notNull().unique(),
+    tier:          text('tier').$type<ApiKeyTier>().notNull().default('free'),
+    isActive:      boolean('is_active').notNull().default(true),
+    dailyLimit:    integer('daily_limit'),
+    notes:         text('notes'),
+    createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt:    timestamp('last_used_at', { withTimezone: true }),
+});
+
+/* ═══════════════════════════════════════════════
+ * api_rate_windows — per-minute counters by identity+tier
+ * ═══════════════════════════════════════════════ */
+
+export const apiRateWindows = sapExpSchema.table(
+    'api_rate_windows',
+    {
+        identityKey:   text('identity_key').notNull(),
+        tier:          text('tier').notNull(),
+        windowStart:   timestamp('window_start', { withTimezone: true }).notNull(),
+        requestCount:  integer('request_count').notNull().default(0),
+        updatedAt:     timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    (table) => ({
+        pk: primaryKey({
+            columns: [table.identityKey, table.tier, table.windowStart],
+        }),
+    }),
+);
 
