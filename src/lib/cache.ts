@@ -53,7 +53,7 @@ export async function swr<T>(
           return data;
         })
         .catch((err) => {
-          console.warn(`[cache] Background revalidation failed for "${key}":`, err?.message);
+          console.warn('[cache] Background revalidation failed for "%s": %s', key, err?.message);
           return entry.data; // keep stale
         })
         .finally(() => _inflight.delete(key));
