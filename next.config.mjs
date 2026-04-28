@@ -46,6 +46,14 @@ const nextConfig = {
       };
     }
 
+    // Silence optional `pino-pretty` import pulled in transitively by
+    // @walletconnect/logger → pino. We never want pretty logs in the browser
+    // bundle, so resolve it to false on both sides.
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      'pino-pretty': false,
+    };
+
     return config;
   },
 };

@@ -18,6 +18,10 @@ export interface TokenBalance {
   meta: TokenMeta | null;
   /** True if wallet is the mint/update authority (i.e. wallet deployed this token) */
   isDeployer?: boolean;
+  /** Estimated USD value of the position (uiAmount × Jupiter price), if a price is available. */
+  usdValue?: number | null;
+  /** Per-unit USD price as reported by Jupiter Price API. */
+  priceUsd?: number | null;
 }
 
 export interface WalletBalancesResponse {
@@ -178,6 +182,35 @@ async function fetchSolPrice(): Promise<number | null> {
   } catch { return solPriceCache.price; }
 }
 
+/* ── Jupiter token prices ─────────────────────────────────
+ * Batch-fetch USD prices for an arbitrary list of SPL / Token-2022
+ * mints via the Jupiter Lite Price v3 API. Returns a partial map
+ * (mints without an active route are simply omitted).
+ * ──────────────────────────────────────────────────────── */
+async function fetchTokenPrices(mints: string[]): Promise<Record<string, number>> {
+  if (mints.length === 0) return {};
+  const out: Record<string, number> = {};
+  // Jupiter caps the `ids` query string at ~100 mints; chunk to be safe.
+  const CHUNK = 80;
+  for (let i = 0; i < mints.length; i += CHUNK) {
+    const slice = mints.slice(i, i + CHUNK);
+    try {
+      const res = await fetch(`https://lite-api.jup.ag/price/v3?ids=${slice.join(',')}`, {
+        signal: AbortSignal.timeout(4000),
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) continue;
+      const data = await res.json() as Record<string, { usdPrice?: number } | null>;
+      for (const mint of slice) {
+        const entry = data?.[mint];
+        const px = entry?.usdPrice;
+        if (typeof px === 'number' && isFinite(px) && px > 0) out[mint] = px;
+      }
+    } catch { /* swallow — partial pricing is acceptable */ }
+  }
+  return out;
+}
+
 /* ── Route handler ───────────────────────────────────────── */
 
 interface TokenAccountInfo {
@@ -284,9 +317,37 @@ export async function GET(
       }))
       .sort((a, b) => b.uiAmount - a.uiAmount);
 
+    // Jupiter pricing for every held mint. We exclude USDC mints (priced 1:1)
+    // and the WSOL mint (already priced via SOL feed) to keep payload small.
+    const priceTargets = tokens
+      .map((t) => t.mint)
+      .filter((m) => !USDC_MINTS.has(m) && m !== 'So11111111111111111111111111111111111111112');
+    const priceMap = priceTargets.length > 0 ? await fetchTokenPrices(priceTargets) : {};
+
+    let tokensUsdSubtotal = 0;
+    for (const t of tokens) {
+      const px = priceMap[t.mint];
+      if (typeof px === 'number') {
+        const v = t.uiAmount * px;
+        t.priceUsd = px;
+        t.usdValue = v;
+        tokensUsdSubtotal += v;
+      } else {
+        t.priceUsd = null;
+        t.usdValue = null;
+      }
+    }
+    // Re-sort by USD value (priced first), falling back to uiAmount.
+    tokens.sort((a, b) => {
+      const av = a.usdValue ?? -1;
+      const bv = b.usdValue ?? -1;
+      if (av !== bv) return bv - av;
+      return b.uiAmount - a.uiAmount;
+    });
+
     const sol = solBalance / LAMPORTS_PER_SOL;
     const solUsd = solPrice ? sol * solPrice : null;
-    const totalUsd = solPrice ? (sol * solPrice) + usdc : null;
+    const totalUsd = (solUsd ?? 0) + usdc + tokensUsdSubtotal;
 
     const deployedTokens = [...deployerMints.entries()].map(([mint, info]) => ({
       mint,

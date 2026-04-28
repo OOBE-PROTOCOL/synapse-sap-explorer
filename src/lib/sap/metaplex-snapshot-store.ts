@@ -21,8 +21,11 @@ import {
   selectAgentMetaplex,
   upsertAgentMetaplex,
 } from '~/lib/db/queries';
-import { getMetaplexLinkSnapshot } from '~/lib/sap/metaplex-link';
-import { listRegistryAgentsForWallet } from '~/lib/metaplex/registry';
+import { getMetaplexLinkSnapshot, getMetaplexAssetsForWallet } from '~/lib/sap/metaplex-link';
+import {
+  listRegistryAgentsForWallet,
+  getRegistryAgentsByMints,
+} from '~/lib/metaplex/registry';
 
 export type AgentMetaplexBadge = {
   asset: string | null;
@@ -33,6 +36,17 @@ export type AgentMetaplexBadge = {
 
 const STALE_MS = 5 * 60_000;        // serve stale immediately, refresh async
 const HARD_TTL_MS = 30 * 60_000;    // beyond this, block on refresh
+/**
+ * "Empty signal" rows (no asset, no plugin, no registry hit) are special:
+ * they are commonly the result of a transient upstream miss — Synapse DAS
+ * 0-result, getProgramAccountsV2 502, registry not yet indexed for a
+ * brand-new wallet. Persisting them as "good" for HARD_TTL_MS hides the
+ * agent's MPL footprint indefinitely. Re-resolve them aggressively (block
+ * on refresh as soon as they're older than this window) so the next read
+ * after the upstream recovers will pick up the real footprint.
+ */
+const EMPTY_SIGNAL_HARD_TTL_MS = 60_000;
+const EMPTY_SIGNAL_STALE_MS = 15_000;
 
 const inflight = new Map<string, Promise<void>>();
 
@@ -40,16 +54,46 @@ async function resolveAndPersist(wallet: string): Promise<void> {
   if (inflight.has(wallet)) return inflight.get(wallet)!;
   const task = (async () => {
     try {
+      // 1. Enumerate owned MPL Core assets first (single source of
+      //    truth for both pluginCount and registry candidate mints).
+      const owned = await getMetaplexAssetsForWallet(wallet).catch(() => null);
+      const candidateMints = (owned?.items ?? [])
+        .filter((i) => i.hasAgentIdentity)
+        .map((i) => i.asset);
+
+      // 2. Resolve registry hits using the authoritative by-mint path,
+      //    then fall back to the paged wallet listing.
+      const resolveRegistry = async () => {
+        try {
+          if (candidateMints.length > 0) {
+            const direct = await getRegistryAgentsByMints(wallet, candidateMints, 'solana-mainnet');
+            if (direct.agents.length > 0) return direct;
+          }
+          return await listRegistryAgentsForWallet(wallet, 'solana-mainnet');
+        } catch {
+          return null;
+        }
+      };
+
       const [snap, reg] = await Promise.all([
         getMetaplexLinkSnapshot(wallet).catch(() => null),
-        listRegistryAgentsForWallet(wallet).catch(() => null),
+        resolveRegistry(),
       ]);
+
+      // Plugin count: prefer the higher of (snapshot, owned-enumeration).
+      // The two paths use different caches — picking the max avoids
+      // persisting a transient zero when one path saw the assets.
+      const pluginCount = Math.max(
+        snap?.pluginCount ?? 0,
+        owned?.withAgentIdentity ?? 0,
+      );
+
       await upsertAgentMetaplex({
         wallet,
         sapAgentPda: snap?.sapAgentPda ?? null,
         asset: snap?.asset ?? null,
         linked: !!snap?.linked,
-        pluginCount: snap?.pluginCount ?? 0,
+        pluginCount,
         registryCount: reg?.agents.length ?? 0,
         agentIdentityUri: snap?.agentIdentityUri ?? null,
         registration: (snap?.registration as unknown) ?? null,
@@ -77,8 +121,13 @@ export async function getCachedAgentMetaplex(
   const row = await selectAgentMetaplex(wallet).catch(() => null);
   const now = Date.now();
   const age = row ? now - new Date(row.refreshedAt).getTime() : Infinity;
+  // A row carries no usable signal when nothing was found across all
+  // sources. We don't trust those for long — they're often transient.
+  const isEmpty = !!row && !row.linked && row.pluginCount === 0 && row.registryCount === 0;
+  const hardTtl = isEmpty ? EMPTY_SIGNAL_HARD_TTL_MS : HARD_TTL_MS;
+  const staleAt = isEmpty ? EMPTY_SIGNAL_STALE_MS : STALE_MS;
 
-  if (!row || age > HARD_TTL_MS) {
+  if (!row || age > hardTtl) {
     // Cold or very stale → block on fresh resolution.
     await resolveAndPersist(wallet);
     const fresh = await selectAgentMetaplex(wallet).catch(() => null);
@@ -92,7 +141,7 @@ export async function getCachedAgentMetaplex(
       : null;
   }
 
-  if (age > STALE_MS) {
+  if (age > staleAt) {
     // Stale-while-revalidate: kick off async refresh, return current.
     void resolveAndPersist(wallet);
   }

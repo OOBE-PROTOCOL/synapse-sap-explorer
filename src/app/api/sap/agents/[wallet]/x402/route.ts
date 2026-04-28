@@ -73,8 +73,20 @@ export async function GET(
       stats,
     });
   } catch (err) {
+    const msg = (err as Error)?.message ?? '';
+    const isTransient = /timeout|terminated|ECONNRESET|connection/i.test(msg);
+    if (isTransient) {
+      console.warn('[x402-api] transient DB failure, returning empty payload:', msg);
+      return NextResponse.json({
+        wallet,
+        payments: [],
+        total: 0,
+        stats: null,
+        degraded: true,
+      });
+    }
     return NextResponse.json(
-      { error: (err as Error).message },
+      { error: msg },
       { status: 500 },
     );
   }
