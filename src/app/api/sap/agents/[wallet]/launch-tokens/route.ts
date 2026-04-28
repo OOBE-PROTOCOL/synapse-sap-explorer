@@ -89,13 +89,9 @@ export async function GET(
     const wallet = resolved?.wallet?.toBase58() ?? walletOrId;
     const profilePda = resolved?.sapAgentPda?.toBase58() ?? wallet;
 
-    // Derive an absolute base for in-process API fan-out (we call our
-    // own /balances endpoint to inherit its mint-authority detection).
-    const baseUrl = new URL(req.url).origin;
-
     const payload = await swr<AgentLaunchTokensResponse>(
       `agent:${wallet}:launch-tokens:v5`,
-      () => buildLaunchTokens(wallet, profilePda, baseUrl),
+      () => buildLaunchTokens(wallet, profilePda),
       { ttl: 60_000, swr: 300_000 },
     );
     return synapseResponse(payload);
@@ -117,7 +113,6 @@ type Candidate = {
 async function buildLaunchTokens(
   wallet: string,
   profilePda: string,
-  baseUrl: string,
 ): Promise<AgentLaunchTokensResponse> {
   // 1. Gather registry agents for this wallet.
   let registryAgents: MetaplexRegistryAgent[] = [];
@@ -199,7 +194,7 @@ async function buildLaunchTokens(
   const agentNameTokens = collectAgentNameTokens(registryAgents);
   try {
     const balancesRes = await fetch(
-      `${baseUrl}/api/sap/agents/${encodeURIComponent(wallet)}/balances`,
+      `/api/sap/agents/${encodeURIComponent(wallet)}/balances`,
       { cache: 'no-store' },
     );
     if (balancesRes.ok) {
