@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { PublicKey, Connection } from '@solana/web3.js';
 import { getRpcConfig } from '~/lib/sap/discovery';
 
+export const dynamic = 'force-dynamic';
+
 type Holder = {
   address: string;
   amount: number;
@@ -24,9 +26,10 @@ type BondingCurveData = {
   holderCount: number;
 };
 
-/* Solana SPL Token program IDs. */
-const SPL_TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJsyFbPVwwQQfq5x5nnwrA8Cuu');
-const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+/* Solana SPL Token program IDs — instantiated lazily inside the function
+ * to avoid Next.js build-time module evaluation errors. */
+const SPL_TOKEN_PROGRAM_ID_STR = 'TokenkegQfeZyiNwAJsyFbPVwwQQfq5x5nnwrA8Cuu';
+const TOKEN_2022_PROGRAM_ID_STR = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
 /* Token-account data sizes per program. Legacy SPL = 165 bytes; Token-2022
  * accounts are at least 165 but may be larger when extensions are present —
@@ -35,6 +38,9 @@ const SPL_TOKEN_ACCOUNT_SIZE = 165;
 
 async function fetchHolders(mint: string): Promise<BondingCurveData | null> {
   try {
+    const SPL_TOKEN_PROGRAM_ID = new PublicKey(SPL_TOKEN_PROGRAM_ID_STR);
+    const TOKEN_2022_PROGRAM_ID = new PublicKey(TOKEN_2022_PROGRAM_ID_STR);
+
     const rpcConfig = getRpcConfig();
     const connection = new Connection(rpcConfig.url, 'confirmed');
 
