@@ -83,7 +83,7 @@
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.10",
-    "esbuild": "^0.27.4",
+    "esbuild": "0.25.12",
     "eslint": "^8.57.0",
     "eslint-config-next": "15.1.11",
     "knip": "^6.4.1",
@@ -103,6 +103,9 @@
       "protobufjs",
       "@stellar/stellar-sdk",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "esbuild": "0.25.12"
+    }
   }
 }
