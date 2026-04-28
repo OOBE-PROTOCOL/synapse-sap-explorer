@@ -43,9 +43,15 @@ export function markDbUp(): void {
 function makePool(): Pool {
     return new Pool({
         connectionString: process.env.DATABASE_URL,
-        max: 10,
+        // 20 connections leaves headroom for parallel route handlers
+        // (each agent page fans out 8–10 endpoints concurrently).
+        max: Number(process.env.DATABASE_POOL_MAX ?? 20),
         idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 3000,
+        // 3s was too aggressive: cold acquires under load (parallel
+        // hooks fanning out from one page) routinely blew past it.
+        // 10s gives the pool time to spin up new connections without
+        // surfacing 500s to the UI.
+        connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 10_000),
         ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
     });
 }

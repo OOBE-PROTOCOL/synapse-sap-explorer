@@ -4,7 +4,9 @@ import { Toaster } from 'sonner';
 import { ThemeProvider } from '~/components/theme-provider';
 import { QueryProvider } from '~/providers/query-provider';
 import { SapDataProvider } from '~/providers/sap-data-provider';
+import { SolanaWalletProvider } from '~/providers/solana-wallet-provider';
 import AppLayout from '~/components/layout/app-layout';
+import { TooltipProvider } from '~/components/ui/tooltip';
 import './globals.css';
 
 const SITE_URL = 'https://explorer.oobeprotocol.ai';
@@ -71,9 +73,13 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            <SapDataProvider>
-              <AppLayout>{children}</AppLayout>
-            </SapDataProvider>
+            <SolanaWalletProvider>
+              <SapDataProvider>
+                <TooltipProvider delayDuration={150}>
+                  <AppLayout>{children}</AppLayout>
+                </TooltipProvider>
+              </SapDataProvider>
+            </SolanaWalletProvider>
           </QueryProvider>
           <Toaster
             position="bottom-right"

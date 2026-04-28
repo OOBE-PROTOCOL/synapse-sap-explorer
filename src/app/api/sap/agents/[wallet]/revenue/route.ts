@@ -58,6 +58,23 @@ export async function GET(
       series: seriesWithLabels,
     });
   } catch (err) {
+    const msg = (err as Error)?.message ?? '';
+    const isTransient = /timeout|terminated|ECONNRESET|connection/i.test(msg);
+    if (isTransient) {
+      console.warn('[revenue] transient DB failure, returning empty payload:', msg);
+      const { wallet } = await params;
+      return NextResponse.json({
+        agentPda: null,
+        wallet,
+        days: 30,
+        totalSettledLamports: '0',
+        totalSettledSol: '0.000000',
+        totalCalls: '0',
+        escrowCount: 0,
+        series: [],
+        degraded: true,
+      });
+    }
     console.error('[revenue]', err);
     return NextResponse.json({ error: 'Failed to load revenue data' }, { status: 500 });
   }

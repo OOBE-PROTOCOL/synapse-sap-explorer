@@ -333,6 +333,36 @@ export function useMetaplexRegistry(wallet: string | null) {
   return useFetch<MetaplexRegistryResponse>(url, { keepStale: true });
 }
 
+/* ── Validated Genesis launch tokens ──────────────────── */
+
+export type AgentLaunchTokenEntry = {
+  mint: string;
+  name: string;
+  symbol: string | null;
+  image: string | null;
+  registryAgentMint: string;
+  tokenProgram: 'spl-token' | 'token-2022';
+  launchCount: number;
+  primaryLaunchStatus: 'upcoming' | 'live' | 'graduated' | 'ended' | null;
+};
+
+export type AgentLaunchTokensResponse = {
+  wallet: string;
+  tokens: AgentLaunchTokenEntry[];
+  candidatesConsidered: number;
+  error?: string;
+};
+
+/**
+ * Returns ONLY the wallet's real Metaplex Genesis launches — every entry
+ * is validated server-side against `api.metaplex.com/v1/tokens/{mint}`.
+ * Does not include MPL Core identity NFTs.
+ */
+export function useAgentLaunchTokens(wallet: string | null) {
+  const url = wallet ? `/api/sap/agents/${wallet}/launch-tokens` : null;
+  return useFetch<AgentLaunchTokensResponse>(url, { keepStale: true });
+}
+
 /* ── Token metadata (shared, DB-cached) ───────────────── */
 
 export type TokenMetaEntry = {

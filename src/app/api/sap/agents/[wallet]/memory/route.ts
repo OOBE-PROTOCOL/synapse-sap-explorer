@@ -97,9 +97,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ wallet: string }> },
 ) {
+  const { wallet } = await params;
   try {
-    const { wallet } = await params;
-
     const data = await swr(`agent-memory:${wallet}`, () => fetchAgentMemory(wallet), {
       ttl: 30_000,
       swr: 120_000,
@@ -107,9 +106,22 @@ export async function GET(
 
     return synapseResponse(data);
   } catch (err: unknown) {
+    const msg = (err as Error)?.message ?? 'unknown';
+    // DB transient failure — degrade gracefully so the page still renders
+    // other tabs. The UI shows an empty state instead of a hard error.
+    const isTransient = /timeout|terminated|ECONNRESET|connection/i.test(msg);
+    if (isTransient) {
+      console.warn('[agent-memory] transient DB failure, returning empty payload:', msg);
+      return synapseResponse({
+        agentPda: wallet,
+        stats: { vaultCount: 0, totalSessions: 0, totalInscriptions: 0, totalBytesInscribed: 0 },
+        vaults: [],
+        degraded: true,
+      } satisfies AgentMemoryResponse & { degraded: true });
+    }
     console.error('[agent-memory]', err);
     return new Response(
-      JSON.stringify({ error: (err as Error).message ?? 'Failed to fetch agent memory' }),
+      JSON.stringify({ error: msg ?? 'Failed to fetch agent memory' }),
       { status: 500, headers: { 'content-type': 'application/json' } },
     );
   }
