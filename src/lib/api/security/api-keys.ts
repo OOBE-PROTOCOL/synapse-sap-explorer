@@ -1,5 +1,5 @@
 import type { ApiTier } from './tiers';
-import { createHash } from 'crypto';
+import { scryptSync } from 'crypto';
 import { selectApiKeyByHash, touchApiKeyLastUsed } from '~/lib/db/queries';
 import { isDbDown } from '~/db';
 
@@ -14,7 +14,8 @@ function parseCsvEnv(key: string): string[] {
 }
 
 function hashApiKey(apiKey: string): string {
-  return createHash('sha256').update(apiKey).digest('hex');
+  const secret = process.env.API_KEY_HASH_SECRET ?? 'default-api-key-hash-secret';
+  return scryptSync(apiKey, secret, 32, { N: 16384, r: 8, p: 1 }).toString('hex');
 }
 
 function resolveTierByKey(apiKey: string): ApiTier | null {
