@@ -6,7 +6,7 @@ import {
   Bot, Activity, ArrowRight, Heart,
   LayoutGrid, LayoutList, Globe, ShieldCheck,
   ExternalLink, Star, Wrench, Wallet,
-  Copy, Check, Coins,
+  Copy, Check, Coins, Clock,
 } from 'lucide-react';
 import {
   EmptyState, Skeleton,
@@ -75,11 +75,13 @@ const HEALTH_META: Record<HealthLevel, { dot: string; text: string; bar: string;
    ═══════════════════════════════════════════════════════ */
 
 const SORT_OPTIONS = [
-  { value: 'health',     label: 'Health' },
-  { value: 'reputation', label: 'Reputation' },
-  { value: 'balance',    label: 'Balance' },
-  { value: 'staking',    label: 'Staking' },
+  { value: 'health',       label: 'Health' },
+  { value: 'reputation',  label: 'Reputation' },
+  { value: 'balance',     label: 'Balance' },
+  { value: 'staking',     label: 'Staking' },
   { value: 'capabilities', label: 'Capabilities' },
+  { value: 'newest',      label: 'Newest' },
+  { value: 'oldest',      label: 'Oldest' },
 ];
 
 const SOLSCAN = 'https://solscan.io';
@@ -190,13 +192,14 @@ function AgentsInner() {
   const [sortBy, setSortBy] = useQueryState(
     'sort',
     'health',
-    QueryParam.enum('health', ['health', 'reputation', 'balance', 'staking', 'capabilities'] as const),
+    QueryParam.enum('health', ['health', 'reputation', 'balance', 'staking', 'capabilities', 'newest', 'oldest'] as const),
   );
   const [activeOnly, setActiveOnly] = useQueryState('active', true, {
     parse: (raw) => (raw == null ? true : raw !== '0' && raw !== 'false'),
     serialize: (v) => (v ? null : '0'),
   });
   const [mplOnly, setMplOnly] = useQueryState('metaplex', false, QueryParam.bool);
+  const [recentOnly, setRecentOnly] = useQueryState('recent', false, QueryParam.bool);
   const [view, setView] = useQueryState('view', 'grid', QueryParam.enum('grid', ['grid', 'list'] as const));
 
   const { data, loading, error } = useEnrichedAgents();
@@ -215,6 +218,16 @@ function AgentsInner() {
         return !!m && (m.linked || m.pluginCount > 0 || m.registryCount > 0);
       });
     }
+    if (recentOnly) {
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      list = list.filter((a) => {
+        const raw = a.agent.identity?.createdAt;
+        if (!raw) return false;
+        const n = Number(raw);
+        const ms = n > 1e12 ? n : n * 1000;
+        return ms >= cutoff;
+      });
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((a) => {
@@ -224,16 +237,23 @@ function AgentsInner() {
       });
     }
     return list;
-  }, [enriched, search, activeOnly, mplOnly]);
+  }, [enriched, search, activeOnly, mplOnly, recentOnly]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
+    const parseTs = (raw: string | null | undefined): number => {
+      if (!raw) return 0;
+      const n = Number(raw);
+      return n > 1e12 ? n : n * 1000;
+    };
     switch (sortBy) {
       case 'health': return copy.sort((a, b) => b.health.score - a.health.score);
       case 'reputation': return copy.sort((a, b) => (b.agent.identity?.reputationScore ?? 0) - (a.agent.identity?.reputationScore ?? 0));
       case 'balance': return copy.sort((a, b) => (b.balances?.sol ?? 0) - (a.balances?.sol ?? 0));
       case 'staking': return copy.sort((a, b) => ((b as CardData & { staking?: AgentStakeSummary | null }).staking?.stakedSol ?? 0) - ((a as CardData & { staking?: AgentStakeSummary | null }).staking?.stakedSol ?? 0));
       case 'capabilities': return copy.sort((a, b) => (b.agent.identity?.capabilities.length ?? 0) - (a.agent.identity?.capabilities.length ?? 0));
+      case 'newest': return copy.sort((a, b) => parseTs(b.agent.identity?.createdAt) - parseTs(a.agent.identity?.createdAt));
+      case 'oldest': return copy.sort((a, b) => parseTs(a.agent.identity?.createdAt) - parseTs(b.agent.identity?.createdAt));
       default: return copy;
     }
   }, [filtered, sortBy]);
@@ -257,6 +277,7 @@ function AgentsInner() {
   const filterChips: FilterChip[] = [];
   if (activeOnly) filterChips.push({ key: 'active', label: 'Active only', value: 'true', onClear: () => setActiveOnly(false) });
   if (mplOnly) filterChips.push({ key: 'mpl', label: 'Metaplex', value: 'on', onClear: () => setMplOnly(false) });
+  if (recentOnly) filterChips.push({ key: 'recent', label: 'Recently added', value: 'on', onClear: () => setRecentOnly(false) });
   if (sortBy !== 'health') filterChips.push({ key: 'sort', label: 'Sort', value: SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? sortBy, onClear: () => setSortBy('health') });
 
   return (
@@ -322,6 +343,20 @@ function AgentsInner() {
           </span>
           MPL × SAP
           <span className="ml-1.5 tabular-nums opacity-80">{mplCount}</span>
+        </Button>
+        <Button
+          variant={recentOnly ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => { setRecentOnly(!recentOnly); if (!recentOnly) setSortBy('newest'); else setSortBy('health'); }}
+          className={cn(
+            recentOnly
+              ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40 hover:bg-cyan-500/30'
+              : 'border-cyan-500/30 text-cyan-400/80 hover:bg-cyan-500/10 hover:text-cyan-300 hover:border-cyan-400/50',
+          )}
+          title="Show agents registered in the last 30 days"
+        >
+          <Clock className="mr-1.5 h-3.5 w-3.5" />
+          Recently Added
         </Button>
       </ExplorerFilterBar>
 
