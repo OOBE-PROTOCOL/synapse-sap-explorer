@@ -1055,8 +1055,9 @@ function AgentDetailInner() {
               ) : (
                 <div className="space-y-2">
                   {agentTools.map((t) => (
-                    <div key={t.pda} className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
-                      <span className="text-sm font-medium text-white">{t.descriptor?.toolName ?? 'Unnamed'}</span>
+                    <div key={t.pda} className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
+                      <span className="text-sm font-medium text-white truncate min-w-0 flex-1">{t.descriptor?.toolName ?? 'Unnamed'}</span>
+                      <div className="flex items-center gap-2 flex-wrap shrink-0">
                       {t.descriptor?.httpMethod && (
                         <Badge className="bg-emerald-500/15 text-emerald-400 text-xs">
                           {typeof t.descriptor.httpMethod === 'object' ? Object.keys(t.descriptor.httpMethod)[0] : t.descriptor.httpMethod}
@@ -1067,9 +1068,10 @@ function AgentDetailInner() {
                           {typeof t.descriptor.category === 'object' ? Object.keys(t.descriptor.category)[0] : t.descriptor.category}
                         </Badge>
                       )}
-                      <span className="ml-auto text-xs text-neutral-500 tabular-nums">
+                      <span className="text-xs text-neutral-500 tabular-nums">
                         {agentEscrows.reduce((s, e) => s + Number(e.totalCallsSettled), 0).toLocaleString()} calls settled
                       </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1303,9 +1305,9 @@ function DegradedBanner({ label }: { label: string }) {
 
 function PropertyRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-5 py-2.5">
+    <div className="flex items-start justify-between gap-4 px-5 py-2.5">
       <span className="text-xs text-neutral-500 shrink-0">{label}</span>
-      <div className="text-right">{value}</div>
+      <div className="text-right min-w-0 [overflow-wrap:anywhere]">{value}</div>
     </div>
   );
 }
@@ -1524,17 +1526,17 @@ function AgentRevenueTab({
         <CardContent className="px-5 pt-3 pb-4">
           <div className="divide-y divide-neutral-800">
             {agentEscrows.map((e) => (
-              <div key={e.pda} className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-2">
-                  <Link href={`/escrows/${e.pda}`} className="text-xs font-mono text-neutral-300 hover:text-primary transition-colors">
+              <div key={e.pda} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between py-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Link href={`/escrows/${e.pda}`} className="text-xs font-mono text-neutral-300 hover:text-primary transition-colors truncate">
                     {e.pda.slice(0, 12)}…{e.pda.slice(-8)}
                   </Link>
                   {Number(e.balance) > 0
-                    ? <Badge className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-1.5 py-0">Funded</Badge>
-                    : <Badge className="text-xs bg-neutral-800 text-neutral-500 border border-neutral-700 px-1.5 py-0">Empty</Badge>
+                    ? <Badge className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-1.5 py-0 shrink-0">Funded</Badge>
+                    : <Badge className="text-xs bg-neutral-800 text-neutral-500 border border-neutral-700 px-1.5 py-0 shrink-0">Empty</Badge>
                   }
                 </div>
-                <div className="flex items-center gap-4 text-xs text-neutral-500">
+                <div className="flex items-center gap-4 text-xs text-neutral-500 shrink-0">
                   <span className="font-mono tabular-nums">{(Number(e.totalSettled) / 1e9).toFixed(4)} SOL settled</span>
                   <span className="font-mono tabular-nums">{e.totalCallsSettled} calls</span>
                 </div>
@@ -1655,14 +1657,14 @@ function AgentMemoryTab({
       {vaults.map((v) => (
         <Card key={v.pda} className="bg-neutral-900 border-neutral-800 overflow-hidden">
           <CardHeader className="pb-0 px-5 pt-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Database className="h-4 w-4 text-primary" />
-                <Link href={`/vaults/${v.pda}`} className="font-mono text-neutral-300 hover:text-primary transition-colors">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-sm flex items-center gap-2 min-w-0">
+                <Database className="h-4 w-4 text-primary shrink-0" />
+                <Link href={`/vaults/${v.pda}`} className="font-mono text-neutral-300 hover:text-primary transition-colors truncate">
                   {v.pda.slice(0, 12)}…{v.pda.slice(-8)}
                 </Link>
               </CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
                 <Badge variant="secondary" className="text-xs">v{v.protocolVersion}</Badge>
                 <Badge variant="secondary" className="text-xs">Nonce v{v.nonceVersion}</Badge>
                 {v.delegateCount > 0 && (
@@ -1692,7 +1694,7 @@ function AgentMemoryTab({
               <div className="space-y-2">
                 <p className="text-xs text-neutral-600 font-semibold uppercase tracking-widest">Sessions</p>
                 {v.sessions.map((s) => (
-                  <div key={s.pda} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-800/30 px-3 py-2">
+                  <div key={s.pda} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-neutral-800 bg-neutral-800/30 px-3 py-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {s.isClosed
                         ? <span className="h-2 w-2 rounded-full bg-red-400 shrink-0" />
@@ -1700,7 +1702,7 @@ function AgentMemoryTab({
                       <span className="text-xs font-mono text-neutral-300 truncate">{s.pda.slice(0, 12)}…{s.pda.slice(-6)}</span>
                       <Badge variant="secondary" className="text-xs px-1">seq {s.sequenceCounter}</Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-neutral-500 shrink-0">
+                    <div className="flex items-center gap-3 text-xs text-neutral-500 flex-wrap sm:shrink-0">
                       <span className="font-mono">{fmtBytes(s.totalBytes)}</span>
                       <span className="font-mono">{s.totalEpochs} epochs</span>
                       <span>{s.isClosed ? 'Closed' : 'Active'}</span>
@@ -1827,8 +1829,8 @@ function AgentEventTimeline({
                                 : String(v);
                             return (
                               <div key={k} className="flex items-start justify-between gap-4 px-3 py-1.5">
-                                <span className="text-xs font-mono text-primary shrink-0 min-w-[120px] pt-0.5">{k}</span>
-                                <span className="text-xs font-mono text-neutral-300 text-right break-all max-w-[400px]">{display}</span>
+                                <span className="text-xs font-mono text-primary shrink-0 min-w-[80px] pt-0.5">{k}</span>
+                                <span className="text-xs font-mono text-neutral-300 text-right break-all min-w-0 flex-1">{display}</span>
                               </div>
                             );
                           })}
@@ -2104,7 +2106,7 @@ function AgentMetaplexTab({
           <PropertyRow
             label="Expected EIP-8004 URL"
             value={
-              <Link href={expectedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 max-w-[20rem] truncate">
+              <Link href={expectedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 break-all">
                 {expectedUrl}
                 <ExternalLink className="h-3 w-3 shrink-0" />
               </Link>
@@ -2114,7 +2116,7 @@ function AgentMetaplexTab({
             <PropertyRow
               label="On-chain AgentIdentity URI"
               value={
-                <Link href={agentIdentityUri} target="_blank" rel="noreferrer" className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 max-w-[20rem] truncate">
+                <Link href={agentIdentityUri} target="_blank" rel="noreferrer" className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 break-all">
                   {agentIdentityUri}
                   <ExternalLink className="h-3 w-3 shrink-0" />
                 </Link>
@@ -2891,7 +2893,7 @@ function AgentTokenCard({
           )}
         </div>
       </div>
-      <div className="mt-2.5 flex items-center justify-between gap-2">
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={onOpenDetails}

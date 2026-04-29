@@ -348,7 +348,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* External links */}
-          <div className={cn('mb-3 flex flex-row justify-between space-y-0.5', effectiveCollapsed && 'space-y-1')}>
+          <div className={cn('mb-3 flex flex-row  xs:flex-col  justify-between space-y-0.5', effectiveCollapsed && 'space-y-0.5 xs:flex-col sm:flex-col')}>
             {[
               { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
               { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
