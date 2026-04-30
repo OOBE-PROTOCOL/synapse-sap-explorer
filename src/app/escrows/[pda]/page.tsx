@@ -18,6 +18,7 @@ import {
 import { useEscrow, useAddressEvents, type SapEvent } from '~/hooks/use-sap';
 import { AgentTag } from '~/components/ui/agent-tag';
 import { formatTokenAmount } from '~/lib/format';
+import { Receipt } from 'lucide-react';
 
 export default function EscrowDetailPage() {
   const { pda } = useParams<{ pda: string }>();
@@ -158,6 +159,54 @@ export default function EscrowDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Settlement Receipts (v0.10 / SAP v0.2.0+) */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Receipt className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <SectionHeader title="Settlement Receipts" />
+              <p className="text-sm text-muted-foreground mb-3">
+                Each <code className="text-xs px-1 py-0.5 rounded bg-muted">settle</code> /{' '}
+                <code className="text-xs px-1 py-0.5 rounded bg-muted">settle_batch</code> call mints a
+                deterministic on-chain receipt PDA preventing replay and providing audit trail.
+              </p>
+              <div className="space-y-2 text-xs">
+                <div className="flex flex-col gap-1">
+                  <span className="font-semibold uppercase tracking-wider text-muted-foreground">
+                    PDA Seed Pattern
+                  </span>
+                  <code className="px-2 py-1.5 rounded bg-muted font-mono text-foreground break-all">
+                    [&quot;sap_recv&quot;, escrow_pda, receipt_key_32_bytes]
+                  </code>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="font-semibold uppercase tracking-wider text-muted-foreground">
+                    Receipt Key
+                  </span>
+                  <p className="text-muted-foreground">
+                    For single <code className="text-xs px-1 py-0.5 rounded bg-muted">settle</code>: the{' '}
+                    <code className="text-xs px-1 py-0.5 rounded bg-muted">service_hash</code>. For{' '}
+                    <code className="text-xs px-1 py-0.5 rounded bg-muted">settle_batch</code>: the SHA-256
+                    Merkle root of all batch service hashes (
+                    <code className="text-xs px-1 py-0.5 rounded bg-muted">computeBatchRoot</code>).
+                  </p>
+                </div>
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 mt-2">
+                  <p className="text-amber-700 dark:text-amber-400 text-[11px]">
+                    Receipts are emitted on-chain but not yet indexed by this explorer. Derive locally with{' '}
+                    <code className="px-1 py-0.5 rounded bg-amber-500/10">deriveSettlementReceipt(escrow,
+                    key)</code> from <code className="px-1 py-0.5 rounded bg-amber-500/10">@oobe-protocol-labs/synapse-sap-sdk</code>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Timestamps */}
       <Card>

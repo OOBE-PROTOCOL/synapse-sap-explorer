@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft, ExternalLink, Copy, Zap, Activity, Loader2, DollarSign, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, HelpCircle, LineChart } from 'lucide-react';
 import { StatusBadge, Address, ProtocolBadge, Skeleton, EmptyState, AgentAvatar, ExplorerPagination, usePagination } from '~/components/ui';
 import { DetailRow, MetricTile, PortfolioRow, SectionLabel, TokenAvatar, TokenAvatarStack, VerificationPill } from '~/components/ui/agent-profile-primitives';
+import { MerchantReadiness } from '~/components/ui/merchant-readiness';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -745,6 +746,14 @@ function AgentDetailInner() {
                 </div>
               </div>
             )}
+
+            {/* Merchant Readiness — v0.10 / SAP v0.2.0+ requirements */}
+            <div className="px-5 py-4 border-b border-neutral-800/60">
+              <MerchantReadiness
+                stakedSol={stakingData?.stakedSol ?? null}
+                tools={agentTools}
+              />
+            </div>
 
             {/* (Identity assets section moved to Section 1 for height
              * balance — see left column.) */}
