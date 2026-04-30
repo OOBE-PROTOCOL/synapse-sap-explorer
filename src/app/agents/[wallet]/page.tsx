@@ -20,6 +20,10 @@ import type {
   MetaplexGenesisTokenLaunchesPayload,
 } from '~/lib/metaplex/genesis-types';
 import type { GenesisOnchainPayload } from '~/app/api/market/genesis-onchain/[genesis]/route';
+import { BondingCurveProgress } from '~/components/market/bonding-curve-progress';
+import { TradingChart } from '~/components/market/trading-chart';
+import { BondingCurveTradePanel } from '~/components/market/bonding-curve-trade-panel';
+import { RecentTradesFeed } from '~/components/market/recent-trades-feed';
 import { toast } from 'sonner';
 import { cn } from '~/lib/utils';
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
@@ -338,6 +342,7 @@ function AgentDetailInner() {
                   <AgentAvatar
                     name={id.name}
                     endpoint={id.x402Endpoint}
+                    mplImage={launchTokensData?.tokens?.[0]?.image ?? null}
                     className="rounded-full p-0 ring-2 ring-neutral-800"
                     size={44}
                   />
@@ -747,13 +752,10 @@ function AgentDetailInner() {
               </div>
             )}
 
-            {/* Merchant Readiness — v0.10 / SAP v0.2.0+ requirements */}
-            <div className="px-5 py-4 border-b border-neutral-800/60">
-              <MerchantReadiness
-                stakedSol={stakingData?.stakedSol ?? null}
-                tools={agentTools}
-              />
-            </div>
+            {/* Merchant Readiness moved out to full-width section below
+             * Section 2 — see <MerchantReadinessBand/> directly above the
+             * tab bar. Keeping the placeholder note here so future
+             * editors don't accidentally re-introduce the inner card. */}
 
             {/* (Identity assets section moved to Section 1 for height
              * balance — see left column.) */}
@@ -761,6 +763,21 @@ function AgentDetailInner() {
         </section>
 
       </div>
+
+      {/* ════ Full-width Merchant Readiness band ════
+       * Visually partitions Section 1+2 (identity / performance) from
+       * Section 3 (deep tabs) and surfaces the v0.2.0 merchant gate so
+       * router/x402 callers can see eligibility at a glance without
+       * scrolling the right column. */}
+      <section
+        aria-label="Merchant readiness"
+        className="rounded-xl border border-neutral-800/70 bg-neutral-900/40"
+      >
+        <MerchantReadiness
+          stakedSol={stakingData?.stakedSol ?? null}
+          tools={agentTools}
+        />
+      </section>
 
       {/* ═══════════ SECTION 3 — Full-width tabs ═══════════ */}
       <section aria-label="Agent details" className="space-y-3 min-w-0">
@@ -3034,6 +3051,8 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
   const [genesisPrimaryLaunch, setGenesisPrimaryLaunch] = useState<MetaplexGenesisLaunch | null>(null);
   const [genesisOnchain, setGenesisOnchain] = useState<GenesisOnchainPayload | null>(null);
   const [genesisOnchainLoading, setGenesisOnchainLoading] = useState(false);
+  // Bumped after every successful native swap so RecentTradesFeed refetches.
+  const [tradeRefreshKey, setTradeRefreshKey] = useState(0);
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
 
@@ -3200,69 +3219,63 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
       </CardHeader>
 
       <CardContent className="px-5 pb-4 pt-0 space-y-4">
-        {tokens.length === 0 && (
-          <AgentTokenEmptyCta />
+        {tokens.length === 0 && <AgentTokenEmptyCta />}
+
+        {/* Token selector — only when there are multiple launches */}
+        {tokens.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {tokens.map((token) => (
+              <Button
+                key={token.mint}
+                size="sm"
+                variant={token.mint === selectedMint ? 'default' : 'outline'}
+                onClick={() => setSelectedMint(token.mint)}
+                className={cn(
+                  'h-8 rounded-md text-xs',
+                  token.mint === selectedMint
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30 hover:bg-emerald-500/30'
+                    : 'border-neutral-700 text-neutral-300 hover:text-emerald-300 hover:border-emerald-400/30',
+                )}
+              >
+                {token.name}
+              </Button>
+            ))}
+          </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {tokens.map((token) => (
-            <Button
-              key={token.mint}
-              size="sm"
-              variant={token.mint === selectedMint ? 'default' : 'outline'}
-              onClick={() => setSelectedMint(token.mint)}
-              className={cn(
-                'h-8 rounded-md text-xs',
-                token.mint === selectedMint
-                  ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30 hover:bg-emerald-500/30'
-                  : 'border-neutral-700 text-neutral-300 hover:text-emerald-300 hover:border-emerald-400/30',
-              )}
-            >
-              {token.name}
-            </Button>
-          ))}
-        </div>
-
+        {/* ── UNIFIED HERO ───────────────────────────────────
+           Token identity + status + bonding-curve progress in one
+           clean card. Replaces the old "BondingCurveProgress" +
+           "Token mint info" stacked layout.
+           ──────────────────────────────────────────────── */}
         {selected && (
-          <div className="rounded-md border border-neutral-800 bg-neutral-950/50 p-3 text-xs space-y-1.5">
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-neutral-600">Token mint ·</span>
-              <Link
-                href={`${SOLSCAN}/token/${selected.mint}`}
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-emerald-300 hover:underline inline-flex items-center gap-1 break-all"
-              >
-                {selected.mint}
-                <ExternalLink className="h-3 w-3 shrink-0" />
-              </Link>
-              <Badge
-                variant="outline"
-                className="border-neutral-700 bg-neutral-900/60 text-[9px] uppercase tracking-wider text-neutral-400"
-              >
-                {/* Token program is detected server-side from the mint's
-                 * owner program. Metaplex Genesis launches via Token-2022
-                 * when extensions (transfer hook, metadata pointer) are
-                 * required, otherwise the legacy SPL Token program. */}
-                {curveData?.tokenProgram === 'token-2022'
-                  ? 'Token-2022'
-                  : curveData?.tokenProgram === 'spl-token'
-                    ? 'SPL Token'
-                    : 'Token'}
-              </Badge>
-            </div>
+          <div className="rounded-xl border border-neutral-800 bg-gradient-to-br from-neutral-950/80 to-neutral-900/40 p-4 space-y-4">
+            <div className="flex items-start gap-3 flex-wrap">
+              {genesisTokenData?.baseToken?.image ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={genesisTokenData.baseToken.image}
+                  alt={genesisTokenData.baseToken.name ?? selected.name}
+                  className="h-14 w-14 rounded-xl object-cover border border-neutral-800 shrink-0"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="h-14 w-14 rounded-xl border border-neutral-800 bg-neutral-900 flex items-center justify-center shrink-0">
+                  <Coins className="h-6 w-6 text-neutral-700" />
+                </div>
+              )}
 
-            <div className="pt-2 mt-2 border-t border-neutral-800/80 space-y-2">
-              {/* ── METAPLEX GENESIS PANEL ─────────────────────────────────
-                 Genesis is the launch coordinator (launchpool / presale /
-                 bonding curve). Each token mint can have multiple historical
-                 launches. We render the full set + base-token identity. */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-neutral-600">Metaplex Genesis ·</span>
-                {genesisLoading ? (
-                  <Badge variant="secondary" className="text-[10px]">Syncing…</Badge>
-                ) : genesisPrimaryLaunch ? (
-                  <>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-base font-semibold text-neutral-100 truncate">
+                    {genesisTokenData?.baseToken?.name ?? selected.name}
+                  </span>
+                  {genesisTokenData?.baseToken?.symbol && (
+                    <span className="text-xs font-mono text-emerald-300">
+                      ${genesisTokenData.baseToken.symbol}
+                    </span>
+                  )}
+                  {genesisPrimaryLaunch && (
                     <Badge
                       className={cn(
                         'text-[10px] uppercase tracking-wider border',
@@ -3277,458 +3290,139 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
                     >
                       {genesisPrimaryLaunch.status}
                     </Badge>
+                  )}
+                  {genesisPrimaryLaunch?.type && (
                     <Badge variant="outline" className="text-[10px] border-neutral-700 text-neutral-300 font-mono">
                       {genesisPrimaryLaunch.type}
                     </Badge>
-                    {genesisPrimaryLaunch.spotlight && (
-                      <Badge className="text-[10px] bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-400/30">
-                        ★ spotlight
-                      </Badge>
-                    )}
-                    {(genesisTokenData?.launches.length ?? 0) > 1 && (
-                      <Badge variant="outline" className="text-[10px] border-neutral-700 text-neutral-400">
-                        {genesisTokenData!.launches.length} launches
-                      </Badge>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-neutral-500">No launch indexed</span>
+                  )}
+                </div>
+
+                {genesisTokenData?.baseToken?.description && (
+                  <p className="text-[11px] text-neutral-400 line-clamp-2">
+                    {genesisTokenData.baseToken.description}
+                  </p>
                 )}
-                {genesisError && <span className="text-amber-400">{genesisError}</span>}
-              </div>
 
-              {/* Base token identity from Genesis (canonical name/symbol/image) */}
-              {genesisTokenData?.baseToken && (
-                <div className="flex items-start gap-3 rounded-md border border-neutral-800 bg-neutral-950/40 p-2.5">
-                  {genesisTokenData.baseToken.image && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={genesisTokenData.baseToken.image}
-                      alt={genesisTokenData.baseToken.name}
-                      className="h-12 w-12 rounded-md object-cover border border-neutral-800 shrink-0"
-                      loading="lazy"
-                    />
+                <div className="flex items-center gap-3 flex-wrap text-[10px]">
+                  <Link
+                    href={`${SOLSCAN}/token/${selected.mint}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-neutral-500 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
+                  >
+                    {selected.mint.slice(0, 6)}…{selected.mint.slice(-4)}
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </Link>
+                  {genesisPrimaryLaunch?.launchPage && (
+                    <Link
+                      href={genesisPrimaryLaunch.launchPage}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-fuchsia-300 hover:underline inline-flex items-center gap-1"
+                    >
+                      Metaplex <ExternalLink className="h-2.5 w-2.5" />
+                    </Link>
                   )}
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-neutral-100 truncate">
-                        {genesisTokenData.baseToken.name}
-                      </span>
-                      <span className="text-[11px] font-mono text-emerald-300">
-                        ${genesisTokenData.baseToken.symbol}
-                      </span>
-                    </div>
-                    {genesisTokenData.baseToken.description && (
-                      <p className="text-[11px] text-neutral-400 line-clamp-2">
-                        {genesisTokenData.baseToken.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* All launches for this mint (chronological — newest first) */}
-              {genesisTokenData && genesisTokenData.launches.length > 0 && (
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/40 overflow-hidden">
-                  <div className="px-2.5 py-1.5 border-b border-neutral-800 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                    Launch Timeline
-                  </div>
-                  <div className="divide-y divide-neutral-800">
-                    {genesisTokenData.launches.map((l) => {
-                      const startMs = Date.parse(l.startTime);
-                      const endMs = Date.parse(l.endTime);
-                      const grad = l.graduatedAt ? Date.parse(l.graduatedAt) : null;
-                      return (
-                        <div key={l.genesisAddress} className="flex flex-col gap-1 px-2.5 py-2 text-[11px] sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <Badge
-                              className={cn(
-                                'text-[9px] uppercase tracking-wider border shrink-0',
-                                l.status === 'live'
-                                  ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
-                                  : l.status === 'graduated'
-                                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-400/30'
-                                    : l.status === 'upcoming'
-                                      ? 'bg-amber-500/15 text-amber-200 border-amber-400/30'
-                                      : 'bg-neutral-800 text-neutral-300 border-neutral-700',
-                              )}
-                            >
-                              {l.status}
-                            </Badge>
-                            <span className="font-mono text-neutral-300 shrink-0">{l.mechanic}</span>
-                            <Link
-                              href={`${SOLSCAN}/account/${l.genesisAddress}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-mono text-neutral-500 hover:text-emerald-300 hover:underline truncate"
-                            >
-                              {l.genesisAddress.slice(0, 8)}…{l.genesisAddress.slice(-4)}
-                            </Link>
-                          </div>
-                          <div className="flex items-center gap-3 text-neutral-500 sm:justify-end shrink-0">
-                            {!Number.isNaN(startMs) && (
-                              <span title={`Start ${new Date(startMs).toISOString()}`}>
-                                {new Date(startMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                {!Number.isNaN(endMs) && (
-                                  <> → {new Date(endMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
-                                )}
-                              </span>
-                            )}
-                            {grad && (
-                              <span className="text-cyan-300" title={`Graduated ${new Date(grad).toISOString()}`}>
-                                graduated {new Date(grad).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              </span>
-                            )}
-                            <Link
-                              href={l.launchPage}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-emerald-300 hover:underline"
-                            >
-                              open <ExternalLink className="h-3 w-3" />
-                            </Link>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* On-chain Genesis Account state — graduation progress, raised SOL,
-                  finalized flag, bucket count. Fetched live from RPC. */}
-              {(genesisOnchainLoading || genesisOnchain?.account) && (
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-2.5 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap text-[10px] uppercase tracking-[0.12em] text-neutral-500 font-semibold">
-                    On-chain state
-                    {genesisOnchainLoading && (
-                      <Badge variant="secondary" className="text-[9px]">Syncing…</Badge>
-                    )}
-                    {genesisOnchain?.account?.finalized != null && (
-                      <Badge
-                        className={cn(
-                          'text-[9px] uppercase tracking-wider border',
-                          genesisOnchain.account.finalized
-                            ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
-                            : 'bg-amber-500/15 text-amber-200 border-amber-400/30',
-                        )}
-                      >
-                        {genesisOnchain.account.finalized ? 'finalized' : 'configurable'}
-                      </Badge>
-                    )}
-                  </div>
-                  {genesisOnchain?.account && (
-                    <>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
-                        <div className="rounded border border-neutral-800 bg-neutral-900/40 px-2 py-1.5">
-                          <div className="text-neutral-600">Raised</div>
-                          <div className="font-mono text-emerald-300 tabular-nums">
-                            {genesisOnchain.proceedsSol == null
-                              ? '—'
-                              : `${genesisOnchain.proceedsSol.toFixed(genesisOnchain.proceedsSol >= 100 ? 2 : 4)} SOL`}
-                          </div>
-                        </div>
-                        <div className="rounded border border-neutral-800 bg-neutral-900/40 px-2 py-1.5">
-                          <div className="text-neutral-600">Allocated</div>
-                          <div className="font-mono text-neutral-200 tabular-nums">
-                            {genesisOnchain.allocationProgress == null
-                              ? '—'
-                              : `${(genesisOnchain.allocationProgress * 100).toFixed(2)}%`}
-                          </div>
-                        </div>
-                        <div className="rounded border border-neutral-800 bg-neutral-900/40 px-2 py-1.5">
-                          <div className="text-neutral-600">Buckets</div>
-                          <div className="font-mono text-neutral-200 tabular-nums">
-                            {genesisOnchain.account.bucketCount}
-                          </div>
-                        </div>
-                        <div className="rounded border border-neutral-800 bg-neutral-900/40 px-2 py-1.5">
-                          <div className="text-neutral-600">Launch type</div>
-                          <div className="font-mono text-neutral-200 tabular-nums" title="0 = Uninitialized · 3 = LaunchPoolV1">
-                            {genesisOnchain.account.launchType}
-                          </div>
-                        </div>
-                      </div>
-                      {genesisOnchain.allocationProgress != null && (
-                        <div className="space-y-1">
-                          <div className="flex items-baseline justify-between text-[10px] text-neutral-500">
-                            <span>Supply allocated to buckets</span>
-                            <span className="font-mono text-neutral-300">
-                              {(genesisOnchain.allocationProgress * 100).toFixed(2)}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400"
-                              style={{ width: `${Math.min(genesisOnchain.allocationProgress * 100, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <div className="text-[10px] text-neutral-600 font-mono break-all">
-                        authority · {genesisOnchain.account.authority}
-                      </div>
-                    </>
+                  {marketPair?.url && (
+                    <Link
+                      href={marketPair.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-neutral-400 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
+                    >
+                      DexScreener <ExternalLink className="h-2.5 w-2.5" />
+                    </Link>
                   )}
-                </div>
-              )}
-
-              {/* Website + socials (from Genesis token metadata) */}
-              {(genesisTokenData?.website || genesisTokenData?.socials?.x || genesisTokenData?.socials?.telegram || genesisTokenData?.socials?.discord) && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-neutral-600">Links ·</span>
                   {genesisTokenData?.website && (
-                    <Link href={genesisTokenData.website} target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-emerald-300 hover:underline inline-flex items-center gap-1">
-                      website <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  )}
-                  {genesisTokenData?.socials?.x && (
-                    <Link href={genesisTokenData.socials.x} target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-emerald-300 hover:underline inline-flex items-center gap-1">
-                      x <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  )}
-                  {genesisTokenData?.socials?.telegram && (
-                    <Link href={genesisTokenData.socials.telegram} target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-emerald-300 hover:underline inline-flex items-center gap-1">
-                      telegram <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  )}
-                  {genesisTokenData?.socials?.discord && (
-                    <Link href={genesisTokenData.socials.discord} target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-emerald-300 hover:underline inline-flex items-center gap-1">
-                      discord <ExternalLink className="h-3 w-3" />
+                    <Link
+                      href={genesisTokenData.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-neutral-400 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
+                    >
+                      website <ExternalLink className="h-2.5 w-2.5" />
                     </Link>
                   )}
                 </div>
-              )}
+              </div>
+            </div>
+
+            {/* Bonding-curve progress integrated into the hero */}
+            {(genesisOnchain?.account || genesisPrimaryLaunch?.genesisAddress) && (
+              <BondingCurveProgress
+                proceedsSol={genesisOnchain?.proceedsSol ?? 0}
+                allocationProgress={genesisOnchain?.allocationProgress ?? 0}
+                finalized={genesisOnchain?.account?.finalized ?? false}
+                symbol={genesisTokenData?.baseToken?.symbol ?? null}
+                loading={genesisOnchainLoading}
+              />
+            )}
+
+            {/* Compact metrics strip — pulls from DexScreener when available */}
+            {(marketPair || curveData) && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
+                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">Price</div>
+                  <div className="font-mono text-neutral-100 tabular-nums">
+                    {marketPair?.priceUsd ? `$${marketPair.priceUsd}` : '—'}
+                  </div>
+                </div>
+                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
+                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">24h</div>
+                  <div className={cn('font-mono tabular-nums', (marketPair?.priceChange24h ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
+                    {marketPair?.priceChange24h == null ? '—' : `${marketPair.priceChange24h.toFixed(2)}%`}
+                  </div>
+                </div>
+                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
+                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">24h Vol</div>
+                  <div className="font-mono text-neutral-100 tabular-nums">
+                    {marketPair?.volume24h == null ? '—' : `$${fmtCompact(marketPair.volume24h)}`}
+                  </div>
+                </div>
+                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
+                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">Holders</div>
+                  <div className="font-mono text-neutral-100 tabular-nums">
+                    {curveData?.holderCount ?? '—'}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── TRADING SUITE ─────────────────────────────────
+           Chart + recent trades (left, 2/3) · Trade panel (right, 1/3).
+           Renders as soon as a Genesis address is known.
+           ──────────────────────────────────────────────── */}
+        {genesisPrimaryLaunch?.genesisAddress && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2 space-y-3">
+              <TradingChart
+                genesisAddress={genesisPrimaryLaunch.genesisAddress}
+                symbol={genesisTokenData?.baseToken?.symbol ?? null}
+              />
+              <RecentTradesFeed
+                genesisAddress={genesisPrimaryLaunch.genesisAddress}
+                symbol={genesisTokenData?.baseToken?.symbol ?? null}
+                refreshKey={tradeRefreshKey}
+              />
+            </div>
+            <div>
+              <BondingCurveTradePanel
+                genesisAddress={genesisPrimaryLaunch.genesisAddress}
+                symbol={genesisTokenData?.baseToken?.symbol ?? null}
+                baseMint={genesisOnchain?.account?.baseMint ?? selectedMint}
+                finalized={genesisOnchain?.account?.finalized ?? false}
+                priceSolPerToken={
+                  marketPair?.priceNative ? Number(marketPair.priceNative) : null
+                }
+                onTradeLanded={() => setTradeRefreshKey((k) => k + 1)}
+              />
             </div>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <WalletMultiButton className="!h-9 !rounded-md !bg-neutral-800 !text-neutral-100 hover:!bg-neutral-700 !border !border-neutral-700" />
-          <div className="flex items-center gap-2 text-xs text-neutral-500 flex-wrap">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-neutral-600">SOL</span>
-              <span className="font-mono text-neutral-200 tabular-nums">{connected ? (solBalance == null ? '—' : solBalance.toFixed(4)) : 'connect wallet'}</span>
-            </span>
-            <span className="text-neutral-700">·</span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-neutral-600">Token</span>
-              <span className="font-mono text-emerald-300 tabular-nums">{connected ? (tokenBalance == null ? '—' : tokenBalance.toFixed(4)) : 'connect wallet'}</span>
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Genesis launch CTA — primary when an active/upcoming launch exists */}
-          {genesisPrimaryLaunch && (genesisPrimaryLaunch.status === 'live' || genesisPrimaryLaunch.status === 'upcoming') && (
-            <Button asChild size="sm" className="h-9 bg-fuchsia-500/20 text-fuchsia-100 border border-fuchsia-400/30 hover:bg-fuchsia-500/30">
-              <Link href={genesisPrimaryLaunch.launchPage} target="_blank" rel="noreferrer">
-                {genesisPrimaryLaunch.status === 'live' ? 'Participate on Metaplex' : 'View on Metaplex'}
-                <ExternalLink className="h-3 w-3 ml-1" />
-              </Link>
-            </Button>
-          )}
-
-          {/* Jupiter — only meaningful once a Raydium pool exists (graduated or DexScreener-listed) */}
-          {(() => {
-            const tradable = !!marketPair?.pairAddress || genesisPrimaryLaunch?.status === 'graduated';
-            return (
-              <>
-                <Button
-                  asChild={tradable}
-                  size="sm"
-                  disabled={!tradable}
-                  className="h-9 bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 hover:bg-emerald-500/30 disabled:opacity-40"
-                  title={tradable ? undefined : 'Available after Genesis graduation → Raydium CPMM pool'}
-                >
-                  {tradable ? (
-                    <Link href={buyUrl ?? '#'} target="_blank" rel="noreferrer">Buy on Jupiter</Link>
-                  ) : (
-                    <span>Buy on Jupiter</span>
-                  )}
-                </Button>
-                <Button
-                  asChild={tradable}
-                  size="sm"
-                  variant="outline"
-                  disabled={!tradable}
-                  className="h-9 border-rose-400/30 text-rose-200 hover:bg-rose-500/10 disabled:opacity-40"
-                  title={tradable ? undefined : 'Available after Genesis graduation → Raydium CPMM pool'}
-                >
-                  {tradable ? (
-                    <Link href={sellUrl ?? '#'} target="_blank" rel="noreferrer">Sell on Jupiter</Link>
-                  ) : (
-                    <span>Sell on Jupiter</span>
-                  )}
-                </Button>
-              </>
-            );
-          })()}
-        </div>
-
-        {/* MARKET METRICS TAB */}
-        <div className="border-t border-neutral-800 pt-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Market Metrics</span>
-            {marketError && <span className="text-xs text-amber-400">{marketError}</span>}
-          </div>
-
-          {marketLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-16" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">Price USD</div>
-                <div className="font-mono text-neutral-100 text-sm">{marketPair?.priceUsd ? `$${marketPair.priceUsd}` : '—'}</div>
-              </div>
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">24h Change</div>
-                <div className={cn('font-mono text-sm', (marketPair?.priceChange24h ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
-                  {marketPair?.priceChange24h == null ? '—' : `${marketPair.priceChange24h.toFixed(2)}%`}
-                </div>
-              </div>
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">Liquidity</div>
-                <div className="font-mono text-neutral-100 text-sm">{marketPair?.liquidityUsd == null ? '—' : `$${fmtCompact(marketPair.liquidityUsd)}`}</div>
-              </div>
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">24h Volume</div>
-                <div className="font-mono text-neutral-100 text-sm">{marketPair?.volume24h == null ? '—' : `$${fmtCompact(marketPair.volume24h)}`}</div>
-              </div>
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">Market Cap</div>
-                <div className="font-mono text-neutral-100 text-sm">{marketPair?.marketCap == null ? '—' : `$${fmtCompact(marketPair.marketCap)}`}</div>
-              </div>
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">FDV</div>
-                <div className="font-mono text-neutral-100 text-sm">{marketPair?.fdv == null ? '—' : `$${fmtCompact(marketPair.fdv)}`}</div>
-              </div>
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">24h Buys</div>
-                <div className="font-mono text-emerald-300 text-sm">{marketPair?.buys24h ?? '—'}</div>
-              </div>
-              <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                <div className="text-neutral-600">24h Sells</div>
-                <div className="font-mono text-rose-300 text-sm">{marketPair?.sells24h ?? '—'}</div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* BONDING CURVE STATS */}
-        <div className="border-t border-neutral-800 pt-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Holder Distribution</span>
-            {curveError && <span className="text-xs text-amber-400">{curveError}</span>}
-          </div>
-
-          {curveLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-8" />
-              <Skeleton className="h-12" />
-            </div>
-          ) : curveData ? (
-            <div className="space-y-3">
-              {/* Holder Distribution Progress */}
-              <div className="space-y-2">
-                <div className="flex items-baseline justify-between text-xs">
-                  <span className="text-neutral-600">Top Holder</span>
-                  <span className="font-mono text-emerald-300">{curveData.topHolderPercent.toFixed(2)}%</span>
-                </div>
-                <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400"
-                    style={{ width: `${Math.min(curveData.topHolderPercent, 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                  <div className="text-neutral-600">Top 10 Holders</div>
-                  <div className="font-mono text-emerald-300">{curveData.top10Percent.toFixed(2)}%</div>
-                </div>
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                  <div className="text-neutral-600">Top 50 Holders</div>
-                  <div className="font-mono text-emerald-300">{curveData.top50Percent.toFixed(2)}%</div>
-                </div>
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2">
-                  <div className="text-neutral-600">Total Holders</div>
-                  <div className="font-mono text-neutral-200">{curveData.holderCount}</div>
-                </div>
-              </div>
-
-              {/* Top Holders Table */}
-              {curveData.holders && curveData.holders.length > 0 && (
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/30 overflow-hidden">
-                  <div className="px-3 py-2 border-b border-neutral-800 text-xs font-semibold text-neutral-500 uppercase tracking-[0.1em]">
-                    Top {Math.min(10, curveData.holders.length)} Holders
-                  </div>
-                  <div className="divide-y divide-neutral-800 max-h-48 overflow-y-auto">
-                    {curveData.holders.slice(0, 10).map((holder: CurveHolder, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between px-3 py-2 text-xs hover:bg-neutral-800/30 transition">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-neutral-600 w-6 text-right">#{holder.rank}</span>
-                          <Link
-                            href={`${SOLSCAN}/address/${holder.address}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-mono text-emerald-300 hover:underline truncate"
-                          >
-                            {holder.address.slice(0, 8)}…{holder.address.slice(-4)}
-                          </Link>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="font-mono text-neutral-200 tabular-nums">{holder.percentage.toFixed(2)}%</div>
-                          <div className="text-neutral-600 tabular-nums">{fmtCompact(holder.amount / Math.pow(10, curveData.decimals))} tokens</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-xs text-neutral-500 text-center py-4">
-              No on-chain holder data available for this token mint.
-            </div>
-          )}
-        </div>
-
-        {/* CHART */}
-        <div className="border-t border-neutral-800 pt-4 rounded-lg bg-neutral-950/40 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 text-xs">
-            <span className="inline-flex items-center gap-1.5 text-neutral-300">
-              <LineChart className="h-3.5 w-3.5 text-emerald-300" />
-              Live Chart
-            </span>
-            {marketPair?.url && (
-              <Link href={marketPair.url} target="_blank" rel="noreferrer" className="text-emerald-300 hover:underline inline-flex items-center gap-1">
-                open on dexscreener
-                <ExternalLink className="h-3 w-3" />
-              </Link>
-            )}
-          </div>
-
-          {marketLoading ? (
-            <Skeleton className="h-[420px] w-full" />
-          ) : chartUrl ? (
-            <iframe
-              title="DexScreener chart"
-              src={chartUrl}
-              className="h-[420px] w-full"
-              loading="lazy"
-            />
-          ) : (
-            <div className="h-[420px] w-full flex items-center justify-center text-xs text-neutral-500 px-6 text-center">
-              Chart not available yet for this token pair.
-            </div>
-          )}
-        </div>
       </CardContent>
     </Card>
   );

@@ -1,7 +1,7 @@
 // src/db/schema.ts
 import {
     pgSchema, text, boolean, smallint, integer, bigint,
-    real, doublePrecision, numeric, timestamp, jsonb, serial, primaryKey,
+    real, doublePrecision, numeric, timestamp, jsonb, serial,
 } from 'drizzle-orm/pg-core';
 
 /* ═══════════════════════════════════════════════
@@ -529,40 +529,57 @@ export const agentMetaplex = sapExpSchema.table('agent_metaplex', {
 });
 
 /* ═══════════════════════════════════════════════
- * api_keys — Public API key registry (hash-only)
+ * api_keys / api_rate_windows — Public API auth + per-window rate limiting
+ * Backed by drizzle/006_public_api_keys.sql (operator-applied migration).
  * ═══════════════════════════════════════════════ */
 
-export type ApiKeyTier = 'free' | 'pro';
-
 export const apiKeys = sapExpSchema.table('api_keys', {
-    id:            serial('id').primaryKey(),
-    keyPrefix:     text('key_prefix').notNull().default(''),
-    keyHash:       text('key_hash').notNull().unique(),
-    tier:          text('tier').$type<ApiKeyTier>().notNull().default('free'),
-    isActive:      boolean('is_active').notNull().default(true),
-    dailyLimit:    integer('daily_limit'),
-    notes:         text('notes'),
-    createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    lastUsedAt:    timestamp('last_used_at', { withTimezone: true }),
+    id:         serial('id').primaryKey(),
+    keyPrefix:  text('key_prefix').notNull().default(''),
+    keyHash:    text('key_hash').notNull().unique(),
+    tier:       text('tier').notNull().default('free'),
+    isActive:   boolean('is_active').notNull().default(true),
+    dailyLimit: integer('daily_limit'),
+    notes:      text('notes'),
+    createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+});
+
+export const apiRateWindows = sapExpSchema.table('api_rate_windows', {
+    identityKey:  text('identity_key').notNull(),
+    tier:         text('tier').notNull(),
+    windowStart:  timestamp('window_start', { withTimezone: true }).notNull(),
+    requestCount: integer('request_count').notNull().default(0),
+    updatedAt:    timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /* ═══════════════════════════════════════════════
- * api_rate_windows — per-minute counters by identity+tier
+ * token_trades / token_trade_cursors — Genesis bonding curve trades
+ * Backed by drizzle/007_token_trades.sql.
+ * Populated on-demand by the trade indexer; powers OHLCV charts.
  * ═══════════════════════════════════════════════ */
 
-export const apiRateWindows = sapExpSchema.table(
-    'api_rate_windows',
-    {
-        identityKey:   text('identity_key').notNull(),
-        tier:          text('tier').notNull(),
-        windowStart:   timestamp('window_start', { withTimezone: true }).notNull(),
-        requestCount:  integer('request_count').notNull().default(0),
-        updatedAt:     timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-    },
-    (table) => ({
-        pk: primaryKey({
-            columns: [table.identityKey, table.tier, table.windowStart],
-        }),
-    }),
-);
+export const tokenTrades = sapExpSchema.table('token_trades', {
+    signature:          text('signature').primaryKey(),
+    genesisAddress:     text('genesis_address').notNull(),
+    baseMint:           text('base_mint').notNull(),
+    trader:             text('trader').notNull(),
+    side:               text('side').notNull(),                                      // 'buy' | 'sell'
+    baseAmount:         numeric('base_amount', { precision: 40, scale: 0 }).notNull(),
+    quoteAmount:        numeric('quote_amount', { precision: 40, scale: 0 }).notNull(),
+    baseDecimals:       smallint('base_decimals').notNull().default(9),
+    quoteDecimals:      smallint('quote_decimals').notNull().default(9),
+    priceQuotePerBase:  numeric('price_quote_per_base', { precision: 40, scale: 18 }).notNull(),
+    slot:               bigint('slot', { mode: 'number' }).notNull(),
+    blockTime:          timestamp('block_time', { withTimezone: true }).notNull(),
+    source:             text('source').notNull().default('bonding-curve'),
+    insertedAt:         timestamp('inserted_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const tokenTradeCursors = sapExpSchema.table('token_trade_cursors', {
+    genesisAddress: text('genesis_address').primaryKey(),
+    lastSignature:  text('last_signature').notNull(),
+    lastSlot:       bigint('last_slot', { mode: 'number' }).notNull(),
+    scannedAt:      timestamp('scanned_at', { withTimezone: true }).notNull().defaultNow(),
+});
 

@@ -788,3 +788,261 @@ body {
     min-width: max-content;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+ * WALLET ADAPTER OVERRIDES — re-skin @solana/wallet-adapter-react-ui
+ * to match the explorer design system. Targets:
+ *   .wallet-adapter-button         — connect / connected trigger
+ *   .wallet-adapter-modal*         — wallet selector modal
+ *   .wallet-adapter-dropdown-list* — connected dropdown
+ * ═══════════════════════════════════════════════════════════ */
+
+/* Trigger button (default + sidebar variant) */
+.wallet-adapter-button {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  font-family: inherit !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  height: 2.5rem !important;
+  padding: 0 1rem !important;
+  border-radius: 0.625rem !important;
+  border: 1px solid hsl(var(--primary) / 0.4) !important;
+  transition: filter 160ms ease, box-shadow 160ms ease, background 160ms ease !important;
+  box-shadow: 0 4px 16px -8px hsl(var(--primary) / 0.4) !important;
+}
+.wallet-adapter-button:not([disabled]):hover {
+  background: hsl(var(--primary)) !important;
+  filter: brightness(1.08);
+  box-shadow: 0 6px 22px -8px hsl(var(--primary) / 0.55) !important;
+}
+.wallet-adapter-button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wallet-adapter-button-trigger {
+  background: hsl(var(--primary)) !important;
+}
+.wallet-adapter-button-start-icon,
+.wallet-adapter-button-end-icon {
+  margin-right: 0.5rem !important;
+}
+
+/* Sidebar variant — full-width compact pill */
+.wallet-trigger-sidebar {
+  display: block;
+  width: 100%;
+}
+/* When connected, the adapter wraps the button in a .wallet-adapter-dropdown
+   inline-block container. Force it to stretch too. */
+.wallet-trigger-sidebar .wallet-adapter-dropdown {
+  display: block !important;
+  width: 100% !important;
+}
+.wallet-trigger-sidebar .wallet-adapter-button {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 2.75rem !important;
+  padding: 0 0.875rem !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  border-radius: 0.625rem !important;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--card))) !important;
+  color: hsl(var(--foreground)) !important;
+  border: 1px solid hsl(var(--primary) / 0.25) !important;
+  box-shadow: 0 4px 14px -8px hsl(var(--primary) / 0.4) !important;
+  justify-content: center !important;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+.wallet-trigger-sidebar .wallet-adapter-button:not([disabled]):hover {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.25), hsl(var(--accent))) !important;
+  border-color: hsl(var(--primary) / 0.5) !important;
+  box-shadow: 0 6px 20px -8px hsl(var(--primary) / 0.6) !important;
+  transform: translateY(-1px);
+  filter: none;
+}
+.wallet-trigger-sidebar .wallet-adapter-button-start-icon {
+  margin-right: 0.5rem !important;
+}
+.wallet-trigger-sidebar .wallet-adapter-button-start-icon img {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* Sidebar collapsed — icon-only square */
+.wallet-trigger-sidebar.is-collapsed {
+  display: flex;
+  width: auto;
+  justify-content: center;
+}
+.wallet-trigger-sidebar.is-collapsed .wallet-adapter-button {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  font-size: 0;
+  gap: 0;
+}
+.wallet-trigger-sidebar.is-collapsed .wallet-adapter-button-start-icon {
+  margin: 0 !important;
+}
+
+/* Modal — wallet picker */
+.wallet-adapter-modal-wrapper {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 24px 60px -20px hsl(var(--background) / 0.8),
+    0 0 0 1px hsl(var(--primary) / 0.1) !important;
+  font-family: inherit !important;
+  color: hsl(var(--foreground)) !important;
+}
+.wallet-adapter-modal-overlay {
+  background: hsl(var(--background) / 0.7) !important;
+  backdrop-filter: blur(10px);
+}
+.wallet-adapter-modal-title {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.01em;
+}
+.wallet-adapter-modal-button-close {
+  background: hsl(var(--muted) / 0.5) !important;
+  border-radius: 0.5rem !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  top: 14px !important;
+  right: 14px !important;
+}
+.wallet-adapter-modal-button-close svg {
+  fill: hsl(var(--muted-foreground)) !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+.wallet-adapter-modal-list {
+  margin: 0 !important;
+  padding: 0.5rem !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.625rem !important;
+  height: 3rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--foreground)) !important;
+  transition: background 140ms ease, border-color 140ms ease !important;
+  box-shadow: none !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button:hover {
+  background: hsl(var(--accent)) !important;
+  border-color: hsl(var(--primary) / 0.3) !important;
+  filter: none;
+}
+.wallet-adapter-modal-list-more {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Dropdown (connected state) */
+.wallet-adapter-dropdown-list {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 12px 30px -10px hsl(var(--background) / 0.8) !important;
+}
+.wallet-adapter-dropdown-list-item {
+  background: transparent !important;
+  color: hsl(var(--foreground)) !important;
+  font-family: inherit !important;
+  font-size: 0.8125rem !important;
+  border-radius: 0.5rem !important;
+  transition: background 120ms ease !important;
+}
+.wallet-adapter-dropdown-list-item:not([disabled]):hover {
+  background: hsl(var(--accent)) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * TRADE SLIDER — themed range input used by BondingCurveTradePanel
+ * Hot-swaps the accent colour between buy (emerald) and sell (rose).
+ * ═══════════════════════════════════════════════════════════ */
+.trade-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 1.25rem;
+  cursor: pointer;
+}
+.trade-slider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.trade-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    rgb(16 185 129) 0%,
+    rgb(16 185 129) var(--pct, 0%),
+    hsl(var(--muted)) var(--pct, 0%),
+    hsl(var(--muted)) 100%
+  );
+}
+.trade-slider.is-sell::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    rgb(244 63 94) 0%,
+    rgb(244 63 94) var(--pct, 0%),
+    hsl(var(--muted)) var(--pct, 0%),
+    hsl(var(--muted)) 100%
+  );
+}
+.trade-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1rem;
+  width: 1rem;
+  margin-top: -6px;
+  border-radius: 9999px;
+  background: rgb(16 185 129);
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 6px -1px rgb(16 185 129 / 0.4);
+  transition: transform 120ms ease;
+}
+.trade-slider.is-sell::-webkit-slider-thumb {
+  background: rgb(244 63 94);
+  box-shadow: 0 2px 6px -1px rgb(244 63 94 / 0.4);
+}
+.trade-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.trade-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: hsl(var(--muted));
+}
+.trade-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgb(16 185 129);
+}
+.trade-slider.is-sell::-moz-range-progress {
+  background: rgb(244 63 94);
+}
+.trade-slider::-moz-range-thumb {
+  height: 1rem;
+  width: 1rem;
+  border-radius: 9999px;
+  background: rgb(16 185 129);
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 6px -1px rgb(16 185 129 / 0.4);
+  cursor: pointer;
+}
+.trade-slider.is-sell::-moz-range-thumb {
+  background: rgb(244 63 94);
+  box-shadow: 0 2px 6px -1px rgb(244 63 94 / 0.4);
+}

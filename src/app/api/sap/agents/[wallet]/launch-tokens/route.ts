@@ -24,6 +24,7 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { Connection, PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { synapseResponse } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
 import {
@@ -33,6 +34,7 @@ import {
 } from '~/lib/metaplex/registry';
 import { getGenesisTokenLaunches } from '~/lib/metaplex/genesis';
 import { fetchGenesisLaunchesByAuthority } from '~/lib/metaplex/genesis-onchain';
+import { fetchMetaplexAgentsByOwner } from '~/lib/metaplex/agents-api';
 import { getMetaplexAssetsForWallet } from '~/lib/sap/metaplex-link';
 import { getRpcConfig, getSapClient, getSynapseConnection } from '~/lib/sap/discovery';
 
@@ -64,8 +66,12 @@ export type AgentLaunchTokensResponse = {
   error?: string;
 };
 
-const SPL_TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJsyFbPVwwQQfq5x5nnwrA8Cuu';
-const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+// Use canonical IDs from @solana/spl-token to avoid typos. The previous
+// hardcoded SPL constant was wrong (ended in 'A8Cuu' instead of '23VQ5DA'),
+// which caused classifyMints to reject every real fungible mint -- the
+// agent Token Launch tab was always empty as a result.
+const SPL_TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toBase58();
+const TOKEN_2022_PROGRAM_ID_STR = TOKEN_2022_PROGRAM_ID.toBase58();
 /** Solana base58 pubkey shape — exactly 32–44 chars, no 0/O/I/l. */
 const BASE58_PUBKEY_RE = /[1-9A-HJ-NP-Za-km-z]{32,44}/g;
 /** Mint addresses we never surface as agent launch tokens. */
@@ -89,9 +95,13 @@ export async function GET(
     const wallet = resolved?.wallet?.toBase58() ?? walletOrId;
     const profilePda = resolved?.sapAgentPda?.toBase58() ?? wallet;
 
+    // v8: bust again after fixing the Metaplex `/v1/tokens/{mint}`
+    //     `{data: {...}}` envelope unwrap in `getGenesisTokenLaunches`,
+    //     so enrichment now produces non-zero `launchCount`, symbol
+    //     and image for Metaplex-coordinated launches.
     const payload = await swr<AgentLaunchTokensResponse>(
-      `agent:${wallet}:launch-tokens:v5`,
-      () => buildLaunchTokens(wallet, profilePda),
+      `agent:${wallet}:launch-tokens:v8`,
+      () => buildLaunchTokens(wallet, profilePda, new URL(req.url).origin),
       { ttl: 60_000, swr: 300_000 },
     );
     return synapseResponse(payload);
@@ -113,11 +123,14 @@ type Candidate = {
 async function buildLaunchTokens(
   wallet: string,
   profilePda: string,
+  origin: string,
 ): Promise<AgentLaunchTokensResponse> {
   // 1. Gather registry agents for this wallet.
   let registryAgents: MetaplexRegistryAgent[] = [];
+  let coreAssetAddresses: string[] = [];
   try {
     const assets = await getMetaplexAssetsForWallet(wallet);
+    coreAssetAddresses = assets.items.map((i) => i.asset).filter(Boolean);
     const candidateAssetMints = assets.items
       .filter((i) => i.hasAgentIdentity)
       .map((i) => i.asset);
@@ -161,6 +174,38 @@ async function buildLaunchTokens(
     console.warn('[launch-tokens] genesis GPA query failed', err);
   }
 
+  // 2a-bis. CANONICAL — Metaplex Agents REST API.
+  //     Metaplex Agents (MPL Core assets owned by the SAP wallet that
+  //     Metaplex's hosted indexer recognises) expose `agentToken` —
+  //     the fungible mint coordinated by the agent. The on-chain
+  //     Genesis launch is created under a separate *deployer* wallet,
+  //     so the GPA-by-authority query above misses it. We close that
+  //     gap by probing every Core asset owned by the wallet against
+  //     `api.metaplex.com/v1/agents/{address}` and trusting any
+  //     `agentToken` returned with `owner === wallet`. Each match is
+  //     whitelisted so the Genesis-only output filter lets it through
+  //     even when the Genesis API enrichment misses it.
+  const metaplexAgentMints = new Set<string>();
+  if (coreAssetAddresses.length > 0) {
+    try {
+      const mplAgents = await fetchMetaplexAgentsByOwner(wallet, coreAssetAddresses, {
+        concurrency: 6,
+      });
+      for (const ag of mplAgents) {
+        const fallbackName = ag.name ?? ag.agentTokenInfo?.name ?? 'Agent token';
+        const tokenMints = new Set<string>();
+        if (ag.agentToken) tokenMints.add(ag.agentToken);
+        for (const t of ag.tokens) if (t?.address) tokenMints.add(t.address);
+        for (const mint of tokenMints) {
+          addCandidate(mint, fallbackName, ag.address);
+          metaplexAgentMints.add(mint);
+        }
+      }
+    } catch (err) {
+      console.warn('[launch-tokens] metaplex agents API lookup failed', err);
+    }
+  }
+
   for (const a of registryAgents) {
     const fallbackName = a.name ?? 'Agent token';
 
@@ -194,7 +239,7 @@ async function buildLaunchTokens(
   const agentNameTokens = collectAgentNameTokens(registryAgents);
   try {
     const balancesRes = await fetch(
-      `/api/sap/agents/${encodeURIComponent(wallet)}/balances`,
+      `${origin}/api/sap/agents/${encodeURIComponent(wallet)}/balances`,
       { cache: 'no-store' },
     );
     if (balancesRes.ok) {
@@ -275,13 +320,15 @@ async function buildLaunchTokens(
 
   // STRICT Genesis-only filter: surface a token under "Agent token ·
   // Genesis" only when it is provably a Metaplex Genesis launch — either
-  // the on-chain GPA-by-authority query matched (canonical proof) or the
-  // Genesis API returned ≥1 launch for the mint. Pump.fun graduations,
-  // raw SPL/Token-2022 mints and other heuristic candidates are dropped
-  // here. The empty-state CTA in the UI handles the no-Genesis case.
+  // the on-chain GPA-by-authority query matched (canonical proof), the
+  // Metaplex Agents API confirmed `owner === wallet` and pinned this
+  // mint as `agentToken`, or the Genesis API returned ≥1 launch for the
+  // mint. Pump.fun graduations, raw SPL/Token-2022 mints and other
+  // heuristic candidates are dropped here. The empty-state CTA in the
+  // UI handles the no-Genesis case.
   const tokens = enriched
     .filter((x): x is AgentLaunchTokenEntry => x !== null)
-    .filter((t) => t.launchCount > 0 || genesisGpaMints.has(t.mint));
+    .filter((t) => t.launchCount > 0 || genesisGpaMints.has(t.mint) || metaplexAgentMints.has(t.mint));
 
   // Sort: Genesis-live → Genesis-graduated → other Genesis → non-Genesis,
   // then by launchCount desc.
@@ -342,7 +389,7 @@ async function classifyMints(
     const mint = indexToMint[i];
     if (!acc) return;
     const owner = acc.owner.toBase58();
-    if (owner !== SPL_TOKEN_PROGRAM_ID && owner !== TOKEN_2022_PROGRAM_ID) return;
+    if (owner !== SPL_TOKEN_PROGRAM_ID_STR && owner !== TOKEN_2022_PROGRAM_ID_STR) return;
 
     const data = acc.data as { parsed?: { info?: { decimals?: number; supply?: string }; type?: string } };
     const parsed = data.parsed;
@@ -355,7 +402,7 @@ async function classifyMints(
     const isFungible = !(decimals === 0 && supply <= 1);
 
     out.set(mint, {
-      tokenProgram: owner === TOKEN_2022_PROGRAM_ID ? 'token-2022' : 'spl-token',
+      tokenProgram: owner === TOKEN_2022_PROGRAM_ID_STR ? 'token-2022' : 'spl-token',
       isFungible,
     });
   });

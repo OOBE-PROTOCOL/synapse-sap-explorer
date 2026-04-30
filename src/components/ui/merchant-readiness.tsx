@@ -96,7 +96,7 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
   const fullyReady = passed === total;
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-3 px-4 py-3', className)}>
       <SectionLabel
         hint={
           fullyReady ? (
@@ -108,12 +108,12 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
       >
         Merchant Readiness
       </SectionLabel>
-      <ul className="grid grid-cols-2 gap-1.5 mt-1.5" aria-label="Merchant requirements">
+      <ul className="grid grid-cols-2 gap-2.5 mt-2" aria-label="Merchant requirements">
         {checks.map((c) => (
           <li
             key={c.label}
             className={cn(
-              'flex items-center gap-2 rounded-md border px-2 py-1.5 text-[11px]',
+              'flex items-center gap-2 rounded-md border px-3 py-2 text-[11px]',
               c.info
                 ? 'border-neutral-800 bg-neutral-900/40'
                 : c.ok

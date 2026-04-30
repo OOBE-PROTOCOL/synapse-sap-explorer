@@ -126,9 +126,22 @@ export async function getGenesisTokenLaunches(
   mint: string,
   network: MetaplexGenesisNetwork = 'solana-mainnet',
 ): Promise<FetchResult<MetaplexGenesisTokenData>> {
-  return fetchJson<MetaplexGenesisTokenData>(
+  // Metaplex's `/v1/tokens/{mint}` endpoint wraps its payload in
+  // `{ data: { launches, baseToken, ... } }` while our consumers expect
+  // the inner `MetaplexGenesisTokenData` shape directly. Unwrap here so
+  // every caller (route handlers, agent launch-tokens enrichment) sees
+  // a stable surface and `result.data?.launches` works as typed.
+  const raw = await fetchJson<{ data: MetaplexGenesisTokenData } | MetaplexGenesisTokenData>(
     `/tokens/${encodeURIComponent(mint)}${toNetworkQuery(network)}`,
   );
+  if (!raw.data) {
+    return { data: null, error: raw.error, status: raw.status };
+  }
+  const inner =
+    'data' in raw.data && raw.data.data
+      ? (raw.data.data as MetaplexGenesisTokenData)
+      : (raw.data as MetaplexGenesisTokenData);
+  return { data: inner, error: raw.error, status: raw.status };
 }
 
 export async function listGenesisLaunches(

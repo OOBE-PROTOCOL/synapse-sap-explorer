@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { PublicKey, Connection } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { getRpcConfig } from '~/lib/sap/discovery';
 
 export const dynamic = 'force-dynamic';
@@ -26,10 +27,11 @@ type BondingCurveData = {
   holderCount: number;
 };
 
-/* Solana SPL Token program IDs — instantiated lazily inside the function
- * to avoid Next.js build-time module evaluation errors. */
-const SPL_TOKEN_PROGRAM_ID_STR = 'TokenkegQfeZyiNwAJsyFbPVwwQQfq5x5nnwrA8Cuu';
-const TOKEN_2022_PROGRAM_ID_STR = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+/* Solana SPL Token program IDs — sourced from @solana/spl-token to avoid
+ * the hardcoded typo bug ('…A8Cuu' instead of '…23VQ5DA') that previously
+ * made every fungible mint look unowned and produced empty holder lists. */
+const SPL_TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toBase58();
+const TOKEN_2022_PROGRAM_ID_STR = TOKEN_2022_PROGRAM_ID.toBase58();
 
 /* Token-account data sizes per program. Legacy SPL = 165 bytes; Token-2022
  * accounts are at least 165 but may be larger when extensions are present —
@@ -42,7 +44,11 @@ async function fetchHolders(mint: string): Promise<BondingCurveData | null> {
     const TOKEN_2022_PROGRAM_ID = new PublicKey(TOKEN_2022_PROGRAM_ID_STR);
 
     const rpcConfig = getRpcConfig();
-    const connection = new Connection(rpcConfig.url, 'confirmed');
+    // MUST forward x-api-key — Synapse RPC returns 401 without it.
+    const connection = new Connection(rpcConfig.url, {
+      commitment: 'confirmed',
+      httpHeaders: rpcConfig.headers,
+    });
 
     const mintPubkey = new PublicKey(mint);
 

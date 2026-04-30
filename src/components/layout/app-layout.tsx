@@ -33,6 +33,8 @@ import { cn } from '~/lib/utils';
 import { Button } from '~/components/ui/button';
 import { SearchCommand } from '~/components/search-command';
 import Image from 'next/image';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip';
 
 type NavSection = {
   label: string;
@@ -329,62 +331,75 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <NavScrollable collapsed={effectiveCollapsed} isNavActive={isNavActive} pathname={pathname} />
 
         {/* ── Sidebar Footer ── */}
-        <div className={cn('sidebar-footer', effectiveCollapsed ? 'p-2 pb-3' : 'p-4')}>
-          {/* Theme toggle */}
-          <div className={cn('mb-3', effectiveCollapsed ? 'flex justify-center' : '')}>
-            <Button
-              variant="outline"
-              size={effectiveCollapsed ? 'icon' : 'sm'}
+        <div className={cn('sidebar-footer space-y-2', effectiveCollapsed ? 'p-2 pb-3' : 'p-3')}>
+          {/* Compact icon row: external links + theme toggle.
+              Expanded → horizontal row. Collapsed → vertical stack. */}
+          <TooltipProvider delayDuration={150}>
+            <div
               className={cn(
-                'h-8 rounded-lg border-border bg-card hover:bg-accent text-muted-foreground',
-                !effectiveCollapsed && 'w-full justify-start gap-2 text-xs',
+                'flex items-center gap-1 rounded-lg border border-border bg-card/60 p-1',
+                effectiveCollapsed ? 'flex-col' : 'justify-between',
               )}
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              {!effectiveCollapsed && <span>{mounted ? (theme === 'dark' ? 'Dark Mode' : 'Light Mode') : '\u00A0'}</span>}
-            </Button>
-          </div>
-
-          {/* External links */}
-          <div className={cn('mb-3 flex flex-row  xs:flex-col  justify-between space-y-0.5', effectiveCollapsed && 'space-y-0.5 xs:flex-col sm:flex-col')}>
-            {[
-              { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
-              { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
-              { href: 'https://github.com/oobe-protocol/synapse-sap-sdk', label: 'SAP Client SDK', icon: Github },
-            ].map(({ href, label, icon: Icon }) => (
-              <a
-                key={href}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={effectiveCollapsed ? label : undefined}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg text-xs text-muted-foreground hover:text-foreground transition-colors',
-                  effectiveCollapsed ? 'justify-center py-1.5' : 'px-2 py-1.5',
-                )}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                {!effectiveCollapsed && <span className="truncate"></span>}
-              </a>
-            ))}
-          </div>
-
-          {/* Program status */}
-          {!effectiveCollapsed ? (
-            <div className="rounded-lg bg-card border border-border p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                <span className="text-xs text-muted-foreground">SAP PROGRAM</span>
-                <span className="ml-auto text-xs font-mono text-muted-foreground/60"><a href="https://synapse.oobeprotocol.ai/skills.md" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-primary hover:text-primary transition-colors">Skill</a></span>
-              </div>
+              {[
+                { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
+                { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
+                { href: 'https://github.com/oobe-protocol/synapse-sap-sdk', label: 'SAP Client SDK', icon: Github },
+                { href: 'https://synapse.oobeprotocol.ai/skills.md', label: 'Skill Manifest', icon: BookOpen },
+              ].map(({ href, label, icon: Icon }) => (
+                <Tooltip key={href}>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={label}
+                      className={cn(
+                        'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors',
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent side={effectiveCollapsed ? 'right' : 'top'} sideOffset={6}>
+                    {label}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    aria-label="Toggle theme"
+                    className="relative flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  >
+                    <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                    <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side={effectiveCollapsed ? 'right' : 'top'} sideOffset={6}>
+                  {mounted ? (theme === 'dark' ? 'Switch to light' : 'Switch to dark') : 'Theme'}
+                </TooltipContent>
+              </Tooltip>
             </div>
-          ) : (
-            <div className="flex justify-center">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          </TooltipProvider>
+
+          {/* SAP program status pill — visible only when expanded */}
+          {!effectiveCollapsed && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-3 py-1.5">
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">SAP Program</span>
+              <span className="ml-auto text-[10px] font-mono text-muted-foreground/60">v0.10</span>
             </div>
           )}
+
+          {/* Wallet connect — primary CTA at bottom of sidebar */}
+          <div className={cn('wallet-trigger-sidebar', effectiveCollapsed && 'is-collapsed flex justify-center')}>
+            <WalletMultiButton />
+          </div>
         </div>
       </aside>
 

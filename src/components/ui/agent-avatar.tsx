@@ -7,11 +7,37 @@ import { cn } from '~/lib/utils';
 type AgentAvatarProps = {
   name: string;
   endpoint?: string | null;
-  /** Direct logo URL (e.g. from well-known data). Takes priority over favicon. */
+  /** Direct logo URL (e.g. from well-known data). Takes priority over MPL/favicon. */
   logo?: string | null;
+  /**
+   * Image URL recovered from the agent's MPL Core / Metaplex Agent NFT
+   * (e.g. `agentTokenInfo.image`, `tokens[0].image`). Used as a second
+   * fallback when `logo` is missing, errors, or matches a known
+   * placeholder URL — so we always show a meaningful asset for agents
+   * registered in the Metaplex Agents directory.
+   */
+  mplImage?: string | null;
   size?: number;
   className?: string;
 };
+
+/**
+ * URLs we consider "placeholder" — if `logo` matches any of these we
+ * skip straight to the MPL/favicon fallback chain. Keep the list short
+ * and conservative; false positives swap a valid (if generic) image
+ * for a derived one.
+ */
+const LOGO_PLACEHOLDER_PATTERNS: RegExp[] = [
+  /\/placeholder(\.\w+)?$/i,
+  /placeholder\.(png|jpg|jpeg|svg|webp)/i,
+  /default[-_]?avatar/i,
+  /no[-_]?image/i,
+];
+
+function isPlaceholderLogo(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return LOGO_PLACEHOLDER_PATTERNS.some((re) => re.test(url));
+}
 
 /**
  * Resolve a high-quality favicon from the endpoint domain.
@@ -42,15 +68,23 @@ function resolveFavicon(endpoint: string | null | undefined): string | null {
 }
 
 /**
- * Agent avatar: shows logo (from well-known) > favicon (from endpoint) > generative fallback.
+ * Agent avatar: shows logo (well-known) > MPL Core NFT image > favicon (endpoint) > generative fallback.
+ * Each tier independently tracks load errors so a broken upstream image
+ * automatically demotes to the next source without flashing the
+ * fallback letters.
  */
-export function AgentAvatar({ name, endpoint, logo, size = 48, className }: AgentAvatarProps) {
+export function AgentAvatar({ name, endpoint, logo, mplImage, size = 48, className }: AgentAvatarProps) {
   const [logoError, setLogoError] = useState(false);
+  const [mplError, setMplError] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
 
-  const logoUrl = logo && !logoError ? logo : null;
-  const faviconUrl = !logoUrl && !faviconError ? resolveFavicon(endpoint) : null;
-  const showImg = logoUrl || faviconUrl;
+  const logoUsable = logo && !logoError && !isPlaceholderLogo(logo);
+  const mplUsable = mplImage && !mplError;
+  const logoUrl = logoUsable ? logo : null;
+  const mplUrl = !logoUrl && mplUsable ? mplImage : null;
+  const faviconUrl = !logoUrl && !mplUrl && !faviconError ? resolveFavicon(endpoint) : null;
+  const activeUrl = logoUrl ?? mplUrl ?? faviconUrl;
+  const showImg = !!activeUrl;
 
   // Deterministic hue from name
   const hue = Array.from(name).reduce((h, c) => h + c.charCodeAt(0), 0) % 360;
@@ -70,14 +104,17 @@ export function AgentAvatar({ name, endpoint, logo, size = 48, className }: Agen
            failed` for valid favicons that Google S2 occasionally 404s. */
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={logoUrl || faviconUrl!}
+          src={activeUrl!}
           alt={`${name} avatar`}
           width={size}
           height={size}
           loading="lazy"
           className="h-full w-full object-contain bg-neutral-900 p-1"
           onError={() => {
-            if (logoUrl) setLogoError(true);
+            // Demote one tier on error so the chain keeps walking
+            // instead of jumping straight to initials.
+            if (activeUrl === logoUrl) setLogoError(true);
+            else if (activeUrl === mplUrl) setMplError(true);
             else setFaviconError(true);
           }}
         />

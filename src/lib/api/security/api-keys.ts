@@ -51,8 +51,15 @@ export async function resolveApiIdentityWithDb(headers: Headers): Promise<ApiIde
       const row = await selectApiKeyByHash(keyHash);
       if (row && row.isActive) {
         touchApiKeyLastUsed(row.id).catch(() => {});
+        // Schema column is `text`, narrow to ApiTier here. Unknown
+        // values fall back to 'public' so we never grant elevated
+        // tiers from corrupted/legacy rows.
+        const tier: ApiTier =
+          row.tier === 'free' || row.tier === 'pro' || row.tier === 'admin'
+            ? row.tier
+            : 'public';
         return {
-          tier: row.tier,
+          tier,
           keyId: row.keyPrefix || apiKey.slice(0, 8),
         };
       }
