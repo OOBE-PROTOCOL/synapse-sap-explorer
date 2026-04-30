@@ -210,7 +210,7 @@ function extractTrade(
 
   // 4. Compute quote-token delta (try wSOL ATA first, then native lamports).
   let quoteDelta = -tokenBalanceDelta(tx, trader, WRAPPED_SOL_MINT);
-  let quoteDecimals = 9;
+  const quoteDecimals = 9;
   if (quoteDelta === 0n) {
     quoteDelta = -nativeLamportsDelta(tx, trader);
   }
@@ -282,7 +282,7 @@ const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 function base58Decode(s: string): Uint8Array {
   const map = new Map<string, number>();
   for (let i = 0; i < B58.length; i++) map.set(B58[i], i);
-  let bytes: number[] = [0];
+  const bytes: number[] = [0];
   for (const c of s) {
     const v = map.get(c);
     if (v === undefined) throw new Error('bad base58');

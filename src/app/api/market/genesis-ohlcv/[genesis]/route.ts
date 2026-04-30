@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { PublicKey } from '@solana/web3.js';
 import { sql } from 'drizzle-orm';
 import { db, isDbDown } from '~/db';
-import { tokenTrades } from '~/db/schema';
 
 export interface OhlcvCandle {
   time: number;       // unix seconds (start of bucket)
