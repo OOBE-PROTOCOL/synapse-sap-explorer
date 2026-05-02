@@ -19,6 +19,11 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '~/components/ui/tooltip';
 import { useEnrichedAgents, type EnrichedAgent, type TokenBalance, type AgentStakeSummary } from '~/hooks/use-sap';
+import {
+  useAggregatedReputationBatch,
+  type AggregatedReputation,
+} from '~/hooks/use-aggregated-reputation';
+import { ReputationChip } from '~/components/agents/reputation-chip';
 import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import type { AgentWellKnown } from '~/lib/sap/well-known';
 import { fmtNum } from '~/lib/format';
@@ -261,6 +266,17 @@ function AgentsInner() {
   const { page, perPage, setPage, setPerPage, paginate } = usePagination(sorted.length, 6);
   const paginated = useMemo(() => paginate(sorted), [paginate, sorted]);
 
+  // ── Batch FairScale × SAP reputation for visible wallets only ──
+  const visibleWallets = useMemo(
+    () =>
+      paginated
+        .map((p) => p.agent.identity?.wallet)
+        .filter((w): w is string => typeof w === 'string' && w.length > 0),
+    [paginated],
+  );
+  const { byWallet: reputationByWallet } =
+    useAggregatedReputationBatch(visibleWallets);
+
   const stats = useMemo(() => {
     const total = agents.length;
     const active = agents.filter((a) => a.agent.identity?.isActive).length;
@@ -373,13 +389,30 @@ function AgentsInner() {
           {view === 'grid' ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
               {paginated.map((item) => (
-                <AgentCard key={item.agent.pda} data={item} />
+                <AgentCard
+                  key={item.agent.pda}
+                  data={item}
+                  reputation={
+                    item.agent.identity?.wallet
+                      ? reputationByWallet.get(item.agent.identity.wallet) ?? null
+                      : null
+                  }
+                />
               ))}
             </div>
           ) : (
             <div className="space-y-2">
               {paginated.map((item, i) => (
-                <AgentListRow key={item.agent.pda} data={item} index={(page - 1) * perPage + i + 1} />
+                <AgentListRow
+                  key={item.agent.pda}
+                  data={item}
+                  index={(page - 1) * perPage + i + 1}
+                  reputation={
+                    item.agent.identity?.wallet
+                      ? reputationByWallet.get(item.agent.identity.wallet) ?? null
+                      : null
+                  }
+                />
               ))}
             </div>
           )}
@@ -404,7 +437,13 @@ function AgentsInner() {
 
 type CardData = EnrichedAgent & { health: { level: HealthLevel; score: number } };
 
-function AgentCard({ data }: { data: CardData }) {
+function AgentCard({
+  data,
+  reputation,
+}: {
+  data: CardData;
+  reputation: AggregatedReputation | null;
+}) {
   const { agent, balances, wellKnown, metadata, health } = data;
   const id = agent.identity;
   if (!id) return null;
@@ -570,6 +609,7 @@ function AgentCard({ data }: { data: CardData }) {
           <div className="mb-3 flex items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/45">STATS</span>
             <span className="h-px flex-1 bg-border/65" />
+            <ReputationChip data={reputation} />
           </div>
           <div className="flex items-center">
             {[
@@ -721,7 +761,15 @@ function AgentCard({ data }: { data: CardData }) {
    Agent List Row — Compact
    ═══════════════════════════════════════════════════════ */
 
-function AgentListRow({ data, index }: { data: CardData; index: number }) {
+function AgentListRow({
+  data,
+  index,
+  reputation,
+}: {
+  data: CardData;
+  index: number;
+  reputation: AggregatedReputation | null;
+}) {
   const { agent, balances, wellKnown, metadata, health } = data;
   const id = agent.identity;
   if (!id) return null;
@@ -764,6 +812,8 @@ function AgentListRow({ data, index }: { data: CardData; index: number }) {
                     <TooltipContent>{hc.label}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+
+                <ReputationChip data={reputation} size="xs" />
               </div>
 
               <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">

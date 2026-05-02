@@ -9,6 +9,8 @@ import { ArrowLeft, ExternalLink, Copy, Zap, Activity, Loader2, DollarSign, Coin
 import { StatusBadge, Address, ProtocolBadge, Skeleton, EmptyState, AgentAvatar, ExplorerPagination, usePagination } from '~/components/ui';
 import { DetailRow, MetricTile, PortfolioRow, SectionLabel, TokenAvatar, TokenAvatarStack, VerificationPill } from '~/components/ui/agent-profile-primitives';
 import { MerchantReadiness } from '~/components/ui/merchant-readiness';
+import { FairScaleAggregatedChip } from '~/components/ui/fairscale-aggregated-chip';
+import { ReputationTab } from '~/components/agents/reputation-tab';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -80,7 +82,7 @@ export default function AgentDetailPage() {
   );
 }
 
-const AGENT_TABS = ['overview', 'revenue', 'tools', 'escrows', 'feedbacks', 'attestations', 'events', 'vault', 'x402', 'metaplex', 'tokens'] as const;
+const AGENT_TABS = ['overview', 'reputation', 'revenue', 'tools', 'escrows', 'feedbacks', 'attestations', 'events', 'vault', 'x402', 'metaplex', 'tokens'] as const;
 type AgentTab = (typeof AGENT_TABS)[number];
 
 function AgentDetailInner() {
@@ -238,6 +240,7 @@ function AgentDetailInner() {
 
   const sidebarSections: Array<{ value: AgentTab; label: string; count?: number }> = [
     { value: 'overview', label: 'Overview' },
+    { value: 'reputation', label: 'Reputation' },
     { value: 'revenue', label: 'SAP Revenue' },
     { value: 'tools', label: 'Tools', count: agentTools.length },
     { value: 'escrows', label: 'Escrows', count: agentEscrows.length },
@@ -259,6 +262,7 @@ function AgentDetailInner() {
     overview: 'overview',
     events: 'activity',
     x402: 'activity',
+    reputation: 'economy',
     revenue: 'economy',
     escrows: 'economy',
     feedbacks: 'economy',
@@ -271,7 +275,7 @@ function AgentDetailInner() {
   const tabGroups: Array<{ key: TabGroup; label: string; tabs: AgentTab[] }> = [
     { key: 'overview', label: 'Overview', tabs: ['overview'] },
     { key: 'activity', label: 'Activity', tabs: ['events', 'x402'] },
-    { key: 'economy', label: 'Economy', tabs: ['revenue', 'escrows', 'feedbacks'] },
+    { key: 'economy', label: 'Economy', tabs: ['reputation', 'revenue', 'escrows', 'feedbacks'] },
     { key: 'capabilities', label: 'Capabilities', tabs: ['tools', 'attestations', 'vault'] },
     {
       key: 'identity',
@@ -663,9 +667,8 @@ function AgentDetailInner() {
                     key: t.mint,
                     symbol: t.meta?.symbol ?? t.mint.slice(0, 4),
                     logo: t.meta?.logo ?? null,
-                    title: `${t.meta?.symbol ?? t.mint.slice(0, 4)} \u2014 ${fmt(t.uiAmount)}${
-                      t.usdValue != null ? ` ($${t.usdValue.toFixed(2)})` : ''
-                    }`,
+                    title: `${t.meta?.symbol ?? t.mint.slice(0, 4)} \u2014 ${fmt(t.uiAmount)}${t.usdValue != null ? ` ($${t.usdValue.toFixed(2)})` : ''
+                      }`,
                   }));
                   return (
                     <div className="mt-2 divide-y divide-neutral-800/60">
@@ -701,7 +704,7 @@ function AgentDetailInner() {
                               .slice(0, 3)
                               .map((t) => t.meta?.symbol ?? t.mint.slice(0, 4))
                               .join(' \u00b7 ')
-                              + (tokens.length > 3 ? ` \u00b7 +${tokens.length - 3}` : '')
+                            + (tokens.length > 3 ? ` \u00b7 +${tokens.length - 3}` : '')
                           }
                           amount={tokensUsd > 0 ? `$${tokensUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u2014'}
                           usd={tokensUsd > 0 ? 'priced' : 'unpriced'}
@@ -763,6 +766,16 @@ function AgentDetailInner() {
         </section>
 
       </div>
+
+      {/* ════ Reputation Aggregation band ════
+       * Sits between identity/performance and the merchant gate so
+       * users see the blended FairScale × SAP signal before judging
+       * routing eligibility. The chip ships its own card chrome. */}
+      {canonicalWallet && (
+        <section aria-label="Reputation aggregation">
+          <FairScaleAggregatedChip wallet={canonicalWallet} />
+        </section>
+      )}
 
       {/* ════ Full-width Merchant Readiness band ════
        * Visually partitions Section 1+2 (identity / performance) from
@@ -900,368 +913,373 @@ function AgentDetailInner() {
             activeGroupMeta.tabs.length > 1 ? 'rounded-b-lg rounded-tr-lg' : 'rounded-lg',
           )}
         >
-        {/* Panel header — group › sub-tab */}
-        {(() => {
-          const subMeta = sidebarSections.find((s) => s.value === activeTab);
-          const subCount = typeof subMeta?.count === 'number' ? subMeta.count : null;
-          return (
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-neutral-800/60">
-              <div className="flex items-baseline gap-2 min-w-0">
-                <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-600 shrink-0">
-                  {activeGroupMeta.label}
-                </span>
-                <span className="text-neutral-700" aria-hidden>›</span>
-                <h2 className="text-sm font-semibold text-neutral-100 truncate text-balance">
-                  {subMeta?.label ?? activeTab}
-                </h2>
-                {subCount != null && subCount > 0 && (
-                  <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono tabular-nums text-neutral-400 shrink-0">
-                    {subCount}
+          {/* Panel header — group › sub-tab */}
+          {(() => {
+            const subMeta = sidebarSections.find((s) => s.value === activeTab);
+            const subCount = typeof subMeta?.count === 'number' ? subMeta.count : null;
+            return (
+              <div className="flex items-center justify-between gap-3 pb-3 border-b border-neutral-800/60">
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-600 shrink-0">
+                    {activeGroupMeta.label}
                   </span>
-                )}
+                  <span className="text-neutral-700" aria-hidden>›</span>
+                  <h2 className="text-sm font-semibold text-neutral-100 truncate text-balance">
+                    {subMeta?.label ?? activeTab}
+                  </h2>
+                  {subCount != null && subCount > 0 && (
+                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono tabular-nums text-neutral-400 shrink-0">
+                      {subCount}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })()}
-        {/* Tab: Overview
+            );
+          })()}
+          {/* Tab: Overview
          * Visual contract matches the dashboard strip above:
          *   • Same surface tokens (`bg-card/60 border-border/40`) so cards
          *     read as continuations, not a new container.
          *   • Same SectionLabel pattern, same px-5 py-4 padding.
          *   • Two-column responsive grid: Capabilities (col-span-2) +
          *     Pricing tiers stack on lg, single column on mobile. */}
-        {activeTab === 'overview' && (
-          <div className="motion-safe:animate-fade-in space-y-4">
-            {(protocols.length > 0 || id.capabilities.length > 0 || id.pricing.length > 0) ? (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                {/* Capabilities (left, span-2): the agent's published
+          {activeTab === 'overview' && (
+            <div className="motion-safe:animate-fade-in space-y-4">
+              {(protocols.length > 0 || id.capabilities.length > 0 || id.pricing.length > 0) ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  {/* Capabilities (left, span-2): the agent's published
                  * surface area. Anchors the tab and gets the most width
                  * since each row carries id + protocol + description. */}
-                <section
-                  aria-label="Protocol & Capabilities"
-                  className="lg:col-span-2 min-w-0"
-                >
-                  <div className="rounded-lg border border-border/40 bg-card/60 overflow-hidden h-full flex flex-col backdrop-blur-sm">
-                    <div className="px-5 py-4 border-b border-neutral-800/60">
-                      <SectionLabel>Protocols</SectionLabel>
-                      {protocols.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {protocols.map((p) => (
-                            <ProtocolBadge key={p} protocol={p} />
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-xs text-neutral-600">No protocol metadata available.</p>
-                      )}
-                    </div>
+                  <section
+                    aria-label="Protocol & Capabilities"
+                    className="lg:col-span-2 min-w-0"
+                  >
+                    <div className="rounded-lg border border-border/40 bg-card/60 overflow-hidden h-full flex flex-col backdrop-blur-sm">
+                      <div className="px-5 py-4 border-b border-neutral-800/60">
+                        <SectionLabel>Protocols</SectionLabel>
+                        {protocols.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {protocols.map((p) => (
+                              <ProtocolBadge key={p} protocol={p} />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-neutral-600">No protocol metadata available.</p>
+                        )}
+                      </div>
 
-                    <div className="px-5 py-4 flex-1 flex flex-col">
-                      <SectionLabel>Capabilities</SectionLabel>
-                      {id.capabilities.length > 0 ? (
-                        <div className="mt-2 divide-y divide-neutral-800/60 rounded-md border border-neutral-800/60 bg-neutral-950/40">
-                          {id.capabilities.map((c) => (
-                            <Link
-                              key={c.id}
-                              href={`/capabilities/${encodeURIComponent(c.id)}`}
-                              className="flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/40 transition-colors group focus-visible:outline-none focus-visible:bg-neutral-800/40"
-                            >
-                              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 shrink-0 ring-1 ring-primary/20">
-                                <Zap className="h-3 w-3 text-primary" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-mono text-xs font-medium text-neutral-100 truncate">{c.id}</span>
-                                  {c.protocolId && <ProtocolBadge protocol={c.protocolId} />}
+                      <div className="px-5 py-4 flex-1 flex flex-col">
+                        <SectionLabel>Capabilities</SectionLabel>
+                        {id.capabilities.length > 0 ? (
+                          <div className="mt-2 divide-y divide-neutral-800/60 rounded-md border border-neutral-800/60 bg-neutral-950/40">
+                            {id.capabilities.map((c) => (
+                              <Link
+                                key={c.id}
+                                href={`/capabilities/${encodeURIComponent(c.id)}`}
+                                className="flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/40 transition-colors group focus-visible:outline-none focus-visible:bg-neutral-800/40"
+                              >
+                                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 shrink-0 ring-1 ring-primary/20">
+                                  <Zap className="h-3 w-3 text-primary" />
                                 </div>
-                                {c.description && (
-                                  <p className="text-[11px] text-neutral-500 mt-0.5 truncate leading-snug">{c.description}</p>
-                                )}
-                              </div>
-                              <ChevronRight className="h-3.5 w-3.5 text-neutral-700 group-hover:text-neutral-400 transition-colors shrink-0" />
-                            </Link>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-xs text-neutral-600">No capabilities published yet.</p>
-                      )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-mono text-xs font-medium text-neutral-100 truncate">{c.id}</span>
+                                    {c.protocolId && <ProtocolBadge protocol={c.protocolId} />}
+                                  </div>
+                                  {c.description && (
+                                    <p className="text-[11px] text-neutral-500 mt-0.5 truncate leading-snug">{c.description}</p>
+                                  )}
+                                </div>
+                                <ChevronRight className="h-3.5 w-3.5 text-neutral-700 group-hover:text-neutral-400 transition-colors shrink-0" />
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-neutral-600">No capabilities published yet.</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
 
-                {/* Pricing tiers (right, span-1): vertical stack so each
+                  {/* Pricing tiers (right, span-1): vertical stack so each
                  * tier reads as a self-contained price card. Uses the
                  * same outer surface as the left column for visual
                  * continuity. Renders an empty-state CTA when no tiers
                  * are defined so the column never collapses. */}
-                <section aria-label="Pricing" className="min-w-0">
-                  <div className="rounded-lg border border-border/40 bg-card/60 overflow-hidden h-full flex flex-col backdrop-blur-sm">
-                    <div className="px-5 py-4 flex-1">
-                      <SectionLabel>Pricing tiers</SectionLabel>
-                      {id.pricing.length > 0 ? (
-                        <div className="mt-3 space-y-2">
-                          {id.pricing.map((p) => (
-                            <div
-                              key={p.tierId}
-                              className="rounded-md border border-neutral-800/60 bg-neutral-950/40 p-3 hover:border-primary/30 transition-colors"
-                            >
-                              <div className="flex items-baseline justify-between gap-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary truncate">
-                                  {p.tierId}
+                  <section aria-label="Pricing" className="min-w-0">
+                    <div className="rounded-lg border border-border/40 bg-card/60 overflow-hidden h-full flex flex-col backdrop-blur-sm">
+                      <div className="px-5 py-4 flex-1">
+                        <SectionLabel>Pricing tiers</SectionLabel>
+                        {id.pricing.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {id.pricing.map((p) => (
+                              <div
+                                key={p.tierId}
+                                className="rounded-md border border-neutral-800/60 bg-neutral-950/40 p-3 hover:border-primary/30 transition-colors"
+                              >
+                                <div className="flex items-baseline justify-between gap-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary truncate">
+                                    {p.tierId}
+                                  </p>
+                                  <span className="text-[10px] text-neutral-600 uppercase tracking-wider shrink-0">
+                                    {formatTokenType(p.tokenType)}/call
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-base font-bold text-neutral-100 font-mono tabular-nums">
+                                  {formatPrice(p.pricePerCall, p.tokenDecimals)}
                                 </p>
-                                <span className="text-[10px] text-neutral-600 uppercase tracking-wider shrink-0">
-                                  {formatTokenType(p.tokenType)}/call
-                                </span>
-                              </div>
-                              <p className="mt-1 text-base font-bold text-neutral-100 font-mono tabular-nums">
-                                {formatPrice(p.pricePerCall, p.tokenDecimals)}
-                              </p>
-                              <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10px]">
-                                <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
-                                  <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Rate</p>
-                                  <p className="text-neutral-200 font-mono tabular-nums">{p.rateLimit}/s</p>
-                                </div>
-                                <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
-                                  <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Max</p>
-                                  <p className="text-neutral-200 font-mono tabular-nums">{p.maxCallsPerSession === 0 ? '∞' : p.maxCallsPerSession}</p>
-                                </div>
-                                <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
-                                  <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Mode</p>
-                                  <p className="text-neutral-200 truncate">{formatSettlement(p.settlementMode)}</p>
+                                <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10px]">
+                                  <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
+                                    <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Rate</p>
+                                    <p className="text-neutral-200 font-mono tabular-nums">{p.rateLimit}/s</p>
+                                  </div>
+                                  <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
+                                    <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Max</p>
+                                    <p className="text-neutral-200 font-mono tabular-nums">{p.maxCallsPerSession === 0 ? '∞' : p.maxCallsPerSession}</p>
+                                  </div>
+                                  <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
+                                    <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Mode</p>
+                                    <p className="text-neutral-200 truncate">{formatSettlement(p.settlementMode)}</p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-3 rounded-md border border-dashed border-neutral-700/60 bg-neutral-950/40 px-3 py-6 text-center">
-                          <p className="text-xs text-neutral-500">No pricing tiers published</p>
-                          <p className="mt-1 text-[10px] text-neutral-600 leading-relaxed">
-                            Agents define tiers via the SAP <span className="font-mono text-neutral-400">register_pricing</span> instruction
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border/40 bg-card/40 px-6 py-10 text-center">
-                <p className="text-sm text-neutral-400">No protocol, capability, or pricing metadata published yet.</p>
-                <p className="mt-1 text-xs text-neutral-600">All other tabs remain available for inspection.</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab: Revenue */}
-        {activeTab === 'revenue' && (
-          <div className="space-y-3">
-            {(revenueData as { degraded?: boolean } | null)?.degraded && (
-              <DegradedBanner label="Revenue" />
-            )}
-            <AgentRevenueTab
-              revenueData={revenueData}
-              loading={revLoading}
-              escrows={agentEscrows}
-              totalSolSettled={totalSolSettled}
-              totalCallsSettled={totalCallsSettled}
-            />
-          </div>
-        )}
-
-        {/* Tab: Tools */}
-        {activeTab === 'tools' && (
-          <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
-            <CardHeader className="pb-0 px-5 pt-4">
-              <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Registered Tools</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pt-3 pb-4">
-              {agentTools.length === 0 ? (
-                <EmptyState message="No tools registered by this agent" />
-              ) : (
-                <div className="space-y-2">
-                  {agentTools.map((t) => (
-                    <div key={t.pda} className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
-                      <span className="text-sm font-medium text-white truncate min-w-0 flex-1">{t.descriptor?.toolName ?? 'Unnamed'}</span>
-                      <div className="flex items-center gap-2 flex-wrap shrink-0">
-                      {t.descriptor?.httpMethod && (
-                        <Badge className="bg-emerald-500/15 text-emerald-400 text-xs">
-                          {typeof t.descriptor.httpMethod === 'object' ? Object.keys(t.descriptor.httpMethod)[0] : t.descriptor.httpMethod}
-                        </Badge>
-                      )}
-                      {t.descriptor?.category && (
-                        <Badge variant="outline" className="text-xs">
-                          {typeof t.descriptor.category === 'object' ? Object.keys(t.descriptor.category)[0] : t.descriptor.category}
-                        </Badge>
-                      )}
-                      <span className="text-xs text-neutral-500 tabular-nums">
-                        {agentEscrows.reduce((s, e) => s + Number(e.totalCallsSettled), 0).toLocaleString()} calls settled
-                      </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Tab: Escrows */}
-        {activeTab === 'escrows' && (
-          <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
-            <CardHeader className="pb-0 px-5 pt-4">
-              <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Escrow Accounts</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pt-3 pb-4">
-              {agentEscrows.length === 0 ? (
-                <EmptyState message="No escrows found for this agent" />
-              ) : (
-                <div className="space-y-3">
-                  {agentEscrows.map((e) => (
-                    <div key={e.pda} className="rounded-lg border border-neutral-800 bg-neutral-800/40 p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <Address value={e.pda} copy />
-                        {Number(e.balance) > 0 ? (
-                          <Badge className="bg-emerald-500/15 text-emerald-400 text-xs">Funded</Badge>
+                            ))}
+                          </div>
                         ) : (
-                          <Badge variant="destructive" className="text-xs">Empty</Badge>
+                          <div className="mt-3 rounded-md border border-dashed border-neutral-700/60 bg-neutral-950/40 px-3 py-6 text-center">
+                            <p className="text-xs text-neutral-500">No pricing tiers published</p>
+                            <p className="mt-1 text-[10px] text-neutral-600 leading-relaxed">
+                              Agents define tiers via the SAP <span className="font-mono text-neutral-400">register_pricing</span> instruction
+                            </p>
+                          </div>
                         )}
                       </div>
-                      <div className="grid grid-cols-3 gap-3 text-center">
-                        <div>
-                          <p className="text-sm font-bold tabular-nums text-white font-mono">{e.balance}</p>
-                          <p className="text-xs text-neutral-500">Balance</p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold tabular-nums text-white font-mono">{e.totalDeposited}</p>
-                          <p className="text-xs text-neutral-500">Deposited</p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold tabular-nums text-white font-mono">{e.totalCallsSettled}</p>
-                          <p className="text-xs text-neutral-500">Calls Settled</p>
-                        </div>
-                      </div>
                     </div>
-                  ))}
+                  </section>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Tab: Feedbacks */}
-        {activeTab === 'feedbacks' && (
-          <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
-            <CardHeader className="pb-0 px-5 pt-4">
-              <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Feedback Received</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pt-3 pb-4">
-              {agentFeedbacks.length === 0 ? (
-                <EmptyState message="No feedback received yet" />
               ) : (
-                <div className="space-y-2">
-                  {agentFeedbacks.map((f) => (
-                    <div key={f.pda} className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                        <span className="text-xs font-bold text-primary">{f.score}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <Address value={f.reviewer} />
-                          {f.tag && <Badge variant="outline" className="text-xs">{f.tag}</Badge>}
-                        </div>
-                        <p className="text-xs text-neutral-500">{new Date(Number(f.createdAt) * 1000).toLocaleDateString()}</p>
-                      </div>
-                      {f.isRevoked && <Badge variant="destructive" className="text-xs">Revoked</Badge>}
-                    </div>
-                  ))}
+                <div className="rounded-lg border border-dashed border-border/40 bg-card/40 px-6 py-10 text-center">
+                  <p className="text-sm text-neutral-400">No protocol, capability, or pricing metadata published yet.</p>
+                  <p className="mt-1 text-xs text-neutral-600">All other tabs remain available for inspection.</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
 
-        {/* Tab: Attestations */}
-        {activeTab === 'attestations' && (
-          <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
-            <CardHeader className="pb-0 px-5 pt-4">
-              <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Attestations</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pt-3 pb-4">
-              {agentAttestations.length === 0 ? (
-                <EmptyState message="No attestations for this agent" />
-              ) : (
-                <div className="space-y-2">
-                  {agentAttestations.map((a) => (
-                    <div key={a.pda} className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">{a.attestationType}</Badge>
-                          <Address value={a.attester} />
-                        </div>
-                        <p className="text-xs text-neutral-500">{new Date(Number(a.createdAt) * 1000).toLocaleDateString()}</p>
-                      </div>
-                      <StatusBadge active={a.isActive} size="xs" />
-                    </div>
-                  ))}
-                </div>
+          {/* Tab: Reputation (FairScale × SAP) */}
+          {activeTab === 'reputation' && canonicalWallet && (
+            <ReputationTab wallet={canonicalWallet} />
+          )}
+
+          {/* Tab: Revenue */}
+          {activeTab === 'revenue' && (
+            <div className="space-y-3">
+              {(revenueData as { degraded?: boolean } | null)?.degraded && (
+                <DegradedBanner label="Revenue" />
               )}
-            </CardContent>
-          </Card>
-        )}
+              <AgentRevenueTab
+                revenueData={revenueData}
+                loading={revLoading}
+                escrows={agentEscrows}
+                totalSolSettled={totalSolSettled}
+                totalCallsSettled={totalCallsSettled}
+              />
+            </div>
+          )}
 
-        {/* Tab: Events */}
-        {activeTab === 'events' && (
-          <AgentEventTimeline events={agentEvents} scanned={eventsData?.scanned ?? 0} loading={evLoading} />
-        )}
+          {/* Tab: Tools */}
+          {activeTab === 'tools' && (
+            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+              <CardHeader className="pb-0 px-5 pt-4">
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Registered Tools</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pt-3 pb-4">
+                {agentTools.length === 0 ? (
+                  <EmptyState message="No tools registered by this agent" />
+                ) : (
+                  <div className="space-y-2">
+                    {agentTools.map((t) => (
+                      <div key={t.pda} className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
+                        <span className="text-sm font-medium text-white truncate min-w-0 flex-1">{t.descriptor?.toolName ?? 'Unnamed'}</span>
+                        <div className="flex items-center gap-2 flex-wrap shrink-0">
+                          {t.descriptor?.httpMethod && (
+                            <Badge className="bg-emerald-500/15 text-emerald-400 text-xs">
+                              {typeof t.descriptor.httpMethod === 'object' ? Object.keys(t.descriptor.httpMethod)[0] : t.descriptor.httpMethod}
+                            </Badge>
+                          )}
+                          {t.descriptor?.category && (
+                            <Badge variant="outline" className="text-xs">
+                              {typeof t.descriptor.category === 'object' ? Object.keys(t.descriptor.category)[0] : t.descriptor.category}
+                            </Badge>
+                          )}
+                          <span className="text-xs text-neutral-500 tabular-nums">
+                            {agentEscrows.reduce((s, e) => s + Number(e.totalCallsSettled), 0).toLocaleString()} calls settled
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Tab: Vault / Memory */}
-        {activeTab === 'vault' && (
-          <div className="space-y-3">
-            {(memoryData as { degraded?: boolean } | null)?.degraded && (
-              <DegradedBanner label="Memory" />
-            )}
-            <AgentMemoryTab memoryData={memoryData} loading={memLoading} fallbackVaults={agentVaults} />
-          </div>
-        )}
+          {/* Tab: Escrows */}
+          {activeTab === 'escrows' && (
+            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+              <CardHeader className="pb-0 px-5 pt-4">
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Escrow Accounts</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pt-3 pb-4">
+                {agentEscrows.length === 0 ? (
+                  <EmptyState message="No escrows found for this agent" />
+                ) : (
+                  <div className="space-y-3">
+                    {agentEscrows.map((e) => (
+                      <div key={e.pda} className="rounded-lg border border-neutral-800 bg-neutral-800/40 p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <Address value={e.pda} copy />
+                          {Number(e.balance) > 0 ? (
+                            <Badge className="bg-emerald-500/15 text-emerald-400 text-xs">Funded</Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs">Empty</Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-center">
+                          <div>
+                            <p className="text-sm font-bold tabular-nums text-white font-mono">{e.balance}</p>
+                            <p className="text-xs text-neutral-500">Balance</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold tabular-nums text-white font-mono">{e.totalDeposited}</p>
+                            <p className="text-xs text-neutral-500">Deposited</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold tabular-nums text-white font-mono">{e.totalCallsSettled}</p>
+                            <p className="text-xs text-neutral-500">Calls Settled</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Tab: x402 Direct Payments */}
-        {activeTab === 'x402' && (
-          <div className="space-y-3">
-            {(x402Data as { degraded?: boolean } | null)?.degraded && (
-              <DegradedBanner label="x402 payments" />
-            )}
-            <AgentX402Tab
-              payments={x402Data?.payments ?? []}
-              stats={x402Data?.stats ?? null}
-              total={x402Data?.total ?? 0}
-              loading={x402Loading}
+          {/* Tab: Feedbacks */}
+          {activeTab === 'feedbacks' && (
+            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+              <CardHeader className="pb-0 px-5 pt-4">
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Feedback Received</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pt-3 pb-4">
+                {agentFeedbacks.length === 0 ? (
+                  <EmptyState message="No feedback received yet" />
+                ) : (
+                  <div className="space-y-2">
+                    {agentFeedbacks.map((f) => (
+                      <div key={f.pda} className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                          <span className="text-xs font-bold text-primary">{f.score}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Address value={f.reviewer} />
+                            {f.tag && <Badge variant="outline" className="text-xs">{f.tag}</Badge>}
+                          </div>
+                          <p className="text-xs text-neutral-500">{new Date(Number(f.createdAt) * 1000).toLocaleDateString()}</p>
+                        </div>
+                        {f.isRevoked && <Badge variant="destructive" className="text-xs">Revoked</Badge>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Tab: Attestations */}
+          {activeTab === 'attestations' && (
+            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+              <CardHeader className="pb-0 px-5 pt-4">
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Attestations</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pt-3 pb-4">
+                {agentAttestations.length === 0 ? (
+                  <EmptyState message="No attestations for this agent" />
+                ) : (
+                  <div className="space-y-2">
+                    {agentAttestations.map((a) => (
+                      <div key={a.pda} className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">{a.attestationType}</Badge>
+                            <Address value={a.attester} />
+                          </div>
+                          <p className="text-xs text-neutral-500">{new Date(Number(a.createdAt) * 1000).toLocaleDateString()}</p>
+                        </div>
+                        <StatusBadge active={a.isActive} size="xs" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Tab: Events */}
+          {activeTab === 'events' && (
+            <AgentEventTimeline events={agentEvents} scanned={eventsData?.scanned ?? 0} loading={evLoading} />
+          )}
+
+          {/* Tab: Vault / Memory */}
+          {activeTab === 'vault' && (
+            <div className="space-y-3">
+              {(memoryData as { degraded?: boolean } | null)?.degraded && (
+                <DegradedBanner label="Memory" />
+              )}
+              <AgentMemoryTab memoryData={memoryData} loading={memLoading} fallbackVaults={agentVaults} />
+            </div>
+          )}
+
+          {/* Tab: x402 Direct Payments */}
+          {activeTab === 'x402' && (
+            <div className="space-y-3">
+              {(x402Data as { degraded?: boolean } | null)?.degraded && (
+                <DegradedBanner label="x402 payments" />
+              )}
+              <AgentX402Tab
+                payments={x402Data?.payments ?? []}
+                stats={x402Data?.stats ?? null}
+                total={x402Data?.total ?? 0}
+                loading={x402Loading}
+              />
+            </div>
+          )}
+
+          {activeTab === 'metaplex' && (
+            <AgentMetaplexTab
+              data={metaplexData}
+              loading={metaplexLoading}
+              nfts={nftsData?.items ?? null}
+              registry={registryData ?? null}
+              canonicalCard={canonicalCard}
+              canonicalLoading={canonicalLoading}
+              sapPda={data?.profile?.pda ?? null}
             />
-          </div>
-        )}
+          )}
 
-        {activeTab === 'metaplex' && (
-          <AgentMetaplexTab
-            data={metaplexData}
-            loading={metaplexLoading}
-            nfts={nftsData?.items ?? null}
-            registry={registryData ?? null}
-            canonicalCard={canonicalCard}
-            canonicalLoading={canonicalLoading}
-            sapPda={data?.profile?.pda ?? null}
-          />
-        )}
-
-        {activeTab === 'tokens' && (
-          agentLaunchTokens.length > 0 ? (
-            <AgentTokenMarketSection tokens={agentLaunchTokens} />
-          ) : (
-            <EmptyState
-              icon={<Coins className="h-6 w-6" />}
-              message="This agent has not launched a Metaplex Agent Token yet."
-            />
-          )
-        )}
+          {activeTab === 'tokens' && (
+            agentLaunchTokens.length > 0 ? (
+              <AgentTokenMarketSection tokens={agentLaunchTokens} />
+            ) : (
+              <EmptyState
+                icon={<Coins className="h-6 w-6" />}
+                message="This agent has not launched a Metaplex Agent Token yet."
+              />
+            )
+          )}
         </div>
       </section>
     </div>
@@ -2015,12 +2033,12 @@ function AgentMetaplexTab({
             <p className="text-xs text-neutral-500">
               {heroState === 'both'
                 ? (() => {
-                    const parts: string[] = [];
-                    if (linked) parts.push('AgentIdentity URI bound to SAP host');
-                    else if (identityNfts.length > 0) parts.push(`${identityNfts.length} on-chain AgentIdentity plugin${identityNfts.length === 1 ? '' : 's'}`);
-                    if (registryAgents.length > 0) parts.push(`${registryAgents.length} entry${registryAgents.length === 1 ? '' : 'ies'} on api.metaplex.com`);
-                    return `Registered on SAP (on-chain PDA) and on Metaplex · ${parts.join(' + ')}.`;
-                  })()
+                  const parts: string[] = [];
+                  if (linked) parts.push('AgentIdentity URI bound to SAP host');
+                  else if (identityNfts.length > 0) parts.push(`${identityNfts.length} on-chain AgentIdentity plugin${identityNfts.length === 1 ? '' : 's'}`);
+                  if (registryAgents.length > 0) parts.push(`${registryAgents.length} entry${registryAgents.length === 1 ? '' : 'ies'} on api.metaplex.com`);
+                  return `Registered on SAP (on-chain PDA) and on Metaplex · ${parts.join(' + ')}.`;
+                })()
                 : error
                   ? `Discovery error: ${error}`
                   : 'Registered on SAP only. No Metaplex AgentIdentity plugin or registry entry found for this wallet.'}
@@ -2072,85 +2090,85 @@ function AgentMetaplexTab({
 
       {/* Identity rows */}
       {activeSubTab === 'mapping' && (
-      <div id="mpl-sub-mapping" role="tabpanel"><Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
-        <CardHeader className="pb-0 px-5 pt-4">
-          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">
-            Identity Mapping
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-0 py-2 divide-y divide-neutral-800">
-          <PropertyRow
-            label="SAP PDA"
-            value={
-              <span className="font-mono text-xs text-neutral-300 break-all">{sapAgentPda}</span>
-            }
-          />
-          <PropertyRow
-            label="MPL Core Asset"
-            value={
-              asset ? (
-                <div className="flex items-center gap-2 justify-end flex-wrap">
-                  <Link
-                    href={`${SOLSCAN}/token/${asset}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-mono text-xs text-pink-400 hover:underline break-all inline-flex items-center gap-1"
-                  >
-                    {asset}
-                    <ExternalLink className="h-3 w-3 shrink-0" />
-                  </Link>
-                  <Pill variant="sap">SAP-BOUND</Pill>
-                </div>
-              ) : identityNfts.length > 0 ? (
-                <div className="flex items-center gap-2 justify-end flex-wrap">
-                  <span
-                    className="inline-flex shrink-0 cursor-help"
-                    aria-label="Discovered MPL Core asset"
-                    title={
-                      identityNfts.length > 1
-                        ? `${identityNfts.length} MPL Core assets owned by this wallet carry an AgentIdentity plugin but none point to the SAP host — see NFT cards below for full details.`
-                        : `Discovered on ${identityNfts[0].identityHost ?? 'a foreign host'} — AgentIdentity plugin URI is not bound to the SAP host. See NFT cards below for full details.`
-                    }
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-                  </span>
-                  <Link
-                    href={`${SOLSCAN}/token/${identityNfts[0].asset}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-mono text-xs text-amber-400 hover:underline break-all inline-flex items-center gap-1"
-                  >
-                    {identityNfts[0].asset}
-                    <ExternalLink className="h-3 w-3 shrink-0" />
-                  </Link>
-                </div>
-              ) : (
-                <span className="text-xs text-neutral-600 italic">none discovered</span>
-              )
-            }
-          />
-          <PropertyRow
-            label="Expected EIP-8004 URL"
-            value={
-              <Link href={expectedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 break-all">
-                {expectedUrl}
-                <ExternalLink className="h-3 w-3 shrink-0" />
-              </Link>
-            }
-          />
-          {agentIdentityUri && agentIdentityUri !== expectedUrl && (
+        <div id="mpl-sub-mapping" role="tabpanel"><Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+          <CardHeader className="pb-0 px-5 pt-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">
+              Identity Mapping
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-0 py-2 divide-y divide-neutral-800">
             <PropertyRow
-              label="On-chain AgentIdentity URI"
+              label="SAP PDA"
               value={
-                <Link href={agentIdentityUri} target="_blank" rel="noreferrer" className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 break-all">
-                  {agentIdentityUri}
+                <span className="font-mono text-xs text-neutral-300 break-all">{sapAgentPda}</span>
+              }
+            />
+            <PropertyRow
+              label="MPL Core Asset"
+              value={
+                asset ? (
+                  <div className="flex items-center gap-2 justify-end flex-wrap">
+                    <Link
+                      href={`${SOLSCAN}/token/${asset}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-xs text-pink-400 hover:underline break-all inline-flex items-center gap-1"
+                    >
+                      {asset}
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </Link>
+                    <Pill variant="sap">SAP-BOUND</Pill>
+                  </div>
+                ) : identityNfts.length > 0 ? (
+                  <div className="flex items-center gap-2 justify-end flex-wrap">
+                    <span
+                      className="inline-flex shrink-0 cursor-help"
+                      aria-label="Discovered MPL Core asset"
+                      title={
+                        identityNfts.length > 1
+                          ? `${identityNfts.length} MPL Core assets owned by this wallet carry an AgentIdentity plugin but none point to the SAP host — see NFT cards below for full details.`
+                          : `Discovered on ${identityNfts[0].identityHost ?? 'a foreign host'} — AgentIdentity plugin URI is not bound to the SAP host. See NFT cards below for full details.`
+                      }
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                    </span>
+                    <Link
+                      href={`${SOLSCAN}/token/${identityNfts[0].asset}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-xs text-amber-400 hover:underline break-all inline-flex items-center gap-1"
+                    >
+                      {identityNfts[0].asset}
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </Link>
+                  </div>
+                ) : (
+                  <span className="text-xs text-neutral-600 italic">none discovered</span>
+                )
+              }
+            />
+            <PropertyRow
+              label="Expected EIP-8004 URL"
+              value={
+                <Link href={expectedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 break-all">
+                  {expectedUrl}
                   <ExternalLink className="h-3 w-3 shrink-0" />
                 </Link>
               }
             />
-          )}
-        </CardContent>
-      </Card></div>
+            {agentIdentityUri && agentIdentityUri !== expectedUrl && (
+              <PropertyRow
+                label="On-chain AgentIdentity URI"
+                value={
+                  <Link href={agentIdentityUri} target="_blank" rel="noreferrer" className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 break-all">
+                    {agentIdentityUri}
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </Link>
+                }
+              />
+            )}
+          </CardContent>
+        </Card></div>
       )}
 
       {/* Canonical EIP-8004 Card — single source of truth served at
@@ -2443,92 +2461,92 @@ function AgentMetaplexTab({
               <p className="text-xs text-amber-400">Registry unreachable: {registry.error}</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {registryAgents.map((a) => {
-                    const hasToken = !!a.agentToken;
-                    return (
-                      <div
-                        key={a.id}
-                        className={cn(
-                          'relative rounded-lg border p-4 space-y-3 transition-colors',
-                          hasToken
-                            ? 'border-amber-400/40 bg-amber-500/5'
-                            : 'border-neutral-800 bg-neutral-950/50',
+                {registryAgents.map((a) => {
+                  const hasToken = !!a.agentToken;
+                  return (
+                    <div
+                      key={a.id}
+                      className={cn(
+                        'relative rounded-lg border p-4 space-y-3 transition-colors',
+                        hasToken
+                          ? 'border-amber-400/40 bg-amber-500/5'
+                          : 'border-neutral-800 bg-neutral-950/50',
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        {a.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={a.image}
+                            alt={a.name ?? 'agent'}
+                            className="size-10 rounded-md object-cover bg-neutral-900 shrink-0"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="size-10 rounded-md bg-neutral-900 shrink-0" />
                         )}
-                      >
-                        <div className="flex items-start gap-3">
-                          {a.image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={a.image}
-                              alt={a.name ?? 'agent'}
-                              className="size-10 rounded-md object-cover bg-neutral-900 shrink-0"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="size-10 rounded-md bg-neutral-900 shrink-0" />
-                          )}
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="text-xs font-medium text-white truncate">{a.name ?? 'Unnamed agent'}</p>
-                              {hasToken && (
-                                <Pill variant="mpl" title="This agent has launched its own SPL token via the Metaplex Agent Token feature (typically a Meteora DBC bonding curve). The token is bound to the agent's MPL Core asset and tradeable.">
-                                  <Coins className="h-3 w-3" />
-                                  AGENT TOKEN
-                                </Pill>
-                              )}
-                            </div>
-                            {a.description && (
-                              <p className="text-xs text-neutral-500 line-clamp-2">{a.description}</p>
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-xs font-medium text-white truncate">{a.name ?? 'Unnamed agent'}</p>
+                            {hasToken && (
+                              <Pill variant="mpl" title="This agent has launched its own SPL token via the Metaplex Agent Token feature (typically a Meteora DBC bonding curve). The token is bound to the agent's MPL Core asset and tradeable.">
+                                <Coins className="h-3 w-3" />
+                                AGENT TOKEN
+                              </Pill>
                             )}
                           </div>
-                        </div>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <span className="text-neutral-600 shrink-0">Mint ·</span>
-                            <Link
-                              href={`${SOLSCAN}/token/${a.mintAddress}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-mono text-neutral-400 hover:text-amber-300 inline-flex items-center gap-1 break-all"
-                            >
-                              {a.mintAddress}
-                              <ExternalLink className="h-3 w-3 shrink-0" />
-                            </Link>
-                          </div>
-                          {hasToken && (
-                            <div className="flex items-baseline gap-1.5 flex-wrap">
-                              <span className="text-amber-400/80 inline-flex items-center gap-1 shrink-0">
-                                <Coins className="h-3 w-3" />
-                                Token ·
-                              </span>
-                              <Link
-                                href={`${SOLSCAN}/token/${a.agentToken}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-mono text-amber-300 hover:underline inline-flex items-center gap-1 break-all"
-                              >
-                                {a.agentToken!}
-                                <ExternalLink className="h-3 w-3 shrink-0" />
-                              </Link>
-                            </div>
+                          {a.description && (
+                            <p className="text-xs text-neutral-500 line-clamp-2">{a.description}</p>
                           )}
-                          <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <span className="text-neutral-600 shrink-0">Metadata ·</span>
-                            <Link
-                              href={a.agentMetadataUri}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-amber-400 hover:underline inline-flex items-center gap-1 break-all"
-                            >
-                              {a.agentMetadataUri}
-                              <ExternalLink className="h-3 w-3 shrink-0" />
-                            </Link>
-                          </div>
                         </div>
                       </div>
-                    );
-                  })}
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <span className="text-neutral-600 shrink-0">Mint ·</span>
+                          <Link
+                            href={`${SOLSCAN}/token/${a.mintAddress}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono text-neutral-400 hover:text-amber-300 inline-flex items-center gap-1 break-all"
+                          >
+                            {a.mintAddress}
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                          </Link>
+                        </div>
+                        {hasToken && (
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-amber-400/80 inline-flex items-center gap-1 shrink-0">
+                              <Coins className="h-3 w-3" />
+                              Token ·
+                            </span>
+                            <Link
+                              href={`${SOLSCAN}/token/${a.agentToken}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-amber-300 hover:underline inline-flex items-center gap-1 break-all"
+                            >
+                              {a.agentToken!}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </Link>
+                          </div>
+                        )}
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <span className="text-neutral-600 shrink-0">Metadata ·</span>
+                          <Link
+                            href={a.agentMetadataUri}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-amber-400 hover:underline inline-flex items-center gap-1 break-all"
+                          >
+                            {a.agentMetadataUri}
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

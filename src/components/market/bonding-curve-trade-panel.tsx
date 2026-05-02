@@ -22,6 +22,35 @@ interface BondingCurveTradePanelProps {
 const DEFAULT_DECIMALS = 9;
 const PRESET_SLIPPAGE = [50, 100, 300, 1000];
 const PERCENT_PRESETS = [25, 50, 75, 100] as const;
+const QUOTE_DEBOUNCE_MS = 350;
+const QUOTE_REFRESH_MS = 6_000;
+
+interface LiveQuote {
+  amountIn: string;
+  amountOut: string;
+  fee: string;
+  creatorFee: string;
+  swappable: boolean;
+  firstBuyPending: boolean;
+  fillPct: number;
+  baseDecimals: number;
+  quoteDecimals: number;
+}
+
+async function readJsonSafe(res: Response): Promise<unknown> {
+  // Next.js sometimes returns empty bodies on uncaught crashes — read
+  // text first so JSON.parse never throws "Unexpected end of JSON input"
+  // and we can surface the actual server status to the user.
+  const text = await res.text();
+  if (!text) {
+    return { error: `Empty response from server (HTTP ${res.status})` };
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text.slice(0, 200) };
+  }
+}
 
 /**
  * Pro-grade Buy/Sell panel for bonding-curve launches.
@@ -50,17 +79,37 @@ export function BondingCurveTradePanel({
   const [status, setStatus] = useState<{ kind: 'idle' | 'ok' | 'err'; msg?: string; sig?: string }>({
     kind: 'idle',
   });
+  const [quote, setQuote] = useState<LiveQuote | null>(null);
+  const [quoteErr, setQuoteErr] = useState<string | null>(null);
+  const [quoting, setQuoting] = useState(false);
 
   const tickSym = symbol ?? 'TOKEN';
   const amountUnit = side === 'buy' ? 'SOL' : tickSym;
   const previewUnit = side === 'buy' ? tickSym : 'SOL';
   const amtNum = Number(amount);
-  const previewOut =
+
+  // Output preview: prefer the server quote (true bonding-curve math
+  // including fees + first-buy waiver). Fall back to indexed price when
+  // the quote endpoint hasn't responded yet.
+  const quoteOutUi = useMemo(() => {
+    if (!quote) return null;
+    const dec = side === 'buy' ? quote.baseDecimals : quote.quoteDecimals;
+    try {
+      const raw = BigInt(quote.amountOut);
+      return Number(raw) / 10 ** dec;
+    } catch {
+      return null;
+    }
+  }, [quote, side]);
+
+  const fallbackOut =
     Number.isFinite(amtNum) && amtNum > 0 && priceSolPerToken && priceSolPerToken > 0
       ? side === 'buy'
         ? amtNum / priceSolPerToken
         : amtNum * priceSolPerToken
       : null;
+
+  const previewOut = quoteOutUi ?? fallbackOut;
 
   const currentBalance = side === 'buy' ? solBalance : tokenBalance;
   const balanceLabel = side === 'buy' ? 'SOL' : tickSym;
@@ -109,6 +158,67 @@ export function BondingCurveTradePanel({
     refreshBalances();
   }, [refreshBalances]);
 
+  /* ── Live on-chain quote (debounced + auto-refresh) ────── */
+  useEffect(() => {
+    if (!genesisAddress || finalized) {
+      setQuote(null);
+      setQuoteErr(null);
+      return;
+    }
+    if (!Number.isFinite(amtNum) || amtNum <= 0) {
+      setQuote(null);
+      setQuoteErr(null);
+      return;
+    }
+
+    const rawAmount =
+      side === 'buy'
+        ? BigInt(Math.floor(amtNum * 1_000_000_000))
+        : BigInt(Math.floor(amtNum * 10 ** decimals));
+    if (rawAmount <= 0n) {
+      setQuote(null);
+      return;
+    }
+
+    const ctrl = new AbortController();
+    let cancelled = false;
+
+    const fetchQuote = async () => {
+      setQuoting(true);
+      try {
+        const r = await fetch(`/api/market/genesis-quote/${genesisAddress}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ side, amount: rawAmount.toString() }),
+          signal: ctrl.signal,
+        });
+        const j = (await readJsonSafe(r)) as LiveQuote | { error: string };
+        if (cancelled) return;
+        if (!r.ok || 'error' in j) {
+          setQuote(null);
+          setQuoteErr('error' in j ? j.error : `HTTP ${r.status}`);
+        } else {
+          setQuote(j);
+          setQuoteErr(null);
+        }
+      } catch (e) {
+        if (cancelled || (e instanceof Error && e.name === 'AbortError')) return;
+        setQuoteErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setQuoting(false);
+      }
+    };
+
+    const debounce = setTimeout(fetchQuote, QUOTE_DEBOUNCE_MS);
+    const interval = setInterval(fetchQuote, QUOTE_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      clearTimeout(debounce);
+      clearInterval(interval);
+    };
+  }, [genesisAddress, finalized, side, amtNum, decimals]);
+
   /* ── Slider (% of balance) ─────────────────────────────── */
   const sliderPct = useMemo(() => {
     if (!currentBalance || currentBalance <= 0 || !amtNum || amtNum <= 0) return 0;
@@ -138,8 +248,18 @@ export function BondingCurveTradePanel({
           ? BigInt(Math.floor(amtNum * 1_000_000_000))
           : BigInt(Math.floor(amtNum * 10 ** decimals));
 
+      // Prefer the server quote's exact `amountOut` (real curve math
+      // including fees + first-buy waiver). Fall back to indexed price
+      // when the quote endpoint hasn't responded yet.
       let minOut = 0n;
-      if (priceSolPerToken && priceSolPerToken > 0) {
+      if (quote) {
+        try {
+          const expectedRaw = BigInt(quote.amountOut);
+          minOut = (expectedRaw * BigInt(10_000 - slippageBps)) / 10_000n;
+        } catch {
+          minOut = 0n;
+        }
+      } else if (priceSolPerToken && priceSolPerToken > 0) {
         const expectedUi =
           side === 'buy' ? amtNum / priceSolPerToken : amtNum * priceSolPerToken;
         const expectedRaw =
@@ -159,7 +279,7 @@ export function BondingCurveTradePanel({
           minAmountOutScaled: minOut.toString(),
         }),
       });
-      const buildJson = (await buildRes.json()) as
+      const buildJson = (await readJsonSafe(buildRes)) as
         | { transaction: string; lastValidBlockHeight: number; blockhash: string }
         | { error: string };
       if (!buildRes.ok || 'error' in buildJson) {
@@ -381,18 +501,42 @@ export function BondingCurveTradePanel({
           </div>
         </div>
 
-        {/* Output preview */}
-        <div className="flex items-center justify-between rounded-xl border border-border/40 bg-background/20 px-3 py-2.5">
-          <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-            You receive ≈
-          </span>
-          <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
-            {previewOut !== null
-              ? `${previewOut.toLocaleString(undefined, {
-                  maximumFractionDigits: previewOut < 1 ? 6 : 4,
-                })} ${previewUnit}`
-              : `— ${previewUnit}`}
-          </span>
+        {/* Output preview — driven by live on-chain quote */}
+        <div className="rounded-xl border border-border/40 bg-background/20 px-3 py-2.5 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              You receive ≈
+            </span>
+            <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+              {previewOut !== null
+                ? `${previewOut.toLocaleString(undefined, {
+                    maximumFractionDigits: previewOut < 1 ? 6 : 4,
+                  })} ${previewUnit}`
+                : `— ${previewUnit}`}
+            </span>
+          </div>
+          {quote && quote.fee !== '0' && (
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground/70">
+              <span>Protocol fee</span>
+              <span className="font-mono tabular-nums">
+                {(Number(BigInt(quote.fee)) / 1e9).toLocaleString(undefined, {
+                  maximumFractionDigits: 6,
+                })}{' '}
+                SOL
+              </span>
+            </div>
+          )}
+          {quote?.firstBuyPending && (
+            <div className="text-[10px] text-amber-300">
+              ⚠ First-buy restriction active — only the designated buyer can trade now
+            </div>
+          )}
+          {quoteErr && !quote && (
+            <div className="text-[10px] text-rose-300">Quote: {quoteErr}</div>
+          )}
+          {quoting && !quote && (
+            <div className="text-[10px] text-muted-foreground/60">Pricing on-chain…</div>
+          )}
         </div>
 
         {/* Slippage */}

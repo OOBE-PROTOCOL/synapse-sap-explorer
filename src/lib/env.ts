@@ -35,6 +35,13 @@ export const env = {
   get SAP_FALLBACK_RPC_URL() {
     return optional('SAP_FALLBACK_RPC_URL', '');
   },
+  /**
+   * FairScale Agent API key (https://docs.fairscale.xyz). Optional —
+   * when missing, FairScale-backed endpoints degrade to SAP-only.
+   */
+  get FAIRSCALE_API_KEY() {
+    return optional('FAIRSCALE_API_KEY', '');
+  },
   /* Database */
   get DATABASE_URL() {
     return required('DATABASE_URL');

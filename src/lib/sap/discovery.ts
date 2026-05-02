@@ -149,6 +149,17 @@ function getSap(): SapClient {
     });
 
     _sap = SapClient.from(provider, SAP_PROGRAM_ID);
+
+    // FairScale is an optional registry on SapClient (>=0.11.0).
+    // We type the call locally so the configuration step is robust
+    // against any stale `node_modules` symlink that still resolves
+    // an older `SapClient.d.ts` without `configureFairScale`.
+    if (env.FAIRSCALE_API_KEY) {
+      const fsCapable = _sap as unknown as {
+        configureFairScale?: (cfg: { apiKey: string }) => unknown;
+      };
+      fsCapable.configureFairScale?.({ apiKey: env.FAIRSCALE_API_KEY });
+    }
   }
   return _sap;
 }
