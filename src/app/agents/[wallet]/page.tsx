@@ -11,6 +11,7 @@ import { DetailRow, MetricTile, PortfolioRow, SectionLabel, TokenAvatar, TokenAv
 import { MerchantReadiness } from '~/components/ui/merchant-readiness';
 import { FairScaleAggregatedChip } from '~/components/ui/fairscale-aggregated-chip';
 import { ReputationTab } from '~/components/agents/reputation-tab';
+import { ToolRow } from '~/components/agents/tool-row';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -1098,26 +1099,31 @@ function AgentDetailInner() {
                   <EmptyState message="No tools registered by this agent" />
                 ) : (
                   <div className="space-y-2">
-                    {agentTools.map((t) => (
-                      <div key={t.pda} className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
-                        <span className="text-sm font-medium text-white truncate min-w-0 flex-1">{t.descriptor?.toolName ?? 'Unnamed'}</span>
-                        <div className="flex items-center gap-2 flex-wrap shrink-0">
-                          {t.descriptor?.httpMethod && (
-                            <Badge className="bg-emerald-500/15 text-emerald-400 text-xs">
-                              {typeof t.descriptor.httpMethod === 'object' ? Object.keys(t.descriptor.httpMethod)[0] : t.descriptor.httpMethod}
-                            </Badge>
-                          )}
-                          {t.descriptor?.category && (
-                            <Badge variant="outline" className="text-xs">
-                              {typeof t.descriptor.category === 'object' ? Object.keys(t.descriptor.category)[0] : t.descriptor.category}
-                            </Badge>
-                          )}
-                          <span className="text-xs text-neutral-500 tabular-nums">
-                            {agentEscrows.reduce((s, e) => s + Number(e.totalCallsSettled), 0).toLocaleString()} calls settled
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                    {agentTools.map((t) => {
+                      const d = t.descriptor;
+                      const method = d?.httpMethod
+                        ? typeof d.httpMethod === 'object'
+                          ? Object.keys(d.httpMethod)[0]
+                          : String(d.httpMethod)
+                        : null;
+                      const cat = d?.category
+                        ? typeof d.category === 'object'
+                          ? Object.keys(d.category)[0]
+                          : String(d.category)
+                        : null;
+                      const calls = Number(d?.totalInvocations ?? 0);
+                      return (
+                        <ToolRow
+                          key={t.pda}
+                          pda={t.pda}
+                          toolName={d?.toolName ?? 'Unnamed'}
+                          httpMethod={method}
+                          category={cat}
+                          totalInvocations={calls}
+                          inscribedSchemaCount={t.inscribedSchemaCount ?? 0}
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -2653,23 +2659,70 @@ function AgentMetaplexTab({
                     </div>
                   </div>
 
-                  {n.agentIdentityUri && (
-                    <div className="rounded-md border border-neutral-800 bg-neutral-950/40 px-2.5 py-1.5 text-xs">
-                      <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-0.5">URI</div>
-                      <Link
-                        href={n.agentIdentityUri}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={n.agentIdentityUri}
+                  {n.agentIdentityUri && (() => {
+                    const uri = n.agentIdentityUri;
+                    const mismatch = !!expectedUrl && uri !== expectedUrl;
+                    return (
+                      <div
                         className={cn(
-                          'block truncate hover:underline',
-                          isCanonical ? 'text-amber-400' : 'text-neutral-400',
+                          'rounded-md border px-2.5 py-1.5 text-xs space-y-1',
+                          mismatch
+                            ? 'border-amber-500/40 bg-amber-950/20'
+                            : 'border-neutral-800 bg-neutral-950/40',
                         )}
                       >
-                        {n.agentIdentityUri}
-                      </Link>
-                    </div>
-                  )}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-600">
+                            On-chain plugin URI
+                          </span>
+                          {mismatch && (
+                            <span className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-[1px] text-[10px] uppercase tracking-wider text-amber-300">
+                              foreign PDA
+                            </span>
+                          )}
+                          {!mismatch && isCanonical && (
+                            <span className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-[1px] text-[10px] uppercase tracking-wider text-emerald-300">
+                              matches this agent
+                            </span>
+                          )}
+                        </div>
+                        <Link
+                          href={uri}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={uri}
+                          className={cn(
+                            'block truncate hover:underline',
+                            mismatch
+                              ? 'text-amber-300'
+                              : isCanonical
+                                ? 'text-amber-400'
+                                : 'text-neutral-400',
+                          )}
+                        >
+                          {uri}
+                        </Link>
+                        {mismatch && (
+                          <div className="space-y-1 pt-1">
+                            <p className="text-[10px] leading-relaxed text-amber-200/80">
+                              The plugin URI baked into this NFT points to a
+                              different SAP PDA. To bind it to this agent the
+                              owner must update the AgentIdentity plugin URI to:
+                            </p>
+                            <Link
+                              href={expectedUrl!}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={expectedUrl!}
+                              className="block truncate font-mono text-[11px] text-emerald-300 hover:underline"
+                            >
+                              {expectedUrl}
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* EIP-8004 JSON content (foreign or canonical) */}
                   {reg ? (() => {
