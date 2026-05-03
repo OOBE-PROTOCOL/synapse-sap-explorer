@@ -189,21 +189,30 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
         }
 
         let schemaStr: string;
-        if (compressionRaw === 1) {
-          try {
-            const zlib = await import('zlib');
-            schemaStr = zlib.inflateRawSync(rawData).toString('utf-8');
-          } catch {
-            schemaStr = rawData.toString('utf-8');
-          }
-        } else {
-          schemaStr = rawData.toString('utf-8');
-        }
+        let canonicalBytes: Buffer = rawData;
+        type Decoder = 'raw' | 'gzip' | 'deflateRaw' | 'deflate';
+        let decompressedFrom: Decoder | null = null;
 
-        let schemaJson: Record<string, unknown> | null = null;
-        try {
-          schemaJson = JSON.parse(schemaStr) as Record<string, unknown>;
-        } catch {}
+        // Try the declared compression first, then fall back through the
+        // common formats. Some publishers set compression=0 even when the
+        // payload is gzipped — be robust to that.
+        const zlib = await import('zlib');
+        const tryDecompress = (fn: () => Buffer): Buffer | null => {
+          try { return fn(); } catch { return null; }
+        };
+
+        const candidates: Array<{ kind: Decoder; bytes: Buffer | null }> = [];
+        if (compressionRaw === 1) {
+          candidates.push({ kind: 'deflateRaw', bytes: tryDecompress(() => zlib.inflateRawSync(rawData)) });
+          candidates.push({ kind: 'gzip',       bytes: tryDecompress(() => zlib.gunzipSync(rawData)) });
+          candidates.push({ kind: 'deflate',    bytes: tryDecompress(() => zlib.inflateSync(rawData)) });
+          candidates.push({ kind: 'raw',        bytes: rawData });
+        } else {
+          candidates.push({ kind: 'raw',        bytes: rawData });
+          candidates.push({ kind: 'gzip',       bytes: tryDecompress(() => zlib.gunzipSync(rawData)) });
+          candidates.push({ kind: 'deflateRaw', bytes: tryDecompress(() => zlib.inflateRawSync(rawData)) });
+          candidates.push({ kind: 'deflate',    bytes: tryDecompress(() => zlib.inflateSync(rawData)) });
+        }
 
         const hashData = data.schemaHash ?? data.schema_hash;
         let schemaHash = '';
@@ -217,11 +226,32 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
             .join('');
         }
 
+        // Pick the candidate that (a) parses as JSON OR (b) matches the
+        // on-chain hash. Prefer hash-match over JSON-parses.
+        let chosen: { kind: Decoder; bytes: Buffer; str: string; json: Record<string, unknown> | null; matches: boolean } | null = null;
+        for (const c of candidates) {
+          if (!c.bytes) continue;
+          const str = c.bytes.toString('utf-8');
+          let json: Record<string, unknown> | null = null;
+          try { json = JSON.parse(str) as Record<string, unknown>; } catch { /* not JSON */ }
+          const matches = !!schemaHash && createHash('sha256').update(c.bytes).digest('hex') === schemaHash;
+          if (matches) { chosen = { kind: c.kind, bytes: c.bytes, str, json, matches }; break; }
+          if (!chosen && json) chosen = { kind: c.kind, bytes: c.bytes, str, json, matches };
+        }
+        if (!chosen) {
+          // last resort: use raw bytes as utf-8 (will look garbled but at least we record the event)
+          chosen = { kind: 'raw', bytes: rawData, str: rawData.toString('utf-8'), json: null, matches: false };
+        }
+        canonicalBytes = chosen.bytes;
+        schemaStr = chosen.str;
+        const schemaJson = chosen.json;
+        decompressedFrom = chosen.kind;
+
         const agentPda = data.agent?.toBase58?.() ?? String(data.agent ?? '');
         const toolName: string = data.toolName ?? data.tool_name ?? '';
 
-        // SHA256 verification
-        const computedHash = createHash('sha256').update(rawData).digest('hex');
+        // SHA256 verification on the chosen (canonical) bytes.
+        const computedHash = createHash('sha256').update(canonicalBytes).digest('hex');
         const verified = !!(schemaHash && computedHash === schemaHash);
 
         schemas.push({
@@ -239,6 +269,14 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
           txSignature: batch[j].signature,
           blockTime: tx.blockTime ?? null,
         });
+        // log when we had to override the declared compression — surfaces
+        // publisher bugs without breaking decoding.
+        if ((compressionRaw === 1 && decompressedFrom === 'raw') ||
+            (compressionRaw === 0 && decompressedFrom !== 'raw')) {
+          console.warn(
+            `[tool-schemas] ${toolPda} type=${schemaType} declared compression=${compressionRaw} but decoded as ${decompressedFrom}`,
+          );
+        }
         foundTypes.add(schemaTypeRaw);
       }
     }
@@ -304,11 +342,13 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid PDA' }, { status: 400 });
     }
 
-    // DB cache (fast path)
+    // DB cache (fast path) — but skip when any row is unverified, so we
+    // re-decode with the latest decoder logic and overwrite the cache.
     if (!isDbDown()) {
       try {
         const dbSchemas = await selectToolSchemas(pda);
-        if (dbSchemas.length > 0) {
+        const allVerified = dbSchemas.length > 0 && dbSchemas.every((s) => s.verified);
+        if (allVerified) {
           const mapped = dbSchemas.map((s) => ({
             schemaType: s.schemaTypeLabel,
             schemaTypeRaw: s.schemaType,
