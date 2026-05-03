@@ -19,6 +19,7 @@ import {
   x402DirectPayments,
   agentMetaplex,
   agentLogos,
+  agentEnrichmentCache,
   apiKeys,
   apiRateWindows,
 } from '~/db/schema';
@@ -1133,6 +1134,42 @@ export async function upsertAgentLogo(data: typeof agentLogos.$inferInsert) {
         wellKnownLogo: data.wellKnownLogo ?? null,
         mplImage: data.mplImage ?? null,
         mplAsset: data.mplAsset ?? null,
+        refreshedAt: now,
+        updatedAt: now,
+      },
+    });
+}
+
+/* ── Agent enrichment cache ───────────────────── */
+
+export async function selectAgentEnrichment(wallet: string) {
+  const rows = await db
+    .select()
+    .from(agentEnrichmentCache)
+    .where(eq(agentEnrichmentCache.wallet, wallet))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function selectAgentEnrichmentBatch(wallets: string[]) {
+  if (wallets.length === 0) return [] as Array<typeof agentEnrichmentCache.$inferSelect>;
+  return db
+    .select()
+    .from(agentEnrichmentCache)
+    .where(inArray(agentEnrichmentCache.wallet, wallets));
+}
+
+export async function upsertAgentEnrichment(
+  data: typeof agentEnrichmentCache.$inferInsert,
+) {
+  const now = new Date();
+  return db
+    .insert(agentEnrichmentCache)
+    .values({ ...data, refreshedAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: agentEnrichmentCache.wallet,
+      set: {
+        data: data.data,
         refreshedAt: now,
         updatedAt: now,
       },

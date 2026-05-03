@@ -543,6 +543,22 @@ export const agentLogos = sapExpSchema.table('agent_logos', {
 });
 
 /* ═══════════════════════════════════════════════
+ * agent_enrichment_cache — Persistent SWR cache for /agents enriched view
+ * Backed by drizzle/009_agent_enrichment.sql.
+ *
+ * Stores the heavy enrichment slice (balances, well-known, metadata,
+ * staking, deployedTokenCount) per wallet so the listing serves
+ * instantly from Postgres and refreshes in background.
+ * ═══════════════════════════════════════════════ */
+
+export const agentEnrichmentCache = sapExpSchema.table('agent_enrichment_cache', {
+    wallet:        text('wallet').primaryKey(),
+    data:          jsonb('data').$type<unknown>().notNull(),
+    refreshedAt:   timestamp('refreshed_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt:     timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
  * api_keys / api_rate_windows — Public API auth + per-window rate limiting
  * Backed by drizzle/006_public_api_keys.sql (operator-applied migration).
  * ═══════════════════════════════════════════════ */

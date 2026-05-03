@@ -124,6 +124,42 @@ export function useEnrichedAgents() {
   return useFetch<EnrichedAgentsRes>('/api/sap/agents/enriched', { pollInterval: POLL.agents, keepStale: true });
 }
 
+/* ── Progressive listing (Solscan-style) ─────────────────
+ * useAgentList returns the lite, on-chain-only payload (~sub-second).
+ * useAgentEnrichment fetches the heavy slice for ONE wallet and is
+ * intended to be gated by an IntersectionObserver in the listing so
+ * each row only triggers its own enrichment when scrolled into view.
+ * ─────────────────────────────────────────────────────── */
+
+export type { AgentListResponse, AgentListItem } from '~/app/api/sap/agents/list/route';
+type AgentListRes = import('~/app/api/sap/agents/list/route').AgentListResponse;
+
+export function useAgentList() {
+  return useFetch<AgentListRes>('/api/sap/agents/list', {
+    pollInterval: POLL.agents,
+    keepStale: true,
+  });
+}
+
+export type { AgentEnrichResponse } from '~/app/api/sap/agents/[wallet]/enrich/route';
+type AgentEnrichRes = import('~/app/api/sap/agents/[wallet]/enrich/route').AgentEnrichResponse;
+
+/** Per-row enrichment. Pass `enabled=false` until the row is in view. */
+export function useAgentEnrichment(
+  wallet: string | null,
+  opts?: { enabled?: boolean; agentPda?: string | null; endpoint?: string | null; agentUri?: string | null },
+) {
+  const enabled = opts?.enabled !== false;
+  const qs = new URLSearchParams();
+  if (opts?.agentPda) qs.set('agentPda', opts.agentPda);
+  if (opts?.endpoint) qs.set('endpoint', opts.endpoint);
+  if (opts?.agentUri) qs.set('agentUri', opts.agentUri);
+  const url = wallet && enabled
+    ? `/api/sap/agents/${wallet}/enrich${qs.toString() ? '?' + qs.toString() : ''}`
+    : null;
+  return useFetch<AgentEnrichRes>(url, { keepStale: true });
+}
+
 export function useAgent(wallet: string | null) {
   const url = wallet ? `/api/sap/agents/${wallet}` : null;
   return useFetch<AgentProfileResponse>(url);
