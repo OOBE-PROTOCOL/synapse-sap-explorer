@@ -4,10 +4,11 @@
  * Resolution order (in this order, first non-empty wins for the
  * `displayLogo` accessor used by the avatar component):
  *
- *   1. `wellKnownLogo` — `<endpoint>/.well-known/agent.json`.logo
- *   2. `mplImage`      — image of the SAP-bound MPL Core asset, or the
+ *   1. `mplImage`      — image of the SAP-bound MPL Core asset (or the
  *                         first owned asset carrying an EIP-8004
- *                         AgentIdentity plugin.
+ *                         AgentIdentity plugin). Preferred because it is
+ *                         on-chain and immutable.
+ *   2. `wellKnownLogo` — `<endpoint>/.well-known/agent.json`.logo (HTTP).
  *
  * Why a dedicated store?
  *   The agents listing was re-scraping `.well-known/agent.json` and
@@ -53,7 +54,9 @@ const EMPTY_STALE_MS = 60_000;
 const inflight = new Map<string, Promise<AgentLogoSnapshot>>();
 
 function pickDisplayLogo(wk: string | null, mpl: string | null): string | null {
-  return wk ?? mpl ?? null;
+  // Prefer the on-chain MPL Core NFT image when present (immutable +
+  // verifiable). Fall back to the off-chain well-known logo otherwise.
+  return mpl ?? wk ?? null;
 }
 
 async function resolveLogos(

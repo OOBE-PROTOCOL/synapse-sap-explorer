@@ -68,22 +68,24 @@ function resolveFavicon(endpoint: string | null | undefined): string | null {
 }
 
 /**
- * Agent avatar: shows logo (well-known) > MPL Core NFT image > favicon (endpoint) > generative fallback.
- * Each tier independently tracks load errors so a broken upstream image
- * automatically demotes to the next source without flashing the
- * fallback letters.
+ * Agent avatar: prefers MPL Core NFT identity image (on-chain, immutable)
+ * over the off-chain `.well-known/agent.json` logo, then favicon, then a
+ * deterministic generative fallback. Each tier independently tracks load
+ * errors so a broken upstream image automatically demotes to the next
+ * source without flashing the fallback letters.
  */
 export function AgentAvatar({ name, endpoint, logo, mplImage, size = 48, className }: AgentAvatarProps) {
   const [logoError, setLogoError] = useState(false);
   const [mplError, setMplError] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
 
-  const logoUsable = logo && !logoError && !isPlaceholderLogo(logo);
   const mplUsable = mplImage && !mplError;
-  const logoUrl = logoUsable ? logo : null;
-  const mplUrl = !logoUrl && mplUsable ? mplImage : null;
-  const faviconUrl = !logoUrl && !mplUrl && !faviconError ? resolveFavicon(endpoint) : null;
-  const activeUrl = logoUrl ?? mplUrl ?? faviconUrl;
+  const logoUsable = logo && !logoError && !isPlaceholderLogo(logo);
+  // MPL NFT image first (on-chain identity), then well-known logo.
+  const mplUrl = mplUsable ? mplImage : null;
+  const logoUrl = !mplUrl && logoUsable ? logo : null;
+  const faviconUrl = !mplUrl && !logoUrl && !faviconError ? resolveFavicon(endpoint) : null;
+  const activeUrl = mplUrl ?? logoUrl ?? faviconUrl;
   const showImg = !!activeUrl;
 
   // Deterministic hue from name

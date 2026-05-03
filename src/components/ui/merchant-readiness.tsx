@@ -153,7 +153,6 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
             <li key={c.label} className="w-full min-w-0">
               <Tooltip>
                 <TooltipTrigger
-                  type="button"
                   className={cn(
                     'flex h-full w-full cursor-help items-center gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors',
                     c.info
