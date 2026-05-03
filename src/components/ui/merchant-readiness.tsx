@@ -162,6 +162,14 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
                         : 'border-amber-900/50 bg-amber-950/15 hover:border-amber-800/70',
                   )}
                 >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-medium leading-tight text-neutral-100">
+                      {c.label}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs leading-tight">
+                      {c.detail}
+                    </span>
+                  </span>
                   <span
                     className={cn(
                       'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
@@ -180,14 +188,6 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
                     ) : (
                       <X className="h-3 w-3" strokeWidth={3} />
                     )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-medium leading-tight text-neutral-100">
-                      {c.label}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs leading-tight">
-                      {c.detail}
-                    </span>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[280px] text-xs leading-relaxed">

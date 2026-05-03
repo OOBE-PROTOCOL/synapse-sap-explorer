@@ -491,18 +491,6 @@ function AgentCard({
           : 'border-border/30 hover:border-border/60 hover:shadow-[0_8px_40px_-12px_hsl(var(--glow)/0.08)]',
         'h-full flex flex-col',
       )}>
-        {/* Gold corner ribbon — only when on Metaplex. Subtle, top-right. */}
-        {onMetaplex && (
-          <span
-            aria-hidden
-            className={cn(
-              'pointer-events-none absolute -top-px -right-px h-12 w-12 rounded-bl-[28px]',
-              metaplexVerified
-                ? 'bg-gradient-to-bl from-amber-300/30 via-amber-400/10 to-transparent'
-                : 'bg-gradient-to-bl from-amber-500/18 via-amber-500/6 to-transparent',
-            )}
-          />
-        )}
         {/* ────────────── HEADER ────────────── */}
         <div className="p-4 sm:p-6 pb-0">
           <div className="flex items-start gap-3 sm:gap-4">
