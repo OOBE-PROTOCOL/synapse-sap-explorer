@@ -188,10 +188,7 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
           continue;
         }
 
-        let schemaStr: string;
-        let canonicalBytes: Buffer = rawData;
         type Decoder = 'raw' | 'gzip' | 'deflateRaw' | 'deflate';
-        let decompressedFrom: Decoder | null = null;
 
         // Try the declared compression first, then fall back through the
         // common formats. Some publishers set compression=0 even when the
@@ -242,10 +239,10 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
           // last resort: use raw bytes as utf-8 (will look garbled but at least we record the event)
           chosen = { kind: 'raw', bytes: rawData, str: rawData.toString('utf-8'), json: null, matches: false };
         }
-        canonicalBytes = chosen.bytes;
-        schemaStr = chosen.str;
+        const canonicalBytes: Buffer = chosen.bytes;
+        const schemaStr: string = chosen.str;
         const schemaJson = chosen.json;
-        decompressedFrom = chosen.kind;
+        const decompressedFrom: Decoder = chosen.kind;
 
         const agentPda = data.agent?.toBase58?.() ?? String(data.agent ?? '');
         const toolName: string = data.toolName ?? data.tool_name ?? '';
