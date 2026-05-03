@@ -190,7 +190,7 @@ function parseLogsForInscriptions(
     }
 
     for (const ev of events) {
-      if (ev.name === 'MemoryInscribedEvent') {
+      if (ev.name === 'MemoryInscribedEvent' || ev.name === 'memoryInscribedEvent') {
         const d = ev.data as Record<string, unknown>;
         inscriptions.push({
           txSignature: tx.signature,
@@ -210,7 +210,7 @@ function parseLogsForInscriptions(
           vault: (d.vault as { toBase58?: () => string })?.toBase58?.() ?? String(d.vault ?? ''),
           session: (d.session as { toBase58?: () => string })?.toBase58?.() ?? String(d.session ?? ''),
         });
-      } else if (ev.name === 'LedgerEntryEvent') {
+      } else if (ev.name === 'LedgerEntryEvent' || ev.name === 'ledgerEntryEvent') {
         const d = ev.data as Record<string, unknown>;
         ledgerEntries.push({
           txSignature: tx.signature,

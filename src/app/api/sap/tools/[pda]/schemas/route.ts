@@ -158,7 +158,7 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
         }
 
         const schemaEvents = events.filter(
-          (e) => e.name === 'ToolSchemaInscribedEvent',
+          (e) => e.name === 'toolSchemaInscribedEvent' || e.name === 'ToolSchemaInscribedEvent',
         );
 
         for (const event of schemaEvents) {

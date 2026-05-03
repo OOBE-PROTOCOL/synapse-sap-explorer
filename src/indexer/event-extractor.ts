@@ -102,12 +102,19 @@ export async function extractAndInsertEvents(
 
 const TOOL_EVENT_MAP: Record<string, string> = {
   ToolPublishedEvent:          'ToolPublished',
+  toolPublishedEvent:          'ToolPublished',
   ToolUpdatedEvent:            'ToolUpdated',
+  toolUpdatedEvent:            'ToolUpdated',
   ToolDeactivatedEvent:        'ToolDeactivated',
+  toolDeactivatedEvent:        'ToolDeactivated',
   ToolReactivatedEvent:        'ToolReactivated',
+  toolReactivatedEvent:        'ToolReactivated',
   ToolClosedEvent:             'ToolClosed',
+  toolClosedEvent:             'ToolClosed',
   ToolSchemaInscribedEvent:    'ToolSchemaInscribed',
+  toolSchemaInscribedEvent:    'ToolSchemaInscribed',
   ToolInvocationReportedEvent: 'ToolInvocationReported',
+  toolInvocationReportedEvent: 'ToolInvocationReported',
 };
 
 const SCHEMA_TYPE_LABELS: Record<number, string> = { 0: 'input', 1: 'output', 2: 'description' };
@@ -164,7 +171,7 @@ async function extractToolEvent(
   }
 
   // For ToolSchemaInscribedEvent, also insert into tool_schemas
-  if (event.name === 'ToolSchemaInscribedEvent') {
+  if (event.name === 'ToolSchemaInscribedEvent' || event.name === 'toolSchemaInscribedEvent') {
     await extractToolSchema(pool, rawData, toolPda, agentPda, txSignature, bt, toolName);
   }
 }

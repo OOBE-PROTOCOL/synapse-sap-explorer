@@ -157,7 +157,7 @@ async function extractAndStoreEvents() {
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const isBatch = evt.name === 'BatchSettledEvent';
+      const isBatch = evt.name === 'BatchSettledEvent' || evt.name === 'batchSettledEvent';
       const { balanceBefore, balanceAfter, amountChanged } = deriveBalances(evt.name, d);
 
       events.push({
