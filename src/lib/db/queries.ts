@@ -1138,36 +1138,3 @@ export async function upsertAgentLogo(data: typeof agentLogos.$inferInsert) {
       },
     });
 }
-
-/* ── Agent Logos ─────────────────────────────── */
-
-export async function selectAgentLogo(wallet: string) {
-  const rows = await db
-    .select()
-    .from(agentLogos)
-    .where(eq(agentLogos.wallet, wallet))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-export async function selectAgentLogosBatch(wallets: string[]) {
-  if (wallets.length === 0) return [] as Array<typeof agentLogos.$inferSelect>;
-  return db.select().from(agentLogos).where(inArray(agentLogos.wallet, wallets));
-}
-
-export async function upsertAgentLogo(data: typeof agentLogos.$inferInsert) {
-  const now = new Date();
-  return db
-    .insert(agentLogos)
-    .values({ ...data, refreshedAt: now, updatedAt: now })
-    .onConflictDoUpdate({
-      target: agentLogos.wallet,
-      set: {
-        wellKnownLogo: data.wellKnownLogo ?? null,
-        mplImage: data.mplImage ?? null,
-        mplAsset: data.mplAsset ?? null,
-        refreshedAt: now,
-        updatedAt: now,
-      },
-    });
-}
