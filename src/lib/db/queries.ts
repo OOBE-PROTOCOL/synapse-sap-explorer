@@ -1008,36 +1008,6 @@ export async function selectToolSchemaCounts() {
     .groupBy(toolSchemas.toolPda);
 }
 
-/**
- * Insert decoded inscribed schemas for a tool. Idempotent on
- * (tool_pda, schema_type, version): repeated inscriptions of the
- * same logical schema are deduplicated by replacing the row.
- */
-export async function upsertToolSchemas(
-  rows: Array<typeof toolSchemas.$inferInsert>,
-) {
-  if (rows.length === 0) return;
-  // tool_schemas has no compound unique constraint, so the safest
-  // idempotent path is delete-then-insert per (tool, type, version)
-  // group. We batch deletes into a single OR clause where possible.
-  for (const row of rows) {
-    try {
-      await db
-        .delete(toolSchemas)
-        .where(
-          and(
-            eq(toolSchemas.toolPda, row.toolPda),
-            eq(toolSchemas.schemaType, row.schemaType),
-            eq(toolSchemas.version, row.version ?? 0),
-          ),
-        );
-      await db.insert(toolSchemas).values(row);
-    } catch {
-      // best-effort persistence
-    }
-  }
-}
-
 export async function upsertToolSchema(data: typeof toolSchemas.$inferInsert) {
   // Unique on (tool_pda, schema_type, version)
   try {
