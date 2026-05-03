@@ -146,11 +146,11 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
         </div>
 
         <ul
-          className="grid list-none grid-cols-2 gap-2 p-0"
+          className="grid w-full list-none grid-cols-2 gap-2 p-0"
           aria-label="Merchant requirements"
         >
           {checks.map((c) => (
-            <li key={c.label} className="min-w-0">
+            <li key={c.label} className="min-w-0 w-full">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div
