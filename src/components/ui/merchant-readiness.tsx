@@ -150,49 +150,48 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
           aria-label="Merchant requirements"
         >
           {checks.map((c) => (
-            <li key={c.label} className="min-w-0 w-full">
+            <li key={c.label} className="w-full min-w-0">
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
+                <TooltipTrigger
+                  type="button"
+                  className={cn(
+                    'flex h-full w-full cursor-help items-center gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors',
+                    c.info
+                      ? 'border-neutral-800/70 bg-neutral-950/40 hover:border-neutral-700'
+                      : c.ok
+                        ? 'border-emerald-900/50 bg-emerald-950/15 hover:border-emerald-800/70'
+                        : 'border-amber-900/50 bg-amber-950/15 hover:border-amber-800/70',
+                  )}
+                >
+                  <span
                     className={cn(
-                      'flex h-full w-full cursor-help items-center gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors',
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
                       c.info
-                        ? 'border-neutral-800/70 bg-neutral-950/40 hover:border-neutral-700'
+                        ? 'bg-neutral-800 text-neutral-400'
                         : c.ok
-                          ? 'border-emerald-900/50 bg-emerald-950/15 hover:border-emerald-800/70'
-                          : 'border-amber-900/50 bg-amber-950/15 hover:border-amber-800/70',
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-amber-500/20 text-amber-400',
                     )}
+                    aria-hidden
                   >
-                    <span
-                      className={cn(
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
-                        c.info
-                          ? 'bg-neutral-800 text-neutral-400'
-                          : c.ok
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-amber-500/20 text-amber-400',
-                      )}
-                      aria-hidden
-                    >
-                      {c.info ? (
-                        <Info className="h-3 w-3" strokeWidth={2.5} />
-                      ) : c.ok ? (
-                        <Check className="h-3 w-3" strokeWidth={3} />
-                      ) : (
-                        <X className="h-3 w-3" strokeWidth={3} />
-                      )}
+                    {c.info ? (
+                      <Info className="h-3 w-3" strokeWidth={2.5} />
+                    ) : c.ok ? (
+                      <Check className="h-3 w-3" strokeWidth={3} />
+                    ) : (
+                      <X className="h-3 w-3" strokeWidth={3} />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-medium leading-tight text-neutral-100">
+                      {c.label}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[12px] font-medium leading-tight text-neutral-100">
-                        {c.label}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[11px] leading-tight">
-                        {c.detail}
-                      </span>
+                    <span className="mt-0.5 block truncate text-xs leading-tight">
+                      {c.detail}
                     </span>
-                  </div>
+                  </span>
                 </TooltipTrigger>
-                <TooltipContent className="max-w-[280px] text-[11px] leading-relaxed">
+                <TooltipContent className="max-w-[280px] text-xs leading-relaxed">
                   {c.hint}
                 </TooltipContent>
               </Tooltip>
