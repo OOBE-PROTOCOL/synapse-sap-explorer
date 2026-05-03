@@ -18,6 +18,7 @@ import {
 } from '@metaplex-foundation/genesis';
 import { toWeb3JsTransaction } from '@metaplex-foundation/umi-web3js-adapters';
 import { getRpcConfig } from '~/lib/sap/discovery';
+import { env } from '~/lib/env';
 
 /**
  * Build an unsigned `swapBondingCurveV2` transaction for the requested
@@ -80,7 +81,7 @@ export async function POST(
         : '0';
 
     const { url } = getRpcConfig();
-    const umi = createUmi(url).use(genesis());
+    const umi = createUmi(url, { httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY } }).use(genesis());
     const traderPk = publicKey(body.trader);
     umi.identity = createNoopSigner(traderPk);
     umi.payer = umi.identity;

@@ -22,6 +22,7 @@ import {
   getGenesisAccountV1GpaBuilder,
 } from '@metaplex-foundation/genesis';
 import { getRpcConfig } from '~/lib/sap/discovery';
+import { env } from '~/lib/env';
 
 export interface GenesisAccountOnchain {
   address: string;
@@ -47,7 +48,7 @@ let _umi: ReturnType<typeof createUmi> | null = null;
 function getUmi() {
   if (_umi) return _umi;
   const { url } = getRpcConfig();
-  _umi = createUmi(url).use(genesis());
+  _umi = createUmi(url, { httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY } }).use(genesis());
   return _umi;
 }
 

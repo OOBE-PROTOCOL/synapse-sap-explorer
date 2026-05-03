@@ -17,6 +17,7 @@ import {
   getFillPercentage,
 } from '@metaplex-foundation/genesis';
 import { getRpcConfig } from '~/lib/sap/discovery';
+import { env } from '~/lib/env';
 
 /**
  * POST /api/market/genesis-quote/[genesis]
@@ -82,7 +83,7 @@ export async function POST(
     }
 
     const { url } = getRpcConfig();
-    const umi = createUmi(url).use(genesis());
+    const umi = createUmi(url, { httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY } }).use(genesis());
 
     const genesisPk = publicKey(genesisAddress);
     const account = await safeFetchGenesisAccountV2(umi, genesisPk);
