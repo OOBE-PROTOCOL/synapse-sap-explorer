@@ -41,6 +41,9 @@ export function ToolRow({
   const { data, loading, error } = useToolSchemas(open ? pda : null);
 
   const schemas: InscribedSchema[] = data?.schemas ?? [];
+  const expectedTypes: number[] = (data as { expectedTypes?: number[] } | null)?.expectedTypes ?? [];
+  const scanned = (data as { scannedSignatures?: number } | null)?.scannedSignatures ?? 0;
+  const reachedCap = (data as { reachedCap?: boolean } | null)?.reachedCap ?? false;
   const sorted = [...schemas].sort(
     (a, b) => (TYPE_ORDER[a.schemaType] ?? 99) - (TYPE_ORDER[b.schemaType] ?? 99),
   );
@@ -102,10 +105,31 @@ export function ToolRow({
           )}
 
           {!loading && !error && sorted.length === 0 && (
-            <p className="py-4 text-xs text-neutral-500">
-              No inscribed schemas found on-chain. The tool may use only{' '}
-              <code className="text-neutral-400">schemaUri</code> off-chain.
-            </p>
+            <div className="py-4 text-xs text-neutral-500 space-y-1">
+              {expectedTypes.length === 0 ? (
+                <p>
+                  This tool was published without inscribing any JSON schema on-chain
+                  (all <code className="text-neutral-400">schemaHash</code> fields are zero).
+                </p>
+              ) : reachedCap ? (
+                <>
+                  <p className="text-amber-400">
+                    Scanned {scanned.toLocaleString()} most recent transactions
+                    without finding the inscription. Inscriptions are emitted at
+                    publish time and may be older than our scan window.
+                  </p>
+                  <p>
+                    The tool declares {expectedTypes.length} schema slot{expectedTypes.length === 1 ? '' : 's'} on-chain
+                    — hashes are present but the original inscription tx is out of reach.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  No <code className="text-neutral-400">ToolSchemaInscribedEvent</code>{' '}
+                  found across {scanned.toLocaleString()} transactions for this tool PDA.
+                </p>
+              )}
+            </div>
           )}
 
           {!loading && sorted.length > 0 && (

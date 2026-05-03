@@ -5,7 +5,7 @@ import { PublicKey } from '@solana/web3.js';
 import { createHash } from 'crypto';
 import { getSapClient, getSynapseConnection, getRpcConfig } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
-import { selectToolSchemas } from '~/lib/db/queries';
+import { selectToolSchemas, upsertToolSchemas } from '~/lib/db/queries';
 import { isDbDown } from '~/db';
 import { rawGetTransaction } from '~/lib/rpc';
 import type { InscribedSchema } from '~/types';
@@ -16,71 +16,157 @@ const SCHEMA_TYPE_LABELS: Record<number, string> = {
   2: 'description',
 };
 
-async function fetchToolSchemas(toolPda: string): Promise<InscribedSchema[]> {
+/**
+ * Result of a scan attempt. `expectedTypes` reflects which schema slots
+ * the on-chain ToolDescriptor declares (non-zero hashes); the UI uses it
+ * to differentiate "tool published no schema" from "we scanned but
+ * inscription tx is older than our pagination cap".
+ */
+type ScanResult = {
+  schemas: InscribedSchema[];
+  expectedTypes: number[];
+  scannedSignatures: number;
+  reachedCap: boolean;
+};
+
+/**
+ * Hard cap on signature pagination per request. Inscriptions are emitted
+ * once at publish (and again on each `inscribeSchema` update) — they live
+ * forever in tx history. Active tools accumulate thousands of invocations,
+ * so we may need to paginate deep on the cold path. Persistence to DB
+ * makes this a one-time cost per (tool, version).
+ */
+const SIG_PAGE_SIZE = 100;
+const MAX_SIG_PAGES = 10; // up to 1000 most-recent sigs
+
+/** Fetch the on-chain ToolDescriptor for a tool PDA. */
+async function fetchToolDescriptor(toolPda: string): Promise<{
+  agent: string;
+  toolName: string;
+  version: number;
+  hasInputSchema: boolean;
+  hasOutputSchema: boolean;
+  hasDescription: boolean;
+} | null> {
+  try {
+    const sap = getSapClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const program = (sap as any).program;
+    if (!program?.account?.toolDescriptor) return null;
+    const acct = await program.account.toolDescriptor.fetchNullable(
+      new PublicKey(toolPda),
+    );
+    if (!acct) return null;
+    const nonZero = (arr: unknown): boolean =>
+      Array.isArray(arr) && arr.some((b: number) => b !== 0);
+    return {
+      agent: acct.agent.toBase58(),
+      toolName: String(acct.toolName ?? ''),
+      version: Number(acct.version ?? 0),
+      hasInputSchema: nonZero(acct.inputSchemaHash),
+      hasOutputSchema: nonZero(acct.outputSchemaHash),
+      hasDescription: nonZero(acct.descriptionHash),
+    };
+  } catch (e) {
+    console.warn('[tool-schemas] fetchToolDescriptor failed', (e as Error).message);
+    return null;
+  }
+}
+
+async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
   const conn = getSynapseConnection();
   const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
 
   const sap = getSapClient();
   const eventParser = sap.events;
 
-  let signatures: Array<{ signature: string }> = [];
-  try {
-    signatures = await conn.getSignaturesForAddress(
-      new PublicKey(toolPda),
-      { limit: 25 },
-    );
-  } catch (e: unknown) {
-    const msg = (e as Error)?.message ?? '';
-    // Some RPC providers occasionally throw StructError on this call.
-    if (msg.includes('StructError') || msg.includes('Expected the value to satisfy a union')) {
-      console.warn('[tool-schemas] getSignaturesForAddress struct validation failed, returning empty schemas');
-      return [];
-    }
-    throw e;
+  // Step 1: read the descriptor to know whether schemas are even expected.
+  // If all schema hashes are zero, scanning sigs is pure waste.
+  const descriptor = await fetchToolDescriptor(toolPda);
+  const expectedTypes: number[] = [];
+  if (descriptor) {
+    if (descriptor.hasInputSchema) expectedTypes.push(0);
+    if (descriptor.hasOutputSchema) expectedTypes.push(1);
+    if (descriptor.hasDescription) expectedTypes.push(2);
+  } else {
+    // No descriptor reachable — be conservative: scan but don't paginate deep.
+    expectedTypes.push(0, 1, 2);
   }
 
+  if (expectedTypes.length === 0) {
+    return { schemas: [], expectedTypes: [], scannedSignatures: 0, reachedCap: false };
+  }
+
+  const expectedSet = new Set(expectedTypes);
+
+  // Step 2: paginate getSignaturesForAddress backward until we collect
+  // all expected schema types or hit the page cap. Inscriptions live
+  // forever in tx history; active tools accumulate thousands of
+  // invocations, so deep pagination on the cold path is necessary.
+  // Persistence to DB makes this a one-time cost.
   const schemas: InscribedSchema[] = [];
   const foundTypes = new Set<number>();
+  let before: string | undefined;
+  let scanned = 0;
+  let pages = 0;
 
-  // Process in batches of 10
-  const BATCH = 10;
-  for (let i = 0; i < signatures.length; i += BATCH) {
-    const batch = signatures.slice(i, i + BATCH);
-    const results = await Promise.allSettled(
-      batch.map((sig) => rawGetTransaction(sig.signature, rpcUrl, rpcHeaders)),
-    );
-
-    for (let j = 0; j < results.length; j++) {
-      const r = results[j];
-      if (r.status !== 'fulfilled' || !r.value) continue;
-
-      const tx = r.value;
-      const meta = tx.meta;
-      if (!meta) continue;
-
-      if (meta.err) continue;
-
-      const logMessages: string[] = meta.logMessages ?? [];
-      if (logMessages.length === 0) continue;
-
-      let events: Array<{ name: string; data: Record<string, unknown> }>;
-      try {
-        events = eventParser.parseLogs(logMessages);
-      } catch {
-        continue;
+  outer: while (pages < MAX_SIG_PAGES) {
+    pages++;
+    let signatures: Array<{ signature: string }> = [];
+    try {
+      signatures = await conn.getSignaturesForAddress(
+        new PublicKey(toolPda),
+        { limit: SIG_PAGE_SIZE, before },
+      );
+    } catch (e: unknown) {
+      const msg = (e as Error)?.message ?? '';
+      if (msg.includes('StructError') || msg.includes('Expected the value to satisfy a union')) {
+        console.warn('[tool-schemas] getSignaturesForAddress struct validation failed');
+        break;
       }
+      throw e;
+    }
+    if (signatures.length === 0) break;
+    scanned += signatures.length;
+    before = signatures[signatures.length - 1].signature;
 
-      const schemaEvents = events.filter(
-        (e) => e.name === 'ToolSchemaInscribedEvent',
+    // Process page in batches of 10 parallel TX fetches.
+    const BATCH = 10;
+    for (let i = 0; i < signatures.length; i += BATCH) {
+      const batch = signatures.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map((sig) => rawGetTransaction(sig.signature, rpcUrl, rpcHeaders)),
       );
 
-      for (const event of schemaEvents) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = event.data as Record<string, any>;
+      for (let j = 0; j < results.length; j++) {
+        const r = results[j];
+        if (r.status !== 'fulfilled' || !r.value) continue;
 
-        // Verify event is for our tool PDA
-        const eventToolPda: string = data.tool?.toBase58?.() ?? String(data.tool ?? '');
-        if (eventToolPda && eventToolPda !== toolPda) continue;
+        const tx = r.value;
+        const meta = tx.meta;
+        if (!meta) continue;
+        if (meta.err) continue;
+
+        const logMessages: string[] = meta.logMessages ?? [];
+        if (logMessages.length === 0) continue;
+
+        let events: Array<{ name: string; data: Record<string, unknown> }>;
+        try {
+          events = eventParser.parseLogs(logMessages);
+        } catch {
+          continue;
+        }
+
+        const schemaEvents = events.filter(
+          (e) => e.name === 'ToolSchemaInscribedEvent',
+        );
+
+        for (const event of schemaEvents) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const data = event.data as Record<string, any>;
+
+          const eventToolPda: string = data.tool?.toBase58?.() ?? String(data.tool ?? '');
+          if (eventToolPda && eventToolPda !== toolPda) continue;
 
         const schemaTypeRaw = Number(data.schemaType ?? data.schema_type ?? 0);
         const schemaType = SCHEMA_TYPE_LABELS[schemaTypeRaw] ?? `unknown(${schemaTypeRaw})`;
@@ -157,14 +243,51 @@ async function fetchToolSchemas(toolPda: string): Promise<InscribedSchema[]> {
       }
     }
 
-    // Early exit: stop scanning once we've found all 3 schema types
-    if (foundTypes.size >= 3) break;
+      // Early exit: stop once we've found every expected schema type.
+      if (expectedSet.size > 0 && [...expectedSet].every((t) => foundTypes.has(t))) {
+        break outer;
+      }
+    }
+
+    // RPC returned a partial page → no more history available.
+    if (signatures.length < SIG_PAGE_SIZE) break;
   }
+
+  const reachedCap =
+    pages >= MAX_SIG_PAGES &&
+    expectedSet.size > 0 &&
+    ![...expectedSet].every((t) => foundTypes.has(t));
 
   // Sort: most recent first
   schemas.sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
 
-  return schemas;
+  // Step 3: persist to DB so subsequent calls are instant.
+  if (!isDbDown() && schemas.length > 0) {
+    try {
+      await upsertToolSchemas(
+        schemas.map((s) => ({
+          toolPda,
+          agentPda: s.agent || (descriptor?.agent ?? ''),
+          txSignature: s.txSignature,
+          schemaType: s.schemaTypeRaw,
+          schemaTypeLabel: s.schemaType,
+          schemaData: s.schemaData,
+          schemaJson: s.schemaJson,
+          schemaHash: s.schemaHash,
+          computedHash: s.computedHash,
+          verified: s.verified,
+          compression: s.compression,
+          version: s.version,
+          toolName: s.toolName || (descriptor?.toolName ?? null),
+          blockTime: s.blockTime ? new Date(s.blockTime * 1000) : null,
+        })),
+      );
+    } catch (e) {
+      console.warn('[tool-schemas] persist failed', (e as Error).message);
+    }
+  }
+
+  return { schemas, expectedTypes, scannedSignatures: scanned, reachedCap };
 }
 
 export async function GET(
@@ -209,9 +332,9 @@ export async function GET(
     }
 
     // RPC fetch (cold path)
-    let schemas: InscribedSchema[] = [];
+    let result: ScanResult = { schemas: [], expectedTypes: [], scannedSignatures: 0, reachedCap: false };
     try {
-      schemas = await swr(
+      result = await swr(
         `tool-schemas:${pda}`,
         () => fetchToolSchemas(pda),
         { ttl: 60_000, swr: 300_000 }, // 1min fresh, 5min stale
@@ -224,7 +347,14 @@ export async function GET(
       throw e;
     }
 
-    return NextResponse.json({ schemas, total: schemas.length });
+    return NextResponse.json({
+      schemas: result.schemas,
+      total: result.schemas.length,
+      expectedTypes: result.expectedTypes,
+      scannedSignatures: result.scannedSignatures,
+      reachedCap: result.reachedCap,
+      source: 'rpc',
+    });
   } catch (err: unknown) {
     console.error('[tool-schemas]', err);
     return NextResponse.json(

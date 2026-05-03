@@ -511,7 +511,8 @@ function AgentCard({
               <AgentAvatar
                 name={id.name}
                 endpoint={id.x402Endpoint}
-                logo={wellKnown?.logo}
+                logo={data.logos?.wellKnownLogo ?? wellKnown?.logo ?? null}
+                mplImage={data.logos?.mplImage ?? null}
                 size={48}
               />
               {/* Metaplex verification mark — overlay on avatar (bottom-right),
@@ -791,7 +792,13 @@ function AgentListRow({
           <div className="flex items-start gap-3">
             <span className="mt-1 w-6 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground/35">{index}</span>
 
-            <AgentAvatar name={id.name} endpoint={id.x402Endpoint} logo={wellKnown?.logo} size={40} />
+            <AgentAvatar
+              name={id.name}
+              endpoint={id.x402Endpoint}
+              logo={data.logos?.wellKnownLogo ?? wellKnown?.logo ?? null}
+              mplImage={data.logos?.mplImage ?? null}
+              size={40}
+            />
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5">

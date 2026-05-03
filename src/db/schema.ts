@@ -529,6 +529,20 @@ export const agentMetaplex = sapExpSchema.table('agent_metaplex', {
 });
 
 /* ═══════════════════════════════════════════════
+ * agent_logos — Persistent cache for resolved agent logo URLs
+ * Backed by drizzle/008_agent_logos.sql.
+ * ═══════════════════════════════════════════════ */
+
+export const agentLogos = sapExpSchema.table('agent_logos', {
+    wallet:         text('wallet').primaryKey(),
+    wellKnownLogo:  text('well_known_logo'),
+    mplImage:       text('mpl_image'),
+    mplAsset:       text('mpl_asset'),
+    refreshedAt:    timestamp('refreshed_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt:      timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
  * api_keys / api_rate_windows — Public API auth + per-window rate limiting
  * Backed by drizzle/006_public_api_keys.sql (operator-applied migration).
  * ═══════════════════════════════════════════════ */

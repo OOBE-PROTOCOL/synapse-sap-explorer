@@ -12,6 +12,7 @@ import {
 import { fetchAgentWellKnownBatch, type AgentWellKnown } from '~/lib/sap/well-known';
 import { resolveTokens } from '~/lib/sap/token-metadata';
 import { getCachedAgentMetaplexBatch } from '~/lib/sap/metaplex-snapshot-store';
+import { getCachedAgentLogosBatch, type AgentLogoSnapshot } from '~/lib/sap/agent-logo-store';
 import { swr, peek } from '~/lib/cache';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
 
@@ -68,6 +69,12 @@ export interface EnrichedAgent {
   staking: AgentStakeSummary | null;
   /** Metaplex Core link snapshot (SDK 0.9.0). Null when discovery fails. */
   metaplex: AgentMetaplexBadge | null;
+  /**
+   * Persisted visual identity for this agent (well-known logo + MPL Core
+   * NFT image). Resolved once and cached in `agent_logos`; the listing
+   * picks `displayLogo` first then falls back to favicon/initials.
+   */
+  logos: AgentLogoSnapshot | null;
 }
 
 /** Compact MPL Core link summary for list/card surfaces. */
@@ -245,7 +252,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     const wallets = agents.map((a) => a.identity?.wallet).filter(Boolean) as string[];
 
     // Fetch well-known, metadata, raw balances, on-chain tools, and staking in parallel
-    const [wellKnownMap, allTools, stakingResults, metaplexBadgeMap, ...rest] = await Promise.all([
+    const [wellKnownMap, allTools, stakingResults, metaplexBadgeMap, logosMap, ...rest] = await Promise.all([
       fetchAgentWellKnownBatch(endpoints),
       findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
       // Batch fetch staking for all agents
@@ -275,6 +282,16 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
       // instantly from `agent_metaplex` table; cold wallets block on a
       // single resolution call, then are persisted forever.
       getCachedAgentMetaplexBatch(wallets),
+      // DB-backed agent logo cache. Same SWR pattern: serves persisted
+      // well-known + MPL image URLs instantly, refreshes in background.
+      getCachedAgentLogosBatch(
+        agents
+          .filter((a) => a.identity?.wallet)
+          .map((a) => ({
+            wallet: a.identity!.wallet,
+            endpoint: a.identity?.x402Endpoint ?? null,
+          })),
+      ),
       ...agentUris.map((uri) => fetchAgentMetadata(uri)),
       ...wallets.map((w) => fetchRawBalances(w)),
     ]);
@@ -360,6 +377,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
           const badge = metaplexBadgeMap.get(wallet);
           return badge ?? null;
         })(),
+        logos: wallet ? (logosMap.get(wallet) ?? null) : null,
       };
     });
 

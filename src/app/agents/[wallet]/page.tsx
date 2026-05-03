@@ -733,7 +733,7 @@ function AgentDetailInner() {
 
             {/* Staking summary */}
             {stakingData && stakingData.stakedSol > 0 && (
-              <div className="px-5 py-4 border-b border-neutral-800/60">
+              <div className="px-5 py-4 w-full border-b border-neutral-800/60">
                 <SectionLabel>Stake</SectionLabel>
                 <div className="mt-2 divide-y divide-neutral-800/60">
                   <DetailRow

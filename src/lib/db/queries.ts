@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, count } from 'drizzle-orm';
+import { eq, desc, sql, and, count, inArray } from 'drizzle-orm';
 import { db } from '~/db';
 import {
   agents,
@@ -18,6 +18,7 @@ import {
   settlementLedger,
   x402DirectPayments,
   agentMetaplex,
+  agentLogos,
   apiKeys,
   apiRateWindows,
 } from '~/db/schema';
@@ -1007,6 +1008,36 @@ export async function selectToolSchemaCounts() {
     .groupBy(toolSchemas.toolPda);
 }
 
+/**
+ * Insert decoded inscribed schemas for a tool. Idempotent on
+ * (tool_pda, schema_type, version): repeated inscriptions of the
+ * same logical schema are deduplicated by replacing the row.
+ */
+export async function upsertToolSchemas(
+  rows: Array<typeof toolSchemas.$inferInsert>,
+) {
+  if (rows.length === 0) return;
+  // tool_schemas has no compound unique constraint, so the safest
+  // idempotent path is delete-then-insert per (tool, type, version)
+  // group. We batch deletes into a single OR clause where possible.
+  for (const row of rows) {
+    try {
+      await db
+        .delete(toolSchemas)
+        .where(
+          and(
+            eq(toolSchemas.toolPda, row.toolPda),
+            eq(toolSchemas.schemaType, row.schemaType),
+            eq(toolSchemas.version, row.version ?? 0),
+          ),
+        );
+      await db.insert(toolSchemas).values(row);
+    } catch {
+      // best-effort persistence
+    }
+  }
+}
+
 export async function upsertToolSchema(data: typeof toolSchemas.$inferInsert) {
   // Unique on (tool_pda, schema_type, version)
   try {
@@ -1099,6 +1130,72 @@ export async function upsertAgentMetaplex(data: typeof agentMetaplex.$inferInser
         registryAgents: data.registryAgents ?? [],
         source: data.source ?? 'unknown',
         error: data.error ?? null,
+        refreshedAt: now,
+        updatedAt: now,
+      },
+    });
+}
+
+/* ── Agent Logos ─────────────────────────────── */
+
+export async function selectAgentLogo(wallet: string) {
+  const rows = await db
+    .select()
+    .from(agentLogos)
+    .where(eq(agentLogos.wallet, wallet))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function selectAgentLogosBatch(wallets: string[]) {
+  if (wallets.length === 0) return [] as Array<typeof agentLogos.$inferSelect>;
+  return db.select().from(agentLogos).where(inArray(agentLogos.wallet, wallets));
+}
+
+export async function upsertAgentLogo(data: typeof agentLogos.$inferInsert) {
+  const now = new Date();
+  return db
+    .insert(agentLogos)
+    .values({ ...data, refreshedAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: agentLogos.wallet,
+      set: {
+        wellKnownLogo: data.wellKnownLogo ?? null,
+        mplImage: data.mplImage ?? null,
+        mplAsset: data.mplAsset ?? null,
+        refreshedAt: now,
+        updatedAt: now,
+      },
+    });
+}
+
+/* ── Agent Logos ─────────────────────────────── */
+
+export async function selectAgentLogo(wallet: string) {
+  const rows = await db
+    .select()
+    .from(agentLogos)
+    .where(eq(agentLogos.wallet, wallet))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function selectAgentLogosBatch(wallets: string[]) {
+  if (wallets.length === 0) return [] as Array<typeof agentLogos.$inferSelect>;
+  return db.select().from(agentLogos).where(inArray(agentLogos.wallet, wallets));
+}
+
+export async function upsertAgentLogo(data: typeof agentLogos.$inferInsert) {
+  const now = new Date();
+  return db
+    .insert(agentLogos)
+    .values({ ...data, refreshedAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: agentLogos.wallet,
+      set: {
+        wellKnownLogo: data.wellKnownLogo ?? null,
+        mplImage: data.mplImage ?? null,
+        mplAsset: data.mplAsset ?? null,
         refreshedAt: now,
         updatedAt: now,
       },

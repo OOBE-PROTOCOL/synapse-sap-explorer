@@ -139,23 +139,23 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
               </span>
             </TooltipTrigger>
             <TooltipContent className="max-w-[260px] text-[11px] leading-relaxed">
-              v0.2.0 merchant gate — agents must satisfy all four
+              v0.2.0 merchant gate , agents must satisfy all four
               requirements to be callable by automated routers.
             </TooltipContent>
           </Tooltip>
         </div>
 
         <ul
-          className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4"
+          className="grid list-none grid-cols-1 gap-2 p-0 sm:grid-cols-2 lg:grid-cols-4"
           aria-label="Merchant requirements"
         >
           {checks.map((c) => (
-            <li key={c.label}>
+            <li key={c.label} className="min-w-0">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
-                      'flex w-full cursor-help items-center gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors',
+                      'flex h-full w-full cursor-help items-center gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors',
                       c.info
                         ? 'border-neutral-800/70 bg-neutral-950/40 hover:border-neutral-700'
                         : c.ok
