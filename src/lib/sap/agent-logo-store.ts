@@ -27,6 +27,7 @@ import {
 } from '~/lib/db/queries';
 import { fetchAgentWellKnown } from '~/lib/sap/well-known';
 import { getMetaplexAssetsForWallet } from '~/lib/sap/metaplex-link';
+import { listRegistryAgentsForWallet } from '~/lib/metaplex/registry';
 import { isDbDown } from '~/db';
 
 export type AgentLogoSnapshot = {
@@ -63,10 +64,17 @@ async function resolveLogos(
   wallet: string,
   endpoint: string | null,
 ): Promise<AgentLogoSnapshot> {
-  // Run both resolutions in parallel; never throw.
-  const [wkResult, mplResult] = await Promise.allSettled([
+  // Run all three resolutions in parallel; never throw.
+  // The Metaplex Registry is a critical fallback: many MPL × SAP agents
+  // have an AgentIdentity plugin pointing to api.metaplex.com but the
+  // mpl-core asset is held under a different authority than the SAP
+  // wallet, so `fetchAssetsByOwner` for that wallet returns nothing.
+  // The registry, indexed by walletAddress/authority/owner, exposes the
+  // canonical NFT image for those cases.
+  const [wkResult, mplResult, regResult] = await Promise.allSettled([
     endpoint ? fetchAgentWellKnown(endpoint) : Promise.resolve(null),
     getMetaplexAssetsForWallet(wallet),
+    listRegistryAgentsForWallet(wallet, 'solana-mainnet'),
   ]);
 
   const wk = wkResult.status === 'fulfilled' ? wkResult.value : null;
@@ -85,6 +93,17 @@ async function resolveLogos(
     if (pick) {
       mplImage = pick.image ?? null;
       mplAsset = pick.asset ?? null;
+    }
+  }
+
+  // Registry fallback — only if wallet enumeration didn't yield an image.
+  if (!mplImage && regResult.status === 'fulfilled' && regResult.value) {
+    const regAgent = regResult.value.agents.find(
+      (a) => typeof a.image === 'string' && a.image.trim().length > 0,
+    );
+    if (regAgent) {
+      mplImage = regAgent.image;
+      if (!mplAsset) mplAsset = regAgent.mintAddress ?? null;
     }
   }
 
