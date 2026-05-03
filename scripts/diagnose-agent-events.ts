@@ -26,10 +26,11 @@ async function main() {
   if (!arg) { console.error('Usage: tsx scripts/diagnose-agent-events.ts <wallet|sig:SIGNATURE> [limit]'); process.exit(1); }
 
   const ep = resolveEndpoint(
-    (process.env.SYNAPSE_NETWORK ?? 'mainnet') as any,
-    (process.env.SYNAPSE_REGION ?? 'US') as any,
+    (process.env.SYNAPSE_NETWORK ?? 'mainnet') as Parameters<typeof resolveEndpoint>[0],
+    (process.env.SYNAPSE_REGION ?? 'US') as Parameters<typeof resolveEndpoint>[1],
   );
-  const headers = process.env.SYNAPSE_API_KEY ? { 'x-api-key': process.env.SYNAPSE_API_KEY } : {};
+  const headers: Record<string, string> = {};
+  if (process.env.SYNAPSE_API_KEY) headers['x-api-key'] = process.env.SYNAPSE_API_KEY;
   const conn = new Connection(ep.rpc, { commitment: 'confirmed', httpHeaders: headers });
   const provider = new AnchorProvider(conn, makeReadOnlyWallet(), { commitment: 'confirmed' });
   const sap = SapClient.from(provider, SAP_PROGRAM_ID);
@@ -48,10 +49,13 @@ async function main() {
     console.log(`[diag] parsed ${events.length} events:`);
     for (const ev of events) {
       console.log(`  - ${ev.name}`);
-      const d: any = ev.data;
+      const d = ev.data as Record<string, unknown>;
       for (const k of Object.keys(d)) {
-        const v = d[k];
-        const repr = v?.toBase58 ? v.toBase58() : Buffer.isBuffer(v) ? `<bytes ${v.length}>` : Array.isArray(v) ? `[${v.length}]` : String(v);
+        const v = d[k] as { toBase58?: () => string; length?: number } | unknown;
+        const repr = (v as { toBase58?: () => string })?.toBase58?.()
+          ?? (Buffer.isBuffer(v) ? `<bytes ${(v as Buffer).length}>`
+          : Array.isArray(v) ? `[${v.length}]`
+          : String(v));
         console.log(`      ${k}: ${repr}`);
       }
     }
@@ -90,19 +94,20 @@ async function main() {
       const logs = tx.meta.logMessages;
       if (!logs.some((l) => l.includes(SAP_PROGRAM_ID.toBase58()))) continue;
       txWithSapLogs++;
-      let events: any[] = [];
+      let events: Array<{ name: string; data: Record<string, unknown> }> = [];
       try { events = eventParser.parseLogs(logs); }
       catch (e) { console.warn(`  parseLogs threw on ${batch[j].signature.slice(0,12)}…: ${(e as Error).message}`); continue; }
       for (const ev of events) {
         eventCounts[ev.name] = (eventCounts[ev.name] ?? 0) + 1;
         if (ev.name === 'ToolSchemaInscribedEvent') {
-          const d: any = ev.data;
-          const tool = d.tool?.toBase58?.() ?? String(d.tool ?? '');
-          const sd = d.schemaData ?? d.schema_data;
+          const d = ev.data as Record<string, unknown>;
+          const toolVal = d.tool as { toBase58?: () => string } | string | undefined;
+          const tool = (toolVal as { toBase58?: () => string })?.toBase58?.() ?? String(toolVal ?? '');
+          const sd = (d.schemaData ?? d.schema_data) as Buffer | Uint8Array | number[] | undefined;
           const len = Buffer.isBuffer(sd) ? sd.length : (sd?.length ?? 0);
           inscriptions.push({
             sig: batch[j].signature, tool,
-            toolName: d.toolName ?? d.tool_name,
+            toolName: (d.toolName ?? d.tool_name) as string | undefined,
             type: Number(d.schemaType ?? d.schema_type ?? 0),
             bytes: len,
           });
