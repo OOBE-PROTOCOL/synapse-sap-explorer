@@ -146,7 +146,7 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
         </div>
 
         <ul
-          className="grid list-none grid-cols-1 gap-2 p-0 sm:grid-cols-2 lg:grid-cols-4"
+          className="grid list-none grid-cols-2 gap-2 p-0"
           aria-label="Merchant requirements"
         >
           {checks.map((c) => (
