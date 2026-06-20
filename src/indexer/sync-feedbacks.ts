@@ -2,7 +2,7 @@
 import { db } from '~/db';
 import { feedbacks } from '~/db/schema';
 import { findAllFeedbacks } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, num, bnToDate, hashToHex, conflictUpdateSet } from './utils';
+import { log, logErr, withRetry, pk, num, bnToDate, hashToHex, conflictUpdateSet, conflictUpdateWhere } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncFeedbacks(): Promise<number> {
@@ -36,7 +36,8 @@ export async function syncFeedbacks(): Promise<number> {
     try {
       await db.insert(feedbacks).values(row).onConflictDoUpdate({
         target: feedbacks.pda,
-        set: conflictUpdateSet(feedbacks, ['pda']),
+        set: conflictUpdateSet(feedbacks, ['pda', 'createdAt']),
+        setWhere: conflictUpdateWhere(feedbacks, ['pda', 'createdAt', 'indexedAt']),
       });
       upserted++;
     } catch (e: unknown) {
@@ -48,4 +49,3 @@ export async function syncFeedbacks(): Promise<number> {
   log('feedbacks', `Done: ${upserted} feedbacks upserted`);
   return upserted;
 }
-

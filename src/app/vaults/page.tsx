@@ -2,7 +2,10 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Vault, Database, FileText, Clock, Search, X } from "lucide-react";
+import {
+  Vault, Database, FileText, Clock, Search, X,
+  BookOpen, HardDrive, Shield, Users,
+} from "lucide-react";
 import { ExplorerPageShell, ExplorerMetric, EmptyState } from "~/components/ui";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
@@ -16,8 +19,14 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { useVaults } from "~/hooks/use-sap";
-import { timeAgo } from "~/lib/format";
+import { asText, entityPath, short, timeAgo } from "~/lib/format";
 import { cn } from "~/lib/utils";
 
 export default function VaultsPage() {
@@ -46,9 +55,9 @@ export default function VaultsPage() {
     const q = search.toLowerCase();
     return vaults.filter(
       (v) =>
-        v.pda.toLowerCase().includes(q) ||
-        v.agent.toLowerCase().includes(q) ||
-        v.wallet.toLowerCase().includes(q),
+        asText(v.pda).toLowerCase().includes(q) ||
+        asText(v.agent).toLowerCase().includes(q) ||
+        asText(v.wallet).toLowerCase().includes(q),
     );
   }, [vaults, search]);
 
@@ -119,6 +128,111 @@ export default function VaultsPage() {
         ) : undefined
       }
     >
+      {/* Memory Layers Legend */}
+      <Card className="border-border/40 bg-gradient-to-r from-primary/5 via-primary/[0.02] to-transparent">
+        <CardContent className="p-4 mt-4">
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/10 border border-primary/20 cursor-help">
+                    <BookOpen className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs font-bold text-primary">INS</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    <span className="font-semibold text-primary">Inscriptions Layer</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Core data inscriptions stored on-chain. Contains the actual payload data written to the vault.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 cursor-help">
+                    <HardDrive className="h-3.5 w-3.5 text-blue-500" />
+                    <span className="text-xs font-bold text-blue-500">LDG</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    <span className="font-semibold text-blue-500">Ledger Layer</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Transaction ledger tracking all writes, updates, and state changes to the vault.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help">
+                    <Clock className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="text-xs font-bold text-emerald-500">EPC</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    <span className="font-semibold text-emerald-500">Epoch Pages</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Time-based page organization for efficient data retrieval by epoch periods.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-help">
+                    <Shield className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="text-xs font-bold text-amber-500">CKP</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    <span className="font-semibold text-amber-500">Checkpoints</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Snapshot points for state verification and recovery. Enables rollbacks to known states.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 cursor-help">
+                    <Users className="h-3.5 w-3.5 text-purple-500" />
+                    <span className="text-xs font-bold text-purple-500">DEL</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    <span className="font-semibold text-purple-500">Delegates</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Authorized agents/users with write/read permissions to the vault.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            Each vault can have multiple active layers. Layers are immutable once written.
+          </p>
+        </CardContent>
+      </Card>
       {loading ? (
         <Card>
           <CardContent className="p-4 space-y-3">
@@ -154,19 +268,24 @@ export default function VaultsPage() {
                   Data Size
                 </TableHead>
                 <TableHead className="text-right hidden lg:table-cell">
+                  Est. Fees
+                </TableHead>
+                <TableHead className="text-right hidden lg:table-cell">
                   Memory Layers
                 </TableHead>
                 <TableHead className="hidden md:table-cell">Created</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((vault) => {
+              {filtered.map((vault, i) => {
                 const layers = vault.memoryLayers;
+                const vaultPda = asText(vault.pda);
+                const wallet = asText(vault.wallet);
                 return (
                   <TableRow
-                    key={vault.pda}
+                    key={vaultPda || wallet || i}
                     className="cursor-pointer hover:bg-muted/30 transition-colors group"
-                    onClick={() => router.push(`/agents/${vault.wallet}`)}
+                    onClick={() => router.push(entityPath('/vaults', vaultPda))}
                   >
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -175,7 +294,7 @@ export default function VaultsPage() {
                         </div>
                         <div>
                           <span className="font-mono text-xs text-muted-foreground">
-                            {vault.pda.slice(0, 8)}…{vault.pda.slice(-6)}
+                            {short(vaultPda, 8, 6)}
                           </span>
                           {vault.latestTxTime && (
                             <p className="text-xs text-muted-foreground/50 mt-0.5">
@@ -187,7 +306,7 @@ export default function VaultsPage() {
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="font-mono text-xs text-muted-foreground">
-                        {vault.wallet.slice(0, 4)}…{vault.wallet.slice(-4)}
+                        {short(wallet, 4, 4)}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
@@ -196,7 +315,7 @@ export default function VaultsPage() {
                       </span>
                       {vault.sessionsSummary.filter((s) => !s.isClosed).length >
                         0 && (
-                        <span className="ml-1.5 text-[10px] text-emerald-400">
+                        <span className="ml-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">
                           {
                             vault.sessionsSummary.filter((s) => !s.isClosed)
                               .length
@@ -215,6 +334,11 @@ export default function VaultsPage() {
                         {formatBytes(Number(vault.totalBytesInscribed))}
                       </span>
                     </TableCell>
+                    <TableCell className="text-right hidden lg:table-cell">
+                      <span className="text-xs font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                        ≈{(Number(vault.totalBytesInscribed) / 1024 * 0.000001).toFixed(6)} SOL
+                      </span>
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell text-right">
                       <div className="flex items-center justify-end gap-1">
                         {[
@@ -227,7 +351,7 @@ export default function VaultsPage() {
                           <span
                             key={key}
                             className={cn(
-                              "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold ring-1",
+                              "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ring-1",
                               layers[key as keyof typeof layers]
                                 ? "bg-primary/10 text-primary ring-primary/20"
                                 : "text-muted-foreground/30 ring-border/20",

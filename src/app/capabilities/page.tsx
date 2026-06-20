@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~
 import { Button } from '~/components/ui/button';
 import { useGraph, useAgents } from '~/hooks/use-sap';
 import type { GraphNode } from '~/lib/sap/discovery';
+import { pathSegment } from '~/lib/format';
 
 type SortKey = 'name' | 'owners' | 'protocol' | 'version';
 type SortDir = 'asc' | 'desc';
@@ -300,7 +301,7 @@ export default function CapabilitiesPage() {
                   <TableRow
                     key={cap.id}
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => router.push(`/capabilities/${encodeURIComponent(cap.id)}`)}
+                    onClick={() => router.push(`/capabilities/${pathSegment(cap.id)}`)}
                   >
                     {/* Name */}
                     <TableCell>
@@ -373,4 +374,3 @@ export default function CapabilitiesPage() {
     </ExplorerPageShell>
   );
 }
-

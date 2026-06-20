@@ -1,11 +1,15 @@
 ---
-title: escrow
-description: Create, fund, monitor, and close prepaid escrows. Covers SOL and SPL deposits, settlement caps, and real time balance polling.
+title: Escrow Commands
+description: Create, fund, monitor, and close prepaid escrows. Covers SOL and SPL deposits, settlement caps, expiration, and real-time balance polling. SDK v0.20.0 aligned.
 ---
 
 # `escrow`
 
-The escrow PDA is where prepaid funds live before an agent settles a call. The CLI exposes the full lifecycle.
+**Program Version:** v0.20.0 (Escrow V2)
+
+The escrow PDA is where prepaid funds live before an agent settles a call. The CLI exposes the full lifecycle for Escrow V2 with volume curves and dispute support.
+
+---
 
 ## `escrow open <wallet>`
 
@@ -22,53 +26,292 @@ synapse-sap escrow open <AGENT_WALLET> \
 | Flag | Description |
 |------|-------------|
 | `--token <sol\|spl>` | Funding token type |
-| `--mint <pubkey>` | Required when `--token spl` |
-| `--deposit <amount>` | Initial deposit in human units (SOL or token) |
-| `--max-calls <n>` | Hard cap on settlements |
+| `--mint <pubkey>` | Required when `--token spl` (SPL token mint address) |
+| `--deposit <amount>` | Initial deposit in human units (SOL or token decimals) |
+| `--max-calls <n>` | Hard cap on settlements (prevents over-consumption) |
 | `--expires <duration>` | TTL like `24h`, `7d`, or RFC 3339 timestamp |
+| `--price-per-call <lamports>` | Override agent's default pricing |
+| `--volume-curve <json>` | Tiered pricing curve (repeatable) |
+| `--simulate` | Resolve instructions without sending |
+| `--json` | Emit raw JSON for piping |
+
+### Volume Curve Example
+
+```bash
+synapse-sap escrow open <AGENT_WALLET> \
+  --token sol \
+  --deposit 1.0 \
+  --volume-curve '{"tierId":"bulk","minCalls":50,"pricePerCall":80000}' \
+  --volume-curve '{"tierId":"premium","minCalls":100,"pricePerCall":60000}'
+```
+
+---
 
 ## `escrow deposit <wallet>` and `escrow withdraw <wallet>`
 
+Add or remove funds from an existing escrow.
+
 ```bash
-synapse-sap escrow deposit <AGENT_WALLET> --amount 0.25
-synapse-sap escrow withdraw <AGENT_WALLET> --amount 0.1
+# Add funds
+synapse-sap escrow deposit <AGENT_WALLET> \
+  --amount 0.25 \
+  --token sol
+
+# Remove funds (only unsettled balance)
+synapse-sap escrow withdraw <AGENT_WALLET> \
+  --amount 0.1 \
+  --token sol
 ```
 
-Withdraw is only allowed up to the unsettled balance.
+| Flag | Description |
+|------|-------------|
+| `--amount <n>` | Amount to deposit/withdraw |
+| `--token <sol\|spl>` | Token type |
+| `--mint <pubkey>` | Required for SPL tokens |
+| `--simulate` | Dry run |
+| `--json` | Machine output |
+
+<Callout type="warning">
+**Withdraw limits:** You can only withdraw up to the unsettled balance. Settled calls cannot be withdrawn.
+</Callout>
+
+---
 
 ## `escrow close <wallet>`
 
+Close an escrow account and recover remaining funds.
+
 ```bash
+# Standard close (checks dispute window)
 synapse-sap escrow close <AGENT_WALLET>
+
+# Force close (bypasses dispute window)
 synapse-sap escrow close <AGENT_WALLET> --force
 ```
 
-`--force` closes even when the dispute window is still open. Use only when you know what you are doing.
+| Flag | Description |
+|------|-------------|
+| `--force` | Close even if dispute window is open (use with caution) |
+| `--simulate` | Dry run |
+| `--json` | Machine output |
+
+<Callout type="warning">
+**Destructive operation.** Closing an escrow:
+- Returns remaining balance to depositor
+- Cannot be undone
+- Requires `--force` if dispute window is active
+
+Always simulate first.
+</Callout>
+
+---
 
 ## `escrow dump <wallet>`
 
 Full account state, decoded.
 
 ```bash
+# Human-readable
 synapse-sap escrow dump <AGENT_WALLET>
-synapse-sap escrow dump <AGENT_WALLET> --raw   # raw bytes only
+
+# Raw bytes (for debugging)
+synapse-sap escrow dump <AGENT_WALLET> --raw
+
+# JSON output
+synapse-sap escrow dump <AGENT_WALLET> --json
 ```
+
+### Example Output
+
+```json
+{
+  "pda": "EscrowPDA...",
+  "agent": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+  "depositor": "5xKjRvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+  "tokenType": "sol",
+  "balance": 450000000,
+  "initialDeposit": 500000000,
+  "maxCalls": 100,
+  "callsSettled": 12,
+  "callsRemaining": 88,
+  "pricePerCall": 100000,
+  "volumeCurves": [],
+  "createdAt": "2026-06-15T10:30:00Z",
+  "expiresAt": "2026-06-22T10:30:00Z",
+  "status": "active",
+  "disputeWindowOpen": false
+}
+```
+
+---
 
 ## `escrow list`
 
-Every escrow controlled by your current wallet.
+List every escrow controlled by your current wallet.
 
 ```bash
+# All escrows
 synapse-sap escrow list
+
+# Filter by status
+synapse-sap escrow list --status active
+
+# JSON + jq filtering
 synapse-sap escrow list --json | jq '.[] | select(.balance > 0)'
 ```
 
+| Flag | Description |
+|------|-------------|
+| `--status <s>` | Filter: `active`, `settled`, `disputed`, `closed`, `all` |
+| `--agent <wallet>` | Filter by agent wallet |
+| `--json` | Machine output |
+| `--limit <n>` | Max results (default: 50) |
+
+---
+
 ## `escrow monitor <wallet>`
 
-Real time polling, refresh every 5 seconds, exit on `Ctrl+C`.
+Real-time polling, refresh every 5 seconds, exit on `Ctrl+C`.
 
 ```bash
 synapse-sap escrow monitor <AGENT_WALLET>
 ```
 
+### Display
+
+```
+Escrow: EscrowPDA...
+Agent:  8xPjQvN3...
+Status: Active
+Balance: 0.45 SOL (90 calls remaining)
+Settled: 12 calls (0.12 SOL)
+Expires: 2026-06-22T10:30:00Z (5d 14h remaining)
+Dispute Window: Closed
+
+[Refreshing every 5s - Ctrl+C to exit]
+```
+
 Useful during incident response. Pair with `agent health` in another pane.
+
+| Flag | Description |
+|------|-------------|
+| `--interval <s>` | Refresh interval in seconds (default: 5) |
+| `--json` | Emit JSON updates (one per line) |
+
+---
+
+## `escrow settle <wallet>`
+
+**Agent-side command:** Settle accumulated calls and claim payment.
+
+```bash
+synapse-sap escrow settle <DEPOSITOR_WALLET> \
+  --calls 12 \
+  --service jupiter-swap \
+  --simulate
+```
+
+| Flag | Description |
+|------|-------------|
+| `--calls <n>` | Number of calls to settle |
+| `--service <name>` | Tool/service name (for attribution) |
+| `--simulate` | Dry run |
+| `--json` | Machine output |
+
+<Callout type="info">
+**Agent-only:** This command must be run by the agent (merchant) wallet that owns the receiving escrow.
+</Callout>
+
+---
+
+## `escrow dispute <wallet>`
+
+File a dispute on an escrow (v0.20.0).
+
+```bash
+synapse-sap escrow dispute <AGENT_WALLET> \
+  --reason "Service not delivered" \
+  --evidence "Transaction failed, no response" \
+  --simulate
+```
+
+| Flag | Description |
+|------|-------------|
+| `--reason <text>` | Dispute reason (max 256 chars) |
+| `--evidence <text>` | Supporting evidence (max 1024 chars) |
+| `--simulate` | Dry run |
+| `--json` | Machine output |
+
+<Callout type="warning">
+**Dispute window:** Disputes can only be filed within 24 hours of the last settlement. After the window closes, use `escrow close --force`.
+</Callout>
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Validation failed (invalid amounts, missing flags) |
+| `2` | RPC error (timeout, 5xx, unreachable) |
+| `3` | On-chain failure (instruction error) |
+| `4` | Escrow not found (no escrow for this agent/depositor pair) |
+| `5` | Permission denied (wrong signer) |
+| `6` | Dispute window expired |
+
+---
+
+## Common Errors
+
+### Escrow Already Exists
+
+```
+Error: EscrowAlreadyExists (6005)
+An active escrow already exists for this agent-depositor pair.
+```
+
+**Fix:** Use `escrow deposit` to add funds, or close the existing escrow first.
+
+### Insufficient Balance
+
+```
+Error: EscrowInsufficientBalance (6010)
+Balance (0.05 SOL) is less than requested withdrawal (0.1 SOL).
+```
+
+**Fix:** Reduce withdrawal amount or wait for more settlements.
+
+### Escrow Expired
+
+```
+Error: EscrowExpired (6009)
+Escrow expired at 2026-06-22T10:30:00Z. Close to recover funds.
+```
+
+**Fix:** Use `escrow close` to recover remaining balance.
+
+### Dispute Window Active
+
+```
+Error: DisputeWindowActive (6025)
+Cannot close escrow while dispute window is open (23h remaining).
+Use --force to bypass.
+```
+
+**Fix:** Wait for window to close, or use `--force` if you're certain.
+
+---
+
+## Next Steps
+
+- **[x402](/docs/cli/x402)** — Make paid calls
+- **[Agent](/docs/cli/agent)** — Manage agent identity
+- **[Payments](/docs/core/payments)** — Escrow V2 architecture
+- **[Disputes](/docs/core/dispute-resolution)** — Dispute flow
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3  
+**Escrow Version:** V2

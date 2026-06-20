@@ -42,7 +42,7 @@ function Select({
 
   return (
     <SelectContext.Provider value={{ value: current, onValueChange: setter, open, setOpen, triggerRef }}>
-      <div className="relative inline-block">
+      <div className="relative min-w-35 inline-block">
         {children}
       </div>
     </SelectContext.Provider>
@@ -80,7 +80,7 @@ const SelectTrigger = React.forwardRef<
       aria-controls="select-listbox"
       onClick={() => ctx.setOpen(!ctx.open)}
       className={cn(
-        'flex h-9 w-full items-center justify-between rounded-md border border-border/40 bg-card/50 backdrop-blur-sm px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring/40 focus:border-primary/30 focus:shadow-[0_0_12px_-4px_hsl(var(--glow)/0.15)] hover:border-border/60 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40',
+        'flex h-11 w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:border-primary/40 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
       {...props}
@@ -131,7 +131,7 @@ const SelectContent = React.forwardRef<
         else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node
       }}
       className={cn(
-        'absolute left-0 top-full z-50 mt-1 max-h-96 min-w-[8rem] w-full overflow-auto rounded-md border border-border/40 bg-popover/90 backdrop-blur-xl text-popover-foreground shadow-[0_4px_20px_-4px_hsl(var(--glow)/0.1)] p-1 animate-in fade-in-0 zoom-in-95',
+        'absolute left-0 top-full z-50 mt-1 max-h-96 min-w-[8rem] w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95',
         className,
       )}
       {...props}
@@ -163,8 +163,8 @@ const SelectItem = React.forwardRef<
         ctx.setOpen(false)
       }}
       className={cn(
-        'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent/50 hover:text-accent-foreground transition-colors duration-100',
-        disabled && 'pointer-events-none opacity-40',
+        'relative flex min-h-10 w-full cursor-default select-none items-center rounded-md py-2 pl-8 pr-2 text-sm outline-none transition-colors duration-100 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
+        disabled && 'pointer-events-none opacity-50',
         className,
       )}
       {...props}

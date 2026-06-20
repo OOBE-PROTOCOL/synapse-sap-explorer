@@ -1,9 +1,10 @@
 
 import { PublicKey } from '@solana/web3.js';
-import { EventParser } from '@oobe-protocol-labs/synapse-sap-sdk';
+import { EventParser } from './sdk-compat';
 import { getSapClient, getSynapseConnection, getRpcConfig } from './discovery';
 import type { Pool } from 'pg';
 import { getSharedPool } from '~/db';
+import { asPublicKeyText, asText } from '~/lib/format';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -56,11 +57,106 @@ function getPool(): Pool {
 
 /* ── Helpers ───────────────────────────────────────────── */
 
-function toHex(arr: number[] | Uint8Array): string {
-  return Buffer.from(arr).toString('hex');
+function toBytes(value: unknown): Uint8Array {
+  if (value === null || value === undefined) return new Uint8Array();
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (Buffer.isBuffer(value)) return value;
+
+  if (Array.isArray(value)) {
+    return Uint8Array.from(value.map(Number).filter(Number.isFinite));
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return new Uint8Array();
+    if (/^[A-Fa-f0-9]+$/.test(trimmed) && trimmed.length % 2 === 0) {
+      return Buffer.from(trimmed, 'hex');
+    }
+    try {
+      return Buffer.from(trimmed, 'base64');
+    } catch {
+      return new Uint8Array();
+    }
+  }
+
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (Array.isArray(obj.data)) return toBytes(obj.data);
+    if (obj.data && typeof obj.data === 'object') return toBytes(obj.data);
+    const numericKeys = Object.keys(obj).filter((key) => /^\d+$/.test(key));
+    if (numericKeys.length > 0) {
+      return Uint8Array.from(
+        numericKeys
+          .sort((a, b) => Number(a) - Number(b))
+          .map((key) => Number(obj[key]))
+          .filter(Number.isFinite),
+      );
+    }
+  }
+
+  return new Uint8Array();
 }
-function toBase64(arr: number[] | Uint8Array): string {
-  return Buffer.from(arr).toString('base64');
+
+function toHex(value: unknown): string {
+  return Buffer.from(toBytes(value)).toString('hex');
+}
+
+function toBase64(value: unknown): string {
+  return Buffer.from(toBytes(value)).toString('base64');
+}
+
+function toNumberValue(value: unknown, fallback = 0): number {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  const toNumber = (value as { toNumber?: unknown })?.toNumber;
+  if (typeof toNumber === 'function') {
+    try {
+      const parsed = toNumber.call(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  const text = asText(value);
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toUnixSeconds(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return Math.floor(value.getTime() / 1000);
+  if (typeof value === 'number') return value > 1e12 ? Math.floor(value / 1000) : value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric > 1e12 ? Math.floor(numeric / 1000) : numeric;
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? Math.floor(time / 1000) : null;
+  }
+  return null;
+}
+
+function toAddress(value: unknown): string {
+  return asPublicKeyText(value) || asText(value);
+}
+
+function parseJsonData(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof value === 'object' ? value as Record<string, unknown> : {};
 }
 
 /**
@@ -107,6 +203,103 @@ async function fetchLogsFromDb(address: string, limit = 200): Promise<Array<{
     blockTime: r.block_time ? Math.floor(new Date(r.block_time).getTime() / 1000) : null,
     logs: r.logs ?? [],
   }));
+}
+
+async function fetchEventsFromDb(address: string, limit = 200): Promise<{
+  inscriptions: ParsedInscription[];
+  ledgerEntries: ParsedLedgerEntry[];
+}> {
+  const pool = getPool();
+  const { rows } = await pool.query<{
+    event_name: string;
+    tx_signature: string;
+    slot: string | number;
+    block_time: string | number | Date | null;
+    data: unknown;
+  }>(`
+    SELECT event_name, tx_signature, slot, block_time, data
+    FROM (
+      SELECT DISTINCT ON (
+        event_name,
+        tx_signature,
+        COALESCE(data->>'sequence', ''),
+        COALESCE(data->>'entryIndex', data->>'entry_index', ''),
+        COALESCE(data->>'fragmentIndex', data->>'fragment_index', ''),
+        COALESCE(data->>'contentHash', data->>'content_hash', '')
+      )
+        event_name, tx_signature, slot, block_time, data
+      FROM sap_exp.sap_events
+      WHERE event_name IN (
+        'MemoryInscribedEvent',
+        'memoryInscribedEvent',
+        'LedgerEntryEvent',
+        'ledgerEntryEvent'
+      )
+        AND data::text LIKE '%' || $1 || '%'
+      ORDER BY
+        event_name,
+        tx_signature,
+        COALESCE(data->>'sequence', ''),
+        COALESCE(data->>'entryIndex', data->>'entry_index', ''),
+        COALESCE(data->>'fragmentIndex', data->>'fragment_index', ''),
+        COALESCE(data->>'contentHash', data->>'content_hash', ''),
+        slot DESC
+    ) unique_events
+    ORDER BY slot DESC
+    LIMIT $2
+  `, [address, limit]);
+
+  const inscriptions: ParsedInscription[] = [];
+  const ledgerEntries: ParsedLedgerEntry[] = [];
+
+  for (const row of rows) {
+    const d = parseJsonData(row.data);
+    const slot = toNumberValue(row.slot);
+    const rowBlockTime = toUnixSeconds(row.block_time);
+
+    if (row.event_name === 'MemoryInscribedEvent' || row.event_name === 'memoryInscribedEvent') {
+      const encryptedData = d.encryptedData ?? d.encrypted_data;
+      const dataLen = toNumberValue(d.dataLen ?? d.data_len, toBytes(encryptedData).length);
+      const timestamp = toNumberValue(d.timestamp, rowBlockTime ?? 0);
+      inscriptions.push({
+        txSignature: row.tx_signature,
+        slot,
+        blockTime: rowBlockTime ?? (timestamp > 0 ? timestamp : null),
+        sequence: toNumberValue(d.sequence),
+        epochIndex: toNumberValue(d.epochIndex ?? d.epoch_index),
+        encryptedData: toBase64(encryptedData),
+        nonce: toHex(d.nonce),
+        contentHash: toHex(d.contentHash ?? d.content_hash),
+        totalFragments: toNumberValue(d.totalFragments ?? d.total_fragments, 1),
+        fragmentIndex: toNumberValue(d.fragmentIndex ?? d.fragment_index),
+        compression: toNumberValue(d.compression),
+        dataLen,
+        nonceVersion: toNumberValue(d.nonceVersion ?? d.nonce_version),
+        timestamp,
+        vault: toAddress(d.vault),
+        session: toAddress(d.session),
+      });
+    } else if (row.event_name === 'LedgerEntryEvent' || row.event_name === 'ledgerEntryEvent') {
+      const data = d.data;
+      const dataLen = toNumberValue(d.dataLen ?? d.data_len, toBytes(data).length);
+      const timestamp = toNumberValue(d.timestamp, rowBlockTime ?? 0);
+      ledgerEntries.push({
+        txSignature: row.tx_signature,
+        slot,
+        blockTime: rowBlockTime ?? (timestamp > 0 ? timestamp : null),
+        entryIndex: toNumberValue(d.entryIndex ?? d.entry_index),
+        data: toBase64(data),
+        contentHash: toHex(d.contentHash ?? d.content_hash),
+        dataLen,
+        merkleRoot: toHex(d.merkleRoot ?? d.merkle_root),
+        timestamp,
+        session: toAddress(d.session),
+        ledger: toAddress(d.ledger),
+      });
+    }
+  }
+
+  return { inscriptions, ledgerEntries };
 }
 
 /* ── RPC: fetch TX signatures + full transactions ──────── */
@@ -196,19 +389,19 @@ function parseLogsForInscriptions(
           txSignature: tx.signature,
           slot: tx.slot,
           blockTime: tx.blockTime,
-          sequence: Number(d.sequence ?? 0),
-          epochIndex: Number(d.epochIndex ?? d.epoch_index ?? 0),
-          encryptedData: toBase64(d.encryptedData as number[] ?? d.encrypted_data as number[] ?? []),
-          nonce: toHex(d.nonce as number[] ?? []),
-          contentHash: toHex(d.contentHash as number[] ?? d.content_hash as number[] ?? []),
-          totalFragments: Number(d.totalFragments ?? d.total_fragments ?? 1),
-          fragmentIndex: Number(d.fragmentIndex ?? d.fragment_index ?? 0),
-          compression: Number(d.compression ?? 0),
-          dataLen: Number(d.dataLen ?? d.data_len ?? 0),
-          nonceVersion: Number(d.nonceVersion ?? d.nonce_version ?? 0),
-          timestamp: Number(d.timestamp?.toString?.() ?? tx.blockTime ?? 0),
-          vault: (d.vault as { toBase58?: () => string })?.toBase58?.() ?? String(d.vault ?? ''),
-          session: (d.session as { toBase58?: () => string })?.toBase58?.() ?? String(d.session ?? ''),
+          sequence: toNumberValue(d.sequence),
+          epochIndex: toNumberValue(d.epochIndex ?? d.epoch_index),
+          encryptedData: toBase64(d.encryptedData ?? d.encrypted_data),
+          nonce: toHex(d.nonce),
+          contentHash: toHex(d.contentHash ?? d.content_hash),
+          totalFragments: toNumberValue(d.totalFragments ?? d.total_fragments, 1),
+          fragmentIndex: toNumberValue(d.fragmentIndex ?? d.fragment_index),
+          compression: toNumberValue(d.compression),
+          dataLen: toNumberValue(d.dataLen ?? d.data_len, toBytes(d.encryptedData ?? d.encrypted_data).length),
+          nonceVersion: toNumberValue(d.nonceVersion ?? d.nonce_version),
+          timestamp: toNumberValue(d.timestamp, tx.blockTime ?? 0),
+          vault: toAddress(d.vault),
+          session: toAddress(d.session),
         });
       } else if (ev.name === 'LedgerEntryEvent' || ev.name === 'ledgerEntryEvent') {
         const d = ev.data as Record<string, unknown>;
@@ -216,14 +409,14 @@ function parseLogsForInscriptions(
           txSignature: tx.signature,
           slot: tx.slot,
           blockTime: tx.blockTime,
-          entryIndex: Number(d.entryIndex ?? d.entry_index ?? 0),
-          data: toBase64(d.data as number[] ?? []),
-          contentHash: toHex(d.contentHash as number[] ?? d.content_hash as number[] ?? []),
-          dataLen: Number(d.dataLen ?? d.data_len ?? 0),
-          merkleRoot: toHex(d.merkleRoot as number[] ?? d.merkle_root as number[] ?? []),
-          timestamp: Number(d.timestamp?.toString?.() ?? tx.blockTime ?? 0),
-          session: (d.session as { toBase58?: () => string })?.toBase58?.() ?? String(d.session ?? ''),
-          ledger: (d.ledger as { toBase58?: () => string })?.toBase58?.() ?? String(d.ledger ?? ''),
+          entryIndex: toNumberValue(d.entryIndex ?? d.entry_index),
+          data: toBase64(d.data),
+          contentHash: toHex(d.contentHash ?? d.content_hash),
+          dataLen: toNumberValue(d.dataLen ?? d.data_len, toBytes(d.data).length),
+          merkleRoot: toHex(d.merkleRoot ?? d.merkle_root),
+          timestamp: toNumberValue(d.timestamp, tx.blockTime ?? 0),
+          session: toAddress(d.session),
+          ledger: toAddress(d.ledger),
         });
       }
     }
@@ -248,7 +441,19 @@ export async function getSessionInscriptions(
   const rpcFallback = opts?.rpcFallback ?? true;
   const parser = getEventParser();
 
-  // 1. Try DB first (already-indexed TXs)
+  // 1. Try normalized SAP events first. These are already parsed and queryable,
+  // even when the raw transaction log cache is partial.
+  let dbEventResult: { inscriptions: ParsedInscription[]; ledgerEntries: ParsedLedgerEntry[] } = {
+    inscriptions: [],
+    ledgerEntries: [],
+  };
+  try {
+    dbEventResult = await fetchEventsFromDb(sessionPda, limit);
+  } catch (e) {
+    console.warn('[inscription-parser] DB event fetch failed:', (e as Error).message);
+  }
+
+  // 2. Try DB transaction logs.
   let dbTxList: Array<{ signature: string; slot: number; blockTime: number | null; logs: string[] }> = [];
   try {
     dbTxList = await fetchLogsFromDb(sessionPda, limit);
@@ -256,11 +461,11 @@ export async function getSessionInscriptions(
     console.warn('[inscription-parser] DB fetch failed:', (e as Error).message);
   }
 
-  // 2. Parse DB logs
+  // 3. Parse DB logs
   const dbResult = parseLogsForInscriptions(parser, dbTxList);
   const dbSigs = new Set(dbTxList.map(t => t.signature));
 
-  // 3. RPC fallback for additional TXs not in DB
+  // 4. RPC fallback for additional TXs not in DB
   let rpcTxList: typeof dbTxList = [];
   if (rpcFallback) {
     try {
@@ -274,9 +479,17 @@ export async function getSessionInscriptions(
 
   const rpcResult = parseLogsForInscriptions(parser, rpcTxList);
 
-  // 4. Merge & dedupe
-  const allInscriptions = [...dbResult.inscriptions, ...rpcResult.inscriptions];
-  const allLedgerEntries = [...dbResult.ledgerEntries, ...rpcResult.ledgerEntries];
+  // 5. Merge & dedupe
+  const allInscriptions = [
+    ...dbEventResult.inscriptions,
+    ...dbResult.inscriptions,
+    ...rpcResult.inscriptions,
+  ];
+  const allLedgerEntries = [
+    ...dbEventResult.ledgerEntries,
+    ...dbResult.ledgerEntries,
+    ...rpcResult.ledgerEntries,
+  ];
 
   // Dedupe by signature+sequence+fragmentIndex
   const seenInsc = new Set<string>();
@@ -295,14 +508,24 @@ export async function getSessionInscriptions(
     return true;
   });
 
-  dedupedInsc.sort((a, b) => a.sequence - b.sequence || a.fragmentIndex - b.fragmentIndex);
-  dedupedLe.sort((a, b) => a.entryIndex - b.entryIndex);
+  dedupedInsc.sort((a, b) => b.sequence - a.sequence || b.fragmentIndex - a.fragmentIndex);
+  dedupedLe.sort((a, b) => b.entryIndex - a.entryIndex);
+
+  const dbEventSigs = new Set([
+    ...dbEventResult.inscriptions.map((item) => item.txSignature),
+    ...dbEventResult.ledgerEntries.map((item) => item.txSignature),
+  ]);
+  const txScanned = new Set([
+    ...dbEventSigs,
+    ...dbTxList.map((item) => item.signature),
+    ...rpcTxList.map((item) => item.signature),
+  ]);
 
   return {
     inscriptions: dedupedInsc,
     ledgerEntries: dedupedLe,
-    totalTxScanned: dbTxList.length + rpcTxList.length,
-    totalTxFromDb: dbTxList.length,
+    totalTxScanned: txScanned.size,
+    totalTxFromDb: new Set([...dbEventSigs, ...dbTxList.map((item) => item.signature)]).size,
     totalTxFromRpc: rpcTxList.length,
   };
 }
@@ -327,18 +550,54 @@ export async function getVaultInscriptions(
     return getSessionInscriptions(vaultPda, opts);
   }
 
+  const vaultEventResult = await fetchEventsFromDb(vaultPda, opts?.limit ?? 200).catch((e) => {
+    console.warn('[inscription-parser] vault event fetch failed:', (e as Error).message);
+    return { inscriptions: [], ledgerEntries: [] };
+  });
+
   // Fetch inscriptions for each session
   const results = await Promise.all(
     sessions.map(s => getSessionInscriptions(s.pda, opts)),
   );
+  const inscriptions = dedupeInscriptions([
+    ...vaultEventResult.inscriptions,
+    ...results.flatMap(r => r.inscriptions),
+  ]).sort((a, b) => b.sequence - a.sequence || b.fragmentIndex - a.fragmentIndex);
+  const ledgerEntries = dedupeLedgerEntries([
+    ...vaultEventResult.ledgerEntries,
+    ...results.flatMap(r => r.ledgerEntries),
+  ]).sort((a, b) => b.entryIndex - a.entryIndex);
+
+  const vaultEventSigs = new Set([
+    ...vaultEventResult.inscriptions.map((item) => item.txSignature),
+    ...vaultEventResult.ledgerEntries.map((item) => item.txSignature),
+  ]);
 
   return {
-    inscriptions: results.flatMap(r => r.inscriptions)
-      .sort((a, b) => a.sequence - b.sequence || a.fragmentIndex - b.fragmentIndex),
-    ledgerEntries: results.flatMap(r => r.ledgerEntries)
-      .sort((a, b) => a.entryIndex - b.entryIndex),
-    totalTxScanned: results.reduce((s, r) => s + r.totalTxScanned, 0),
-    totalTxFromDb: results.reduce((s, r) => s + r.totalTxFromDb, 0),
+    inscriptions,
+    ledgerEntries,
+    totalTxScanned: vaultEventSigs.size + results.reduce((s, r) => s + r.totalTxScanned, 0),
+    totalTxFromDb: vaultEventSigs.size + results.reduce((s, r) => s + r.totalTxFromDb, 0),
     totalTxFromRpc: results.reduce((s, r) => s + r.totalTxFromRpc, 0),
   };
+}
+
+function dedupeInscriptions(items: ParsedInscription[]): ParsedInscription[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.txSignature}:${item.sequence}:${item.fragmentIndex}:${item.contentHash}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeLedgerEntries(items: ParsedLedgerEntry[]): ParsedLedgerEntry[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.txSignature}:${item.entryIndex}:${item.contentHash}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

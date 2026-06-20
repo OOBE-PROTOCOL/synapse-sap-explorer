@@ -11,14 +11,11 @@ export type {
   PricingTier as SdkPricingTier,
   VolumeCurveBreakpoint,
   PluginRef,
-} from '@oobe-protocol-labs/synapse-sap-sdk/types';
-
-export type {
   DiscoveredAgent,
   AgentProfile,
   NetworkOverview,
   DiscoveredTool,
-} from '@oobe-protocol-labs/synapse-sap-sdk/registries/discovery';
+} from '~/lib/sap/sdk-compat';
 
 /* ── Anchor enum discriminants (JSON-serialized form) ─── */
 // Anchor enums serialize as { VariantName: {} } objects.
@@ -177,6 +174,11 @@ export type SerializedEscrow = {
   tokenMint: string | null;
   tokenDecimals: number;
   volumeCurve: SerializedVolumeCurveEntry[];
+  metadata?: {
+    toolName?: string;
+    category?: string;
+    [key: string]: unknown;
+  };
 };
 
 export type SerializedAttestation = {

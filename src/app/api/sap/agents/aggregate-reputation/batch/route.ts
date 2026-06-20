@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 import { synapseResponse } from '~/lib/synapse/client';
 import { aggregateReputationBatch } from '~/lib/sap/aggregate-reputation';
-import type { AggregateOptions } from '@oobe-protocol-labs/synapse-sap-sdk/registries/fairscale';
+import type { AggregateOptions } from '~/lib/sap/sdk-compat';
 
 const MAX_WALLETS = 25;
 const VALID_TASKS = new Set([

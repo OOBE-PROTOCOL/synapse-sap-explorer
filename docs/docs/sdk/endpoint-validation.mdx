@@ -1,15 +1,21 @@
 ---
 title: Endpoint Validation
-description: Typed endpoint descriptors, health checks, and validation utilities for agent interoperability (v0.6.0).
+description: Typed endpoint descriptors, health checks, and validation utilities for agent interoperability. SDK v0.20.0 aligned.
 ---
 
 # Endpoint Validation
 
-Added in v0.6.0, endpoint validation solves the "guess the endpoint" interoperability problem. Instead of relying on unstructured metadata strings, agents publish typed `EndpointDescriptor` objects that describe their HTTP endpoints, authentication requirements, and health checks. Consumers can validate these before depositing funds.
+**SDK Version:** v0.20.0
+
+Added in v0.6.0, endpoint validation solves the "guess the endpoint" interoperability problem. Instead of relying on unstructured metadata strings, agents publish typed `EndpointDescriptor` objects that describe their HTTP endpoints, authentication requirements, and health checks.
+
+---
 
 ## Why Endpoint Validation?
 
 Without validation, a consumer might deposit SOL into an escrow for an agent whose endpoint is unreachable, returns HTML instead of JSON, or requires authentication the consumer cannot provide. Validation catches these issues before money is at risk.
+
+---
 
 ## Types
 
@@ -29,11 +35,11 @@ Machine-readable description of an agent's HTTP endpoint.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `url` | `string` | - | Full URL (e.g. `https://api.example.com/x402`) |
+| `url` | `string` | - | Full URL |
 | `method` | `"GET" \| "POST" \| "PUT" \| "DELETE"` | `"POST"` | HTTP method |
 | `contentType` | `string` | `"application/json"` | Expected response Content-Type |
 | `requiresAuth` | `boolean` | `false` | Whether `Authorization` header is needed |
-| `authType` | `"bearer" \| "api-key" \| "x402" \| "none"` | - | Auth type if `requiresAuth` |
+| `authType` | `"bearer" \| "api-key" \| "x402" \| "none"` | - | Auth type |
 | `requiresCSRF` | `boolean` | `false` | Requires CSRF tokens |
 | `requiresCookies` | `boolean` | `false` | Requires browser cookies |
 | `corsOrigins` | `string[]` | - | Required CORS origins |
@@ -48,21 +54,7 @@ Machine-readable description of an agent's HTTP endpoint.
 | `timeoutMs` | `number` | `5000` | Timeout in milliseconds |
 | `method` | `"GET" \| "HEAD"` | `"GET"` | HTTP method |
 
-### AgentManifest
-
-Complete typed manifest replacing stringly-typed metadata.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `version` | `"1.0.0"` | Manifest schema version |
-| `wallet` | `string` | Agent wallet (base58) |
-| `name` | `string` | Agent name |
-| `description` | `string` | Agent description |
-| `endpoint` | `EndpointDescriptor` | Primary x402 endpoint |
-| `healthCheck` | `HealthCheckDescriptor?` | Optional health-check config |
-| `tools` | `ToolManifestEntry[]` | All tools with typed schemas |
-| `supportedNetworks` | `string[]` | Network identifiers for x402 |
-| `generatedAt` | `string` | ISO 8601 timestamp |
+---
 
 ## Validation Functions
 
@@ -78,14 +70,12 @@ import {
 ### Validate a Single URL
 
 ```typescript
-// Checks: reachability, JSON content-type, CORS headers, no HTML redirect.
-// Measures latency. Returns an EndpointValidationResult.
 const result = await validateEndpoint("https://api.example.com/x402", {
   timeoutMs: 10_000,       // default: 10,000 ms
   retries: 1,              // default: 1
   method: "HEAD",          // default: "HEAD" (faster than GET)
   checkCors: true,         // default: false
-  headers: { "X-Custom": "value" },  // optional extra headers
+  headers: { "X-Custom": "value" },
 });
 
 if (!result.reachable) {
@@ -93,7 +83,6 @@ if (!result.reachable) {
 }
 if (!result.isSapCapable) {
   console.warn("Not SAP-capable:", result.warnings);
-  // e.g. ["Endpoint returns HTML - may require CSRF or browser session"]
 }
 console.log("Latency:", result.latencyMs, "ms");
 ```
@@ -101,8 +90,6 @@ console.log("Latency:", result.latencyMs, "ms");
 ### Validate with Descriptor Metadata
 
 ```typescript
-// Uses the descriptor's method, required headers, and adds
-// descriptor-specific warnings for CSRF/cookies.
 const descriptor: EndpointDescriptor = {
   url: "https://api.example.com/x402",
   method: "POST",
@@ -117,26 +104,9 @@ const result = await validateEndpointDescriptor(descriptor);
 console.log("SAP-capable:", result.isSapCapable);
 ```
 
-### Validate Health Check
-
-```typescript
-const health: HealthCheckDescriptor = {
-  url: "https://api.example.com/health",
-  expectedStatus: 200,
-  timeoutMs: 5000,
-};
-
-const result = await validateHealthCheck(health);
-if (!result.isSapCapable) {
-  console.error("Health check failed:", result.warnings);
-}
-```
-
 ### Validate All Agent Endpoints
 
 ```typescript
-// Validate primary endpoint + health check + tool-specific overrides in one call.
-// Returns a Map<string, EndpointValidationResult>.
 const results = await validateAgentEndpoints({
   endpoint: manifest.endpoint,
   healthCheck: manifest.healthCheck,
@@ -168,6 +138,8 @@ for (const [label, result] of results) {
 | `error` | `string?` | Error message if failed |
 | `warnings` | `string[]` | Warnings (e.g. `"requires CSRF"`) |
 
+---
+
 ## Best Practice: Validate Before Escrow
 
 Always validate an agent's endpoint before depositing funds:
@@ -187,3 +159,16 @@ await client.x402.preparePayment(agentWallet, {
   deposit: 1_000_000,
 });
 ```
+
+---
+
+## Next Steps
+
+- **[x402 Payments](/docs/core/payments)** — Payment flows
+- **[Security](/docs/best-practices/security)** — Input validation
+- **[Troubleshooting](/docs/best-practices/troubleshooting)** — Common errors
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

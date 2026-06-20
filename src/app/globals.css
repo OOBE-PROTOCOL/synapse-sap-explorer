@@ -1,6 +1,76 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-background: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-glow: hsl(var(--glow));
+  --color-glow-muted: hsl(var(--glow-muted));
+  --color-neon-cyan: hsl(var(--neon-cyan));
+  --color-neon-emerald: hsl(var(--neon-emerald));
+  --color-neon-amber: hsl(var(--neon-amber));
+  --color-neon-rose: hsl(var(--neon-rose));
+  --color-surface-0: hsl(var(--surface-0));
+  --color-surface-1: hsl(var(--surface-1));
+  --color-surface-2: hsl(var(--surface-2));
+  --color-arena-bg: hsl(var(--arena-bg));
+  --color-arena-ring: hsl(var(--arena-ring));
+  --color-arena-edge: hsl(var(--arena-edge));
+
+  --font-sans: var(--font-geist-mono);
+  --font-serif: var(--font-geist-mono);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --spacing: var(--spacing);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+}
+
 
 @layer utilities {
   .text-balance {
@@ -8,144 +78,137 @@
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
- * SYNAPSE TACTICAL DESIGN SYSTEM
- *
- * Color identity: Deep black -> neutral grays -> teal accent
- * Surface model: Opaque dark surfaces with clean borders
- * Motion: Minimal, purposeful
- * Data: On-chain + off-chain unified — every metric is real
- * ═══════════════════════════════════════════════════════════ */
+/* Synapse Explorer design system: clean data UI, strong contrast, minimal motion. */
 
 @layer base {
   :root {
     --font-sans: var(--font-geist-mono);
     --font-mono: var(--font-geist-mono);
-    /* ── Light mode — slate-tinted off-white ── */
-    --background: 210 20% 96%;
-    --foreground: 210 15% 12%;
+    /* ── Light mode — premium ivory / teal command surface ── */
+    --background: 184 58% 97%;
+    --foreground: 206 48% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 210 15% 12%;
+    --card-foreground: 206 48% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 15% 12%;
+    --popover-foreground: 206 48% 9%;
     --primary: 186 93% 37%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 20% 92%;
-    --secondary-foreground: 210 15% 20%;
-    --muted: 210 20% 92%;
-    --muted-foreground: 210 10% 45%;
-    --accent: 210 20% 92%;
-    --accent-foreground: 210 15% 20%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 210 15% 82%;
-    --input: 210 15% 82%;
+    --secondary: 184 48% 92%;
+    --secondary-foreground: 204 42% 12%;
+    --muted: 186 38% 94%;
+    --muted-foreground: 204 18% 34%;
+    --accent: 186 72% 91%;
+    --accent-foreground: 203 52% 12%;
+    --destructive: 358 78% 49%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 187 31% 84%;
+    --input: 187 31% 84%;
     --ring: 186 93% 37%;
     --chart-1: 186 93% 37%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 210 20% 98%;
-    --sidebar-foreground: 210 15% 20%;
+    --chart-2: 174 72% 34%;
+    --chart-3: 204 58% 24%;
+    --chart-4: 42 91% 54%;
+    --chart-5: 348 82% 57%;
+    --radius: 0.75rem;
+    --sidebar-background: 184 62% 98%;
+    --sidebar-foreground: 206 45% 10%;
     --sidebar-primary: 186 93% 37%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 20% 90%;
-    --sidebar-accent-foreground: 210 15% 20%;
-    --sidebar-border: 210 15% 84%;
+    --sidebar-accent: 186 62% 92%;
+    --sidebar-accent-foreground: 204 44% 12%;
+    --sidebar-border: 187 31% 84%;
     --sidebar-ring: 186 93% 37%;
     /* Tactical accent system */
     --glow: 186 93% 37%;
-    --glow-muted: 186 40% 30%;
+    --glow-muted: 186 44% 42%;
     --neon-cyan: 186 93% 37%;
-    --neon-emerald: 160 70% 35%;
-    --neon-amber: 38 95% 48%;
-    --neon-rose: 0 72% 51%;
+    --neon-emerald: 158 76% 38%;
+    --neon-amber: 39 96% 50%;
+    --neon-rose: 348 82% 57%;
     /* Surface depth */
-    --surface-0: 210 20% 96%;
-    --surface-1: 210 20% 98%;
+    --surface-0: 184 58% 97%;
+    --surface-1: 186 52% 95%;
     --surface-2: 0 0% 100%;
     /* Arena tokens */
-    --arena-bg: 210 20% 96%;
+    --arena-bg: 184 58% 97%;
     --arena-ring: 186 93% 37%;
-    --arena-edge: 186 80% 32%;
-    --sidebar: 210 20% 90%;
+    --arena-edge: 188 82% 34%;
+    --sidebar: 184 48% 93%;
     --font-serif: var(--font-geist-mono);
     --spacing: 0.25rem;
-    --shadow-2xs: 0px 1px 2px hsl(0 0% 0% / 0.05);
-    --shadow-xs: 0px 1px 3px hsl(0 0% 0% / 0.06);
-    --shadow-sm: 0px 2px 4px -1px hsl(0 0% 0% / 0.08);
-    --shadow: 0px 4px 6px -1px hsl(0 0% 0% / 0.08);
-    --shadow-md: 0px 4px 8px -2px hsl(0 0% 0% / 0.1);
-    --shadow-lg: 0px 8px 16px -4px hsl(0 0% 0% / 0.12);
-    --shadow-xl: 0px 12px 24px -6px hsl(0 0% 0% / 0.15);
-    --shadow-2xl: 0px 24px 48px -12px hsl(0 0% 0% / 0.25);
-    --tracking-normal: 0em;
+    --shadow-2xs: 0px 1px 2px hsl(186 93% 15% / 0.05);
+    --shadow-xs: 0px 2px 5px hsl(186 93% 15% / 0.07);
+    --shadow-sm: 0px 4px 10px -4px hsl(186 93% 15% / 0.12);
+    --shadow: 0px 10px 24px -14px hsl(186 93% 15% / 0.18);
+    --shadow-md: 0px 16px 34px -18px hsl(186 93% 15% / 0.22);
+    --shadow-lg: 0px 24px 54px -24px hsl(186 93% 15% / 0.28);
+    --shadow-xl: 0px 32px 72px -30px hsl(186 93% 15% / 0.34);
+    --shadow-2xl: 0px 44px 96px -36px hsl(186 93% 15% / 0.42);
+    --tracking-normal: -0.01em;
   }
 
   .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 98%;
+    --background: 204 64% 4%;
+    --foreground: 184 42% 96%;
+    --card: 204 48% 7%;
+    --card-foreground: 184 42% 96%;
+    --popover: 204 48% 7%;
+    --popover-foreground: 184 42% 96%;
     --primary: 186 93% 37%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
+    --secondary: 204 42% 12%;
+    --secondary-foreground: 184 40% 94%;
+    --muted: 204 38% 13%;
+    --muted-foreground: 187 19% 68%;
+    --accent: 186 54% 13%;
+    --accent-foreground: 184 48% 96%;
+    --destructive: 358 76% 54%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 190 34% 18%;
+    --input: 190 34% 18%;
     --ring: 186 93% 37%;
     --chart-1: 186 93% 37%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 0 0% 7%;
-    --sidebar-foreground: 0 0% 96%;
+    --chart-2: 158 76% 44%;
+    --chart-3: 39 96% 58%;
+    --chart-4: 262 86% 70%;
+    --chart-5: 348 82% 62%;
+    --sidebar-background: 204 58% 5%;
+    --sidebar-foreground: 184 42% 95%;
     --sidebar-primary: 186 93% 37%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 12%;
-    --sidebar-accent-foreground: 0 0% 96%;
-    --sidebar-border: 0 0% 18%;
+    --sidebar-accent: 186 46% 12%;
+    --sidebar-accent-foreground: 184 42% 95%;
+    --sidebar-border: 190 34% 18%;
     --sidebar-ring: 186 93% 37%;
     /* Tactical accent — dark */
     --glow: 186 93% 37%;
-    --glow-muted: 186 40% 25%;
+    --glow-muted: 186 46% 30%;
     --neon-cyan: 186 93% 37%;
-    --neon-emerald: 0 0% 100%;
-    --neon-amber: 186 93% 37%;
-    --neon-rose: 0 63% 50%;
+    --neon-emerald: 158 76% 48%;
+    --neon-amber: 39 96% 58%;
+    --neon-rose: 348 82% 62%;
     /* Surface depth — dark */
-    --surface-0: 0 0% 4%;
-    --surface-1: 0 0% 7%;
-    --surface-2: 0 0% 10%;
+    --surface-0: 204 64% 4%;
+    --surface-1: 204 50% 7%;
+    --surface-2: 204 42% 10%;
     /* Arena tokens — dark */
-    --arena-bg: 0 0% 4%;
+    --arena-bg: 204 64% 4%;
     --arena-ring: 186 93% 37%;
-    --arena-edge: 186 80% 32%;
-    --sidebar: 0 0% 15%;
-    --radius: 0.5rem;
+    --arena-edge: 188 82% 34%;
+    --sidebar: 204 42% 12%;
+    --radius: 0.75rem;
     --font-sans: var(--font-geist-mono);
     --font-serif: var(--font-geist-mono);
     --font-mono: var(--font-geist-mono);
     --spacing: 0.25rem;
-    --shadow-2xs: 0px 1px 2px hsl(0 0% 0% / 0.15);
-    --shadow-xs: 0px 1px 3px hsl(0 0% 0% / 0.2);
-    --shadow-sm: 0px 2px 4px -1px hsl(0 0% 0% / 0.25);
-    --shadow: 0px 4px 6px -1px hsl(0 0% 0% / 0.25);
-    --shadow-md: 0px 4px 8px -2px hsl(0 0% 0% / 0.3);
-    --shadow-lg: 0px 8px 16px -4px hsl(0 0% 0% / 0.35);
-    --shadow-xl: 0px 12px 24px -6px hsl(0 0% 0% / 0.4);
-    --shadow-2xl: 0px 24px 48px -12px hsl(0 0% 0% / 0.5);
+    --shadow-2xs: 0px 1px 2px hsl(0 0% 0% / 0.24);
+    --shadow-xs: 0px 2px 6px hsl(0 0% 0% / 0.28);
+    --shadow-sm: 0px 6px 18px -10px hsl(0 0% 0% / 0.42);
+    --shadow: 0px 14px 34px -18px hsl(0 0% 0% / 0.55);
+    --shadow-md: 0px 20px 48px -22px hsl(0 0% 0% / 0.62);
+    --shadow-lg: 0px 30px 70px -28px hsl(0 0% 0% / 0.7);
+    --shadow-xl: 0px 42px 92px -34px hsl(0 0% 0% / 0.76);
+    --shadow-2xl: 0px 56px 120px -42px hsl(0 0% 0% / 0.84);
   }
 
   body {
@@ -164,6 +227,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 18% -12%, hsl(var(--primary) / 0.16), transparent 32rem),
+      radial-gradient(circle at 100% 0%, hsl(var(--neon-emerald) / 0.08), transparent 28rem),
+      linear-gradient(180deg, hsl(var(--surface-0)), hsl(var(--background)) 46%, hsl(var(--surface-1)));
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -176,52 +244,77 @@
 @layer utilities {
   /* ── Glow system (subtle, primary-based) ──── */
   .glow-sm {
-    box-shadow: 0 0 8px -3px hsl(var(--glow) / 0.12);
+    box-shadow: 0 0 10px -4px hsl(var(--glow) / 0.28), var(--shadow-xs);
   }
   .glow-md {
-    box-shadow: 0 0 16px -5px hsl(var(--glow) / 0.18);
+    box-shadow: 0 0 22px -8px hsl(var(--glow) / 0.34), var(--shadow-sm);
   }
   .glow-lg {
-    box-shadow: 0 0 28px -8px hsl(var(--glow) / 0.22);
+    box-shadow: 0 0 42px -14px hsl(var(--glow) / 0.42), var(--shadow-md);
   }
 
-  /* ── Glass panels (simplified — opaque dark) ── */
+  /* ── Glass panels — premium liquid surface, no flat grey ── */
   .glass {
-    @apply bg-card rounded-lg;
-    border: 1px solid hsl(var(--border));
+    @apply rounded-lg;
+    background:
+      linear-gradient(145deg, hsl(var(--card) / 0.86), hsl(var(--surface-1) / 0.76)),
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.1), transparent 42%);
+    border: 1px solid hsl(var(--border) / 0.82);
+    box-shadow: var(--shadow-sm), inset 0 1px 0 hsl(0 0% 100% / 0.06);
+    backdrop-filter: blur(18px) saturate(1.25);
   }
   .glass-strong {
-    @apply bg-card rounded-lg;
-    border: 1px solid hsl(var(--border));
+    @apply rounded-lg;
+    background:
+      linear-gradient(145deg, hsl(var(--card) / 0.94), hsl(var(--surface-2) / 0.86)),
+      radial-gradient(circle at 15% 0%, hsl(var(--primary) / 0.14), transparent 44%);
+    border: 1px solid hsl(var(--primary) / 0.22);
+    box-shadow: var(--shadow-md), inset 0 1px 0 hsl(0 0% 100% / 0.08);
+    backdrop-filter: blur(22px) saturate(1.35);
   }
 
-  /* ── HUD border (simplified to solid) ── */
+  /* ── HUD border ── */
   .hud-border {
     border: 1px solid hsl(var(--border));
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.06), 0 0 0 1px hsl(var(--background) / 0.35);
   }
 
-  /* ── Diamond grid (subtle dot pattern) ── */
+  /* ── Diamond grid — ultra-subtle technical texture ── */
   .diamond-grid {
-    /* Clean minimal background — no heavy patterns */
+    background-image:
+      linear-gradient(135deg, hsl(var(--primary) / 0.055) 1px, transparent 1px),
+      linear-gradient(45deg, hsl(var(--primary) / 0.035) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: 0 0, 14px 14px;
   }
 
-  /* ── Content gradient (minimal) ── */
+  /* ── Content gradient ── */
   .content-gradient {
-    /* intentionally empty for tactical style */
+    background:
+      radial-gradient(circle at 20% 0%, hsl(var(--primary) / 0.12), transparent 30rem),
+      linear-gradient(180deg, hsl(var(--surface-0)), hsl(var(--background)) 62%, hsl(var(--surface-1)));
   }
 
   /* ── Text effects ── */
   .gradient-text {
-    @apply text-foreground font-bold;
+    @apply font-bold;
+    color: hsl(var(--foreground));
+    background: linear-gradient(90deg, hsl(var(--foreground)), hsl(var(--primary)) 48%, hsl(var(--foreground)) 92%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
   .gradient-text-arena {
-    color: hsl(var(--primary));
-    font-weight: 700;
+    background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--neon-emerald)), hsl(var(--primary)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
   }
 
   /* ── Status indicators ── */
   .status-online {
-    color: hsl(0 0% 100%);
+    color: hsl(var(--neon-emerald));
   }
   .status-degraded {
     color: hsl(var(--primary));
@@ -239,7 +332,7 @@
     position: absolute;
     inset: -3px;
     border-radius: 50%;
-    border: 1px solid hsl(0 0% 100% / 0.25);
+    border: 1px solid hsl(var(--primary) / 0.34);
     animation: pulse-ring-anim 2.8s ease-out infinite;
   }
 
@@ -256,6 +349,26 @@
   /* ── Fade-in ── */
   .animate-fade-in {
     animation: fade-in 0.3s ease-out;
+  }
+
+  /* ── Dashboard activity rail ── */
+  .activity-rail {
+    mask-image: linear-gradient(to right, transparent, black 4%, black 96%, transparent);
+  }
+
+  .activity-rail-track {
+    width: max-content;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .activity-rail-track {
+      animation: activity-rail-scroll 46s linear infinite;
+    }
+
+    .activity-rail:hover .activity-rail-track,
+    .activity-rail:focus-within .activity-rail-track {
+      animation-play-state: paused;
+    }
   }
 
   /* ── Stagger children ── */
@@ -296,8 +409,11 @@
  * ═══════════════════════════════════════════════════════════ */
 
 .sidebar {
-  background: hsl(var(--sidebar-background));
-  border-right: 1px solid hsl(var(--border));
+  background:
+    linear-gradient(180deg, hsl(var(--sidebar-background) / 0.96), hsl(var(--surface-1) / 0.92)),
+    radial-gradient(circle at top, hsl(var(--primary) / 0.08), transparent 22rem);
+  border-right: 1px solid hsl(var(--sidebar-border));
+  box-shadow: inset -1px 0 0 hsl(var(--primary) / 0.06);
 }
 
 @media (min-width: 1024px) {
@@ -350,8 +466,9 @@ body.drawer-open {
   top: 0;
   z-index: 40;
   flex-shrink: 0;
-  background: hsl(var(--card));
+  background: hsl(var(--card) / 0.82);
   border-bottom: 1px solid hsl(var(--border));
+  backdrop-filter: blur(18px) saturate(1.2);
 }
 
 .content-main {
@@ -398,6 +515,14 @@ body.drawer-open {
     100% {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+  @keyframes activity-rail-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(-50% - 0.375rem));
     }
   }
   @keyframes subtle-float {
@@ -511,13 +636,9 @@ body.drawer-open {
 }
 
 /* ═══════════════════════════════════════════════════════════
- * LIGHT-MODE OVERRIDES — Remap hardcoded dark utilities to
- * semantic tokens when the .dark class is NOT present on <html>.
- *
- * The codebase has hundreds of hardcoded dark utilities
- * (bg-neutral-900, text-white, border-neutral-800, etc.).
- * Rather than rewriting every component, we surgically remap
- * them in light mode so the design system theme toggle works.
+ * LIGHT-MODE COMPATIBILITY
+ * Legacy dark utilities are remapped to semantic tokens while older pages
+ * are being converted component by component.
  * ═══════════════════════════════════════════════════════════ */
 
 html:not(.dark) {
@@ -606,7 +727,17 @@ html:not(.dark) {
     color: hsl(var(--muted-foreground)) !important;
   }
   .text-neutral-600 {
-    color: hsl(var(--muted-foreground) / 0.7) !important;
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  .text-muted-foreground\/30,
+  .text-muted-foreground\/40,
+  .text-muted-foreground\/50,
+  .text-muted-foreground\/60,
+  .text-muted-foreground\/70,
+  .text-foreground\/40,
+  .text-foreground\/50 {
+    color: hsl(var(--muted-foreground)) !important;
   }
 
   /* Hover text */

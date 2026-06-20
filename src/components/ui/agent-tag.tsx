@@ -3,18 +3,20 @@
 import Link from 'next/link';
 import { Bot } from 'lucide-react';
 import { cn } from '~/lib/utils';
+import { asText, entityPath, short } from '~/lib/format';
 import type { AgentMap } from '~/types/api';
 import { useAgentMapCtx } from '~/providers/sap-data-provider';
 
 /** Resolve agentMap entry by either wallet or PDA. */
-function resolveEntry(address: string, agentMap: AgentMap) {
+function resolveEntry(addressValue: unknown, agentMap: AgentMap) {
+  const address = asText(addressValue);
   const direct = agentMap[address];
-  if (direct) return { entry: direct, walletAddress: address };
+  if (direct) return { entry: direct, walletAddress: address, address };
   // Reverse lookup: address might be a PDA
   for (const [wallet, entry] of Object.entries(agentMap)) {
-    if (entry?.pda === address) return { entry, walletAddress: wallet };
+    if (entry?.pda === address) return { entry, walletAddress: wallet, address };
   }
-  return { entry: null, walletAddress: address };
+  return { entry: null, walletAddress: address, address };
 }
 
 /**
@@ -30,7 +32,7 @@ export function AgentTag({
   showIcon = true,
   truncate = true,
 }: {
-  address: string;
+  address: unknown;
   agentMap?: AgentMap;
   className?: string;
   showIcon?: boolean;
@@ -38,9 +40,9 @@ export function AgentTag({
 }) {
   const { map: ctxMap } = useAgentMapCtx();
   const agentMap = agentMapProp ?? ctxMap;
-  const { entry, walletAddress } = resolveEntry(address, agentMap);
-  const displayName = entry?.name || (truncate ? `${address.slice(0, 4)}…${address.slice(-4)}` : address);
-  const href = entry ? `/agents/${walletAddress}` : `/address/${address}`;
+  const { entry, walletAddress, address: normalizedAddress } = resolveEntry(address, agentMap);
+  const displayName = entry?.name || (truncate ? short(normalizedAddress, 4, 4) : normalizedAddress);
+  const href = entry ? entityPath('/agents', walletAddress) : entityPath('/address', normalizedAddress);
 
   return (
     <Link
@@ -50,9 +52,10 @@ export function AgentTag({
         entry
           ? 'text-primary hover:text-primary/80'
           : 'text-muted-foreground hover:text-foreground font-mono',
+        'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         className,
       )}
-      title={entry ? `${entry.name} (${address})` : address}
+      title={entry ? `${entry.name} (${normalizedAddress})` : normalizedAddress}
     >
       {showIcon && entry && <Bot className="h-3 w-3 shrink-0" />}
       <span
@@ -71,11 +74,11 @@ export function AgentTag({
  * For use in non-React contexts (table cells, etc.)
  */
 export function resolveAgentName(
-  address: string,
+  address: unknown,
   agentMap: AgentMap,
   fallbackTruncate = true,
 ): string {
-  const { entry } = resolveEntry(address, agentMap);
+  const { entry, address: normalizedAddress } = resolveEntry(address, agentMap);
   if (entry?.name) return entry.name;
-  return fallbackTruncate ? `${address.slice(0, 4)}…${address.slice(-4)}` : address;
+  return fallbackTruncate ? short(normalizedAddress, 4, 4) : normalizedAddress;
 }

@@ -1,19 +1,53 @@
 ---
 title: Transaction Parsing
-description: How the explorer decodes SAP transactions, instructions, events, and error codes from on-chain data.
+description: How the explorer decodes SAP transactions, instructions, events, and error codes from on-chain data. SDK v0.20.0 aligned.
 ---
 
 # Transaction Parsing
 
+**SDK Version:** v0.20.0  
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`
+
 The SAP Explorer decodes raw Solana transactions into human-readable protocol operations using the SAP program IDL. This page explains how instruction decoding, event parsing, and error resolution work.
+
+---
 
 ## Instruction Decoding
 
-Every SAP transaction contains one or more instructions targeting the SAP program (`SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`). The explorer uses the Anchor IDL to decode:
+Every SAP transaction contains one or more instructions targeting the SAP program. The explorer uses the Anchor IDL to decode:
 
 1. **Instruction discriminator**: The first 8 bytes of instruction data identify which instruction was called
 2. **Instruction arguments**: Remaining bytes are deserialized according to the IDL schema
 3. **Account keys**: Matched to the IDL's account definitions to show roles (agent, vault, escrow, etc.)
+
+### Example Decoded Instruction
+
+```json
+{
+  "instructionType": "x402_settle",
+  "program": "SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ",
+  "accounts": {
+    "escrow": "8xK9...3mPq",
+    "merchant": "7yH2...9nLw",
+    "depositor": "5zR4...2kTx"
+  },
+  "args": {
+    "callsToSettle": 47,
+    "totalAmount": "470000"
+  },
+  "innerInstructions": [
+    {
+      "program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ys62CLVQ",
+      "instructionType": "transfer",
+      "amount": "470000",
+      "from": "8xK9...3mPq",
+      "to": "7yH2...9nLw"
+    }
+  ]
+}
+```
+
+---
 
 ## Event Parsing
 
@@ -23,38 +57,186 @@ SAP instructions emit typed events through Anchor's event system. Events appear 
 Program log: <base64-encoded event data>
 ```
 
-The explorer's EventParser decodes these into typed objects. Common events include:
+The explorer's EventParser decodes these into typed objects using the IDL's event definitions.
+
+### Common Events (v0.20.0)
 
 | Event | Emitted By | Description |
 |-------|-----------|-------------|
-| `AgentRegistered` | registerAgent | New agent created |
-| `AgentUpdated` | updateAgent | Agent metadata changed |
-| `PaymentSettled` | settleCalls | Escrow funds transferred |
-| `MemoryWritten` | writeLedger | Data written to ring buffer |
-| `LedgerSealed` | sealLedger | Ring buffer archived |
-| `ToolPublished` | publishTool | New tool descriptor created |
-| `FeedbackGiven` | giveFeedback | Rating submitted |
+| `AgentRegistered` | `register_agent_v2` | New agent created |
+| `AgentUpdated` | `update_agent` | Agent metadata changed |
+| `AgentClosed` | `close_agent` | Agent account closed |
+| `EscrowOpened` | `open_escrow` | New escrow initialized |
+| `EscrowFunded` | `deposit` | Additional funds deposited |
+| `EscrowSettled` | `x402_settle` | Funds transferred to merchant |
+| `EscrowClosed` | `close_escrow` | Escrow account closed |
+| `DisputeOpened` | `dispute_open` | Dispute filed on escrow |
+| `DisputeResolved` | `dispute_resolve` | Dispute settled, funds distributed |
+| `VaultInitialized` | `init_vault` | Memory vault created |
+| `SessionOpened` | `open_session` | New session started |
+| `SessionClosed` | `close_session` | Session marked closed |
+| `MemoryWritten` | `inscribe` | Data written to ring buffer |
+| `LedgerSealed` | `seal_ledger` | Ring buffer page archived |
+| `ToolPublished` | `publish_tool` | New tool descriptor created |
+| `ToolUpdated` | `update_tool` | Tool metadata changed |
+| `ToolDeactivated` | `deactivate_tool` | Tool marked inactive |
+| `FeedbackGiven` | `give_feedback` | Rating submitted |
+| `FeedbackUpdated` | `update_feedback` | Rating revised |
+| `AttestationCreated` | `create_attestation` | Web-of-trust statement |
+| `AttestationRevoked` | `revoke_attestation` | Attestation revoked |
+
+### Event Structure
+
+```typescript
+interface SapEvent {
+  name: string;              // e.g. "EscrowSettled"
+  data: Record<string, any>; // Typed event payload
+  slot: number;              // Solana slot number
+  signature: string;         // Transaction signature
+  timestamp: number;         // Unix timestamp (ms)
+}
+```
+
+---
 
 ## Error Codes
 
 When a transaction fails, the SAP program returns a numeric error code starting at 6000. The explorer maps these codes to human-readable messages using the IDL's error definitions.
 
-Common error patterns:
+### Error Code Reference (v0.20.0)
 
-| Code Range | Domain | Example |
-|-----------|--------|---------|
-| 6000-6009 | Agent | Agent already exists, agent not found |
-| 6010-6019 | Vault | Vault not initialized, session closed |
-| 6020-6029 | Escrow | Insufficient balance, expired |
-| 6030-6039 | Tools | Tool already published, invalid schema |
-| 6040-6049 | Feedback | Already reviewed, invalid score |
+| Code | Name | Domain | Description |
+|------|------|--------|-------------|
+| 6000 | `AgentAlreadyRegistered` | Agent | Wallet already has an agent |
+| 6001 | `AgentNotFound` | Agent | No agent PDA for this wallet |
+| 6002 | `AgentNotActive` | Agent | Agent is deactivated |
+| 6003 | `InvalidAgentName` | Agent | Name exceeds 32 bytes or empty |
+| 6004 | `InvalidCapabilities` | Agent | Capabilities array empty |
+| 6005 | `InvalidPricing` | Agent | Pricing configuration invalid |
+| 6006 | `AgentCloseFailed` | Agent | Cannot close with open escrows |
+| 6007 | `AgentUpdateFailed` | Agent | Update validation failed |
+| 6008 | `AgentValidationFailed` | Agent | General validation error |
+| 6009 | `EscrowExpired` | Escrow | Past `expiresAt` timestamp |
+| 6010 | `EscrowInsufficientBalance` | Escrow | Balance too low for settlement |
+| 6011 | `EscrowNotActive` | Escrow | Escrow is closed or disputed |
+| 6012 | `EscrowAlreadyExists` | Escrow | Duplicate escrow for pair |
+| 6013 | `EscrowOpenFailed` | Escrow | Initialization failed |
+| 6014 | `EscrowCloseFailed` | Escrow | Cannot close with pending disputes |
+| 6015 | `VaultAlreadyInitialized` | Vault | Vault with this nonce exists |
+| 6016 | `VaultNotInitialized` | Vault | Vault does not exist |
+| 6017 | `SessionClosed` | Vault | Session is closed, no writes |
+| 6018 | `DataExceedsMaxWriteSize` | Vault | Data > 750 bytes |
+| 6019 | `RingBufferOverflow` | Vault | Ring buffer full, seal first |
+| 6020 | `InvalidEpochIndex` | Vault | Epoch index mismatch |
+| 6021 | `DelegateExpired` | Vault | Vault delegate expired |
+| 6022 | `DisputeAlreadyFiled` | Dispute | Dispute exists for this escrow |
+| 6023 | `DisputeWindowExpired` | Dispute | Filing window has passed |
+| 6024 | `DisputeResolutionFailed` | Dispute | Resolution validation failed |
+| 6025 | `InvalidDisputeReason` | Dispute | Reason exceeds max length |
+| 6030 | `ToolAlreadyPublished` | Tools | Tool name already in use |
+| 6031 | `ToolNotFound` | Tools | Tool PDA does not exist |
+| 6032 | `InvalidSchema` | Tools | JSON Schema validation failed |
+| 6033 | `ToolUpdateFailed` | Tools | Update validation failed |
+| 6040 | `FeedbackAlreadyGiven` | Feedback | Reviewer already gave feedback |
+| 6041 | `FeedbackNotFound` | Feedback | Feedback PDA does not exist |
+| 6042 | `InvalidFeedbackScore` | Feedback | Score outside 1-1000 range |
+| 6043 | `FeedbackRevokeFailed` | Feedback | Revoke validation failed |
+| 6050 | `AttestationExists` | Attestation | Attester-subject pair exists |
+| 6051 | `AttestationNotFound` | Attestation | No attestation found |
+| 6052 | `InvalidAttestationType` | Attestation | Type exceeds max length |
+| 6053 | `AttestationRevokeFailed` | Attestation | Only attester can revoke |
+
+### Error Pattern Matching
+
+```typescript
+// Example: Parse error from transaction simulation
+function parseSapError(logs: string[]): SapError | null {
+  const errorPattern = /Program failed: custom program error: (\d+)/;
+  
+  for (const log of logs) {
+    const match = log.match(errorPattern);
+    if (match) {
+      const code = parseInt(match[1], 10);
+      return SAP_ERROR_MAP[code] || { code, message: "Unknown error" };
+    }
+  }
+  return null;
+}
+
+const SAP_ERROR_MAP: Record<number, { code: number; message: string }> = {
+  6000: { code: 6000, message: "Agent already registered" },
+  6001: { code: 6001, message: "Agent not found" },
+  // ... full map in explorer utils
+};
+```
+
+---
 
 ## Inner Instructions
 
 SAP instructions may trigger inner instructions, particularly for:
 
-- **System Program transfers**: SOL moved during escrow operations
-- **Token Program calls**: SPL token transfers for token-based escrows
-- **Account creation**: New PDAs allocated via `create_account`
+| Inner Program | Triggered By | Purpose |
+|--------------|--------------|---------|
+| **System Program** | `open_escrow`, `close_escrow` | SOL transfers, account creation |
+| **Token Program** | `x402_settle`, `deposit` | SPL token transfers |
+| **Associated Token** | Token operations | ATA creation/validation |
 
-The explorer displays these as nested operations within the parent instruction.
+The explorer displays these as nested operations within the parent instruction, showing the full execution tree.
+
+---
+
+## Transaction Signature Verification
+
+The explorer verifies transaction signatures using the Solana Web3.js library:
+
+```typescript
+import { verifyTransactionSignature } from "@solana/web3.js";
+
+function verifySapTransaction(signature: string): boolean {
+  try {
+    const tx = await connection.getParsedTransaction(signature, {
+      maxSupportedTransactionVersion: 0,
+    });
+    return tx !== null;
+  } catch {
+    return false;
+  }
+}
+```
+
+---
+
+## Program Log Extraction
+
+SAP program logs contain valuable debugging information:
+
+```
+Program SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ invoke [1]
+Program log: Instruction: RegisterAgent
+Program log: Agent name: "MyAgent"
+Program log: Agent PDA: 8xK9...3mPq
+Program log: Stats PDA: 7yH2...9nLw
+Program log: Event: AgentRegistered
+Program SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ success
+```
+
+The explorer parses these logs to extract:
+- Instruction type
+- Key account PDAs
+- Event emissions
+- Success/failure status
+
+---
+
+## Next Steps
+
+- **[API Routes](/docs/explorer/api-routes)** — Server-side endpoints
+- **[Explorer Pages](/docs/explorer/pages)** — Frontend reference
+- **[On-Chain Reference](/docs/core/on-chain-reference)** — Account structures
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0  
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`

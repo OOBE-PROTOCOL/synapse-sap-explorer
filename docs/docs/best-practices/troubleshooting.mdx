@@ -1,9 +1,13 @@
 ---
 title: Troubleshooting & FAQ
-description: Common errors, debugging strategies, and frequently asked questions for SAP SDK.
+description: Common errors, debugging strategies, and frequently asked questions for SAP SDK v0.20.0.
 ---
 
 # Troubleshooting & FAQ
+
+**SDK Version:** v0.20.0
+
+---
 
 ## Common Errors
 
@@ -46,6 +50,28 @@ if (balance.lt(new BN(requiredAmount))) {
     new BN(topUpAmount),
   );
 }
+```
+
+---
+
+### `EscrowExpired` (error 6009)
+
+**Symptom:** Cannot settle or withdraw from escrow.
+
+**Cause:** The escrow has passed its `expiresAt` timestamp.
+
+**Fix:**
+```typescript
+// Close the expired escrow to recover funds
+await client.escrow.close(agentPda, depositorWallet);
+
+// Create a new escrow if needed
+await client.x402.preparePayment(agentWallet, {
+  pricePerCall: 10_000,
+  maxCalls: 100,
+  deposit: 1_000_000,
+  expiresAt: Math.floor(Date.now() / 1000) + 86400, // 24 hours
+});
 ```
 
 ---
@@ -197,35 +223,134 @@ Zod is optional. It is only required if you import schema validation utilities f
 | 6001 | `AgentNotFound` | No agent PDA exists for this wallet |
 | 6009 | `EscrowExpired` | Escrow past its `expiresAt` timestamp |
 | 6010 | `EscrowInsufficientBalance` | Balance too low for settlement |
+| 6011 | `EscrowNotActive` | Escrow is closed or disputed |
 | 6015 | `VaultAlreadyInitialized` | Vault with this nonce already exists |
 | 6017 | `SessionClosed` | Session is closed, no further writes |
 | 6018 | `DataExceedsMaxWriteSize` | Data exceeds 750-byte limit |
 | 6019 | `RingBufferOverflow` | Ring buffer full, seal before writing |
+| 6020 | `InvalidEpochIndex` | Epoch index doesn't match sequence / 1000 |
+| 6021 | `DelegateExpired` | Vault delegate has expired |
+| 6022 | `DisputeAlreadyFiled` | Dispute already exists for this escrow |
+| 6023 | `DisputeWindowExpired` | Dispute filing window has passed |
 
 ---
 
 ## FAQ
 
-**Q: Can I use the SDK without Anchor?**
+### Q: Can I use the SDK without Anchor?
 
-No. The SDK requires `@coral-xyz/anchor` as a peer dependency. It uses Anchor providers and program interfaces under the hood. You can create a minimal provider with `SapConnection.fromKeypair()`.
+**No.** The SDK requires `@coral-xyz/anchor` as a peer dependency. It uses Anchor providers and program interfaces under the hood. You can create a minimal provider with `SapClient.from(AnchorProvider.env())`.
 
-**Q: What Solana clusters are supported?**
+### Q: What Solana clusters are supported?
 
-Mainnet-beta, devnet, and localnet. Custom clusters work if you provide the RPC URL.
+**Mainnet-beta, devnet, and localnet.** Custom clusters work if you provide the RPC URL.
 
-**Q: Do I need PostgreSQL?**
+### Q: Do I need PostgreSQL?
 
-No. PostgreSQL is optional. The `pg` package is a peer dependency - only install it if you want off-chain mirroring and analytics. See the [PostgreSQL Mirror](../sdk/postgres-mirror) guide.
+**No.** PostgreSQL is optional. The `pg` package is a peer dependency — only install it if you want off-chain mirroring and analytics.
 
-**Q: How much SOL does registration cost?**
+### Q: How much SOL does registration cost?
 
-Agent registration costs ~0.003–0.005 SOL in rent (reclaimable on close). Tools cost ~0.001–0.002 SOL each. Escrows cost ~0.002 SOL for the account plus whatever deposit amount. See the [Cost Optimization](../best-practices/cost-optimization) guide for details.
+**Agent registration:** ~0.018 SOL in rent (reclaimable on close)
+- AgentAccount: ~0.014 SOL
+- AgentStats: ~0.004 SOL
 
-**Q: Can multiple wallets control one agent?**
+**Tools:** ~0.008 SOL each (reclaimable)
 
-No. Each agent PDA is derived from a single wallet. Use the Vault Delegation system to grant hot-wallet access to specific operations. See the [Security](../best-practices/security) guide.
+**Escrows:** ~0.002 SOL for the account + deposit amount
 
-**Q: How do I migrate from v0.5.x to v0.6.0?**
+See the [Cost Optimization](../best-practices/cost-optimization) guide for details.
 
-No breaking changes. v0.6.0 is fully backward compatible. New features (endpoint types, network normalizer, RPC strategy, Zod schemas, CLI) are all additive. New optional peer dependency: `zod` (only if using schema validation).
+### Q: Can multiple wallets control one agent?
+
+**No.** Each agent PDA is derived from a single wallet. Use the Vault Delegation system to grant hot-wallet access to specific operations. See the [Security](../best-practices/security) guide.
+
+### Q: How do I migrate from v0.19.x to v0.20.0?
+
+**v0.20.0 is backward compatible.** Key changes:
+- Dispute module added (optional)
+- Enhanced ledger with better sealing
+- 38 event parsers (up from 32)
+- No breaking changes to existing APIs
+
+### Q: What is the One Agent Per User constraint?
+
+**Each wallet can register exactly ONE agent.** This is enforced via PDA derivation `["sap_agent", owner]`. If you need to create a new agent, you must first close the existing one with `client.agent.close()`.
+
+### Q: How do I debug a failing transaction?
+
+**Use simulation first:**
+```typescript
+try {
+  await client.agent.register({ /* ... */ });
+} catch (error: unknown) {
+  if (error instanceof Error && error.message.includes("Simulation failed")) {
+    const logs = (error as any).logs as string[] | undefined;
+    if (logs) {
+      console.error("Program logs:");
+      for (const log of logs) {
+        console.error("  ", log);
+      }
+    }
+  }
+}
+```
+
+**Or use the CLI:**
+```bash
+synapse-sap agent register --manifest agent.json --simulate --verbose
+```
+
+---
+
+## Debugging Strategies
+
+### 1. Use `doctor run` First
+
+```bash
+synapse-sap doctor run --json
+```
+
+This checks Node version, SDK compatibility, environment variables, keypair validity, RPC reachability, and disk space.
+
+### 2. Enable Verbose Logging
+
+```typescript
+const client = SapClient.from(AnchorProvider.env(), {
+  debug: true,  // Enable debug logging
+});
+```
+
+### 3. Check Cluster Configuration
+
+```bash
+synapse-sap config list | grep cluster
+```
+
+Ensure you're on the expected cluster (mainnet/devnet/localnet).
+
+### 4. Verify PDA Derivation
+
+```typescript
+import { deriveAgent } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
+
+const [expectedPda] = deriveAgent(walletPublicKey);
+console.log("Expected PDA:", expectedPda.toBase58());
+
+// Compare with the PDA you're using
+console.log("Using PDA:", actualPda.toBase58());
+console.log("Match:", expectedPda.equals(actualPda));
+```
+
+---
+
+## Next Steps
+
+- **[Error Handling](/docs/best-practices/error-handling)** — Structured error patterns
+- **[Security](/docs/best-practices/security)** — Security best practices
+- **[On-Chain Reference](/docs/core/on-chain-reference)** — Account types and seeds
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

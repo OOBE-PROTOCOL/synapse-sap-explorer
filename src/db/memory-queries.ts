@@ -318,12 +318,34 @@ export async function getEventsByVault(
   opts?: { limit?: number },
 ): Promise<SapEvent[]> {
   const limit = opts?.limit ?? 100;
-  // Events related to a vault: search in data jsonb for vault PDA or agent PDA
-  // Also search by wallet (vault owner) via sap_memory_vaults join
+  // Events related to a vault. Deduplicate before applying the limit because
+  // historical backfills may have inserted the same program event more than once.
   const { rows } = await getPool().query(
-    `SELECT e.* FROM sap_exp.sap_events e
-     WHERE e.data::text LIKE $1
-     ORDER BY e.slot DESC LIMIT $2`,
+    `SELECT *
+     FROM (
+       SELECT DISTINCT ON (
+         e.event_name,
+         e.tx_signature,
+         COALESCE(e.data->>'sequence', ''),
+         COALESCE(e.data->>'entryIndex', e.data->>'entry_index', ''),
+         COALESCE(e.data->>'fragmentIndex', e.data->>'fragment_index', ''),
+         COALESCE(e.data->>'contentHash', e.data->>'content_hash', '')
+       )
+         e.*
+       FROM sap_exp.sap_events e
+       WHERE e.data::text LIKE $1
+       ORDER BY
+         e.event_name,
+         e.tx_signature,
+         COALESCE(e.data->>'sequence', ''),
+         COALESCE(e.data->>'entryIndex', e.data->>'entry_index', ''),
+         COALESCE(e.data->>'fragmentIndex', e.data->>'fragment_index', ''),
+         COALESCE(e.data->>'contentHash', e.data->>'content_hash', ''),
+         e.slot DESC,
+         e.id DESC
+     ) unique_events
+     ORDER BY slot DESC
+     LIMIT $2`,
     [`%${vaultPda}%`, limit],
   );
   return rows.map((r) => ({

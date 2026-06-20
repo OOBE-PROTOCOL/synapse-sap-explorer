@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse, type NextRequest } from 'next/server';
 import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getSynapseConnection, getRpcConfig, getSapClient } from '~/lib/sap/discovery';
+import { withTimeout } from '~/lib/async-timeout';
 
 export interface TokenMeta {
   name: string;
@@ -49,6 +50,27 @@ const KNOWN_TOKENS: Record<string, TokenMeta> = {
 };
 
 const METAPLEX_METADATA_PROGRAM = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+const BALANCE_CACHE_TTL_MS = 60_000;
+const RESOLVE_TIMEOUT_MS = 1_000;
+const BALANCE_RPC_TIMEOUT_MS = 2_000;
+const BALANCE_ENRICH_TIMEOUT_MS = 900;
+
+const globalForBalances = globalThis as unknown as {
+  __sapBalanceCache?: Map<string, { ts: number; data: WalletBalancesResponse }>;
+};
+const balanceCache = globalForBalances.__sapBalanceCache ?? (
+  globalForBalances.__sapBalanceCache = new Map<string, { ts: number; data: WalletBalancesResponse }>()
+);
+
+function readBalanceCache(key: string): WalletBalancesResponse | null {
+  const entry = balanceCache.get(key);
+  if (!entry) return null;
+  return Date.now() - entry.ts < BALANCE_CACHE_TTL_MS ? entry.data : null;
+}
+
+function writeBalanceCache(key: string, data: WalletBalancesResponse): void {
+  balanceCache.set(key, { ts: Date.now(), data });
+}
 
 /* ── On-chain metadata resolution ─────────────────────────── */
 
@@ -238,12 +260,37 @@ export async function GET(
 
   try {
     const { wallet: walletOrId } = await params;
+    const cached = readBalanceCache(walletOrId);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          'x-sap-data-source': 'memory-cache',
+        },
+      });
+    }
+
     const { url: rpcUrl } = getRpcConfig();
-    const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
-      identifier: walletOrId,
-      rpcUrl,
-    }).catch(() => null);
+    const resolved = await withTimeout(
+      getSapClient().metaplex.resolveAgentIdentifier({
+        identifier: walletOrId,
+        rpcUrl,
+      }),
+      RESOLVE_TIMEOUT_MS,
+      'agent wallet resolve',
+    ).catch(() => null);
     const wallet = resolved?.wallet?.toBase58() ?? walletOrId;
+
+    const walletCached = wallet === walletOrId ? null : readBalanceCache(wallet);
+    if (walletCached) {
+      writeBalanceCache(walletOrId, walletCached);
+      return NextResponse.json(walletCached, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          'x-sap-data-source': 'memory-cache',
+        },
+      });
+    }
 
     let pubkey: PublicKey;
     try {
@@ -256,11 +303,22 @@ export async function GET(
 
     const connection = getSynapseConnection();
 
-    const [solBalance, tokenAccounts, solPrice] = await Promise.all([
-      connection.getBalance(pubkey).catch(() => 0),
-      connection.getParsedTokenAccountsByOwner(pubkey, {
-        programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-      }).catch(() => null),
+    const [solBalance, tokenAccounts, token2022Accounts, solPrice] = await Promise.all([
+      withTimeout(connection.getBalance(pubkey), BALANCE_RPC_TIMEOUT_MS, 'wallet sol balance').catch(() => 0),
+      withTimeout(
+        connection.getParsedTokenAccountsByOwner(pubkey, {
+          programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        }),
+        BALANCE_RPC_TIMEOUT_MS,
+        'wallet spl token accounts',
+      ).catch(() => null),
+      withTimeout(
+        connection.getParsedTokenAccountsByOwner(pubkey, {
+          programId: new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'),
+        }),
+        BALANCE_RPC_TIMEOUT_MS,
+        'wallet token-2022 accounts',
+      ).catch(() => null),
       fetchSolPrice(),
     ]);
 
@@ -284,10 +342,7 @@ export async function GET(
 
     // Also scan Token-2022
     try {
-      const t22Accounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
-        programId: new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'),
-      });
-      for (const ta of t22Accounts.value) {
+      for (const ta of token2022Accounts?.value ?? []) {
         const info = ta.account.data.parsed?.info as TokenAccountInfo | undefined;
         if (!info || !info.tokenAmount?.amount || info.tokenAmount.amount === '0') continue;
         if (USDC_MINTS.has(info.mint)) {
@@ -305,9 +360,24 @@ export async function GET(
 
     // Resolve metadata for all unknown mints + detect deployer
     const unknownMints = rawTokens.filter((t) => !KNOWN_TOKENS[t.mint]).map((t) => t.mint);
-    const { metaMap, deployerMints } = unknownMints.length > 0
-      ? await fetchTokenMetaBatch(unknownMints, wallet)
-      : { metaMap: {} as Record<string, TokenMeta>, deployerMints: new Map<string, { name: string; symbol: string }>() };
+    const priceTargets = rawTokens
+      .map((t) => t.mint)
+      .filter((m) => !USDC_MINTS.has(m) && m !== 'So11111111111111111111111111111111111111112');
+
+    const [metadataResult, priceMap] = await Promise.all([
+      unknownMints.length > 0
+        ? withTimeout(
+        fetchTokenMetaBatch(unknownMints, wallet),
+        BALANCE_ENRICH_TIMEOUT_MS,
+        'wallet token metadata',
+      ).catch(() => ({ metaMap: {} as Record<string, TokenMeta>, deployerMints: new Map<string, { name: string; symbol: string }>() }))
+        : Promise.resolve({ metaMap: {} as Record<string, TokenMeta>, deployerMints: new Map<string, { name: string; symbol: string }>() }),
+      priceTargets.length > 0
+        ? withTimeout(fetchTokenPrices(priceTargets), BALANCE_ENRICH_TIMEOUT_MS, 'wallet token prices')
+          .catch(() => ({} as Record<string, number>))
+        : Promise.resolve({} as Record<string, number>),
+    ]);
+    const { metaMap, deployerMints } = metadataResult;
 
     const tokens: TokenBalance[] = rawTokens
       .map((t) => ({
@@ -316,13 +386,6 @@ export async function GET(
         isDeployer: deployerMints.has(t.mint),
       }))
       .sort((a, b) => b.uiAmount - a.uiAmount);
-
-    // Jupiter pricing for every held mint. We exclude USDC mints (priced 1:1)
-    // and the WSOL mint (already priced via SOL feed) to keep payload small.
-    const priceTargets = tokens
-      .map((t) => t.mint)
-      .filter((m) => !USDC_MINTS.has(m) && m !== 'So11111111111111111111111111111111111111112');
-    const priceMap = priceTargets.length > 0 ? await fetchTokenPrices(priceTargets) : {};
 
     let tokensUsdSubtotal = 0;
     for (const t of tokens) {
@@ -364,6 +427,8 @@ export async function GET(
       totalUsd,
       deployedTokens,
     };
+    writeBalanceCache(walletOrId, response);
+    writeBalanceCache(wallet, response);
 
     return NextResponse.json(response, {
       headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },

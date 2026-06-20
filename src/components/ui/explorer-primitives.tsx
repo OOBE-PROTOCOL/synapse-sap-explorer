@@ -1,25 +1,26 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 /* ═══════════════════════════════════════════════════════════
- * Explorer Primitives — Arena-grade Protocol Intelligence UI
+ * Explorer Primitives — clean data-explorer UI
  *
  * Reusable building blocks for every explorer page:
  *   ExplorerPageShell  — full page wrapper (header + stats + content)
- *   ExplorerSection    — titled content block with HUD accents
- *   ExplorerMetric     — compact KPI display (neon-style)
+ *   ExplorerSection    — titled content block
+ *   ExplorerMetric     — compact KPI display
  *   ExplorerFilterBar  — search + filter chips + sort controls
  *   ExplorerSortHeader — clickable table header with sort indicator
  *   ExplorerGrid       — responsive grid wrapper
  *   ExplorerLiveDot    — animated live indicator
- *   SectionDivider     — subtle gradient separator
+ *   SectionDivider     — subtle separator
  *   DataSourceBadge    — on-chain / off-chain data source indicator
- *   ArenaCard          — sci-fi card with glow effects
+ *   ArenaCard          — backwards-compatible elevated card
  * ═══════════════════════════════════════════════════════════ */
 
 import React from "react";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import {
   Select,
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Search, ArrowUpDown, ArrowUp, ArrowDown, X } from "lucide-react";
+import { Skeleton } from "./skeleton";
 
 /* ── ExplorerPageShell ──────────────────────── */
 export function ExplorerPageShell({
@@ -51,32 +53,32 @@ export function ExplorerPageShell({
   className?: string;
 }) {
   return (
-    <div className={cn("space-y-4 sm:space-y-6 animate-fade-in", className)}>
+    <div className={cn("space-y-5 sm:space-y-6", className)}>
       {/* ── Header ─── */}
       <div>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
             {icon && (
-              <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                 {icon}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-foreground truncate">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground text-balance sm:text-3xl">
                   {title}
                 </h1>
                 {badge}
               </div>
               {subtitle && (
-                <p className="mt-1 text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground text-pretty">
                   {subtitle}
                 </p>
               )}
             </div>
           </div>
           {actions && (
-            <div className="flex items-center justify-end gap-2 shrink-0 w-full sm:w-auto sm:pl-4">
+            <div className="flex w-full shrink-0 items-center justify-start gap-2 sm:w-auto sm:justify-end sm:pl-4">
               {actions}
             </div>
           )}
@@ -85,7 +87,7 @@ export function ExplorerPageShell({
 
       {/* ── Stats Strip ─── */}
       {stats && (
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 stagger-children">
+        <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4">
           {stats}
         </div>
       )}
@@ -96,6 +98,7 @@ export function ExplorerPageShell({
   );
 }
 
+/* ── ExplorerSection ────────────────────────── */
 /* ── ExplorerSection ────────────────────────── */
 export function ExplorerSection({
   title,
@@ -119,32 +122,61 @@ export function ExplorerSection({
   dataSource?: "onchain" | "offchain" | "hybrid";
 }) {
   return (
-    <Card className={cn("overflow-hidden bg-card border-border", className)}>
-      <CardHeader className={cn("pb-0", compact ? "py-3 px-4" : "px-5 pt-4")}>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
-            {icon && <span className="text-muted-foreground">{icon}</span>}
-            {title}
+    <Card
+      className={cn(
+        "min-w-0 overflow-hidden border bg-card shadow-sm",
+        className,
+      )}
+    >
+      <CardHeader
+        className={cn(
+          "pb-0",
+          compact ? "px-3 py-3 sm:px-4" : "px-4 pt-4 sm:px-5 sm:pt-5",
+        )}
+      >
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold sm:text-base">
+            {icon && (
+              <span className="shrink-0 text-muted-foreground">
+                {icon}
+              </span>
+            )}
+
+            <span className="min-w-0 truncate">{title}</span>
+
             {count !== undefined && (
               <Badge
                 variant="secondary"
-                className="ml-1 tabular-nums font-mono"
+                className="shrink-0 font-mono text-[0.65rem] tabular-nums sm:text-xs"
               >
                 {count.toLocaleString()}
               </Badge>
             )}
-            {dataSource && <DataSourceBadge source={dataSource} />}
+
+            {dataSource && (
+              <span className="shrink-0">
+                <DataSourceBadge source={dataSource} />
+              </span>
+            )}
           </CardTitle>
-          {actions}
+
+          {actions && (
+            <div className="flex w-full shrink-0 items-center justify-start sm:w-auto sm:justify-end">
+              {actions}
+            </div>
+          )}
         </div>
       </CardHeader>
+
       <CardContent
         className={cn(
-          compact ? "pt-3 pb-3 px-4" : "px-5 pt-3 pb-4",
+          compact ? "px-3 pb-3 pt-3 sm:px-4 sm:pb-4" : "px-4 pb-4 pt-4 sm:px-5 sm:pb-5",
           noPadding && "p-0 pt-3",
         )}
       >
-        {children}
+        <div className="min-w-0 overflow-hidden">
+          {children}
+        </div>
       </CardContent>
     </Card>
   );
@@ -169,58 +201,59 @@ export function ExplorerMetric({
   className?: string;
 }) {
   const accentMap = {
-    primary: { iconBg: "bg-primary/10", iconText: "text-primary" },
-    cyan: { iconBg: "bg-neutral-800", iconText: "text-white" },
-    emerald: { iconBg: "bg-neutral-800", iconText: "text-white" },
-    amber: { iconBg: "bg-primary/10", iconText: "text-primary" },
-    rose: { iconBg: "bg-red-500/10", iconText: "text-red-400" },
+    primary: { iconBg: "bg-primary/10 border-primary/20", iconText: "text-primary" },
+    cyan: { iconBg: "bg-primary/10 border-primary/20", iconText: "text-primary" },
+    emerald: { iconBg: "bg-primary/10 border-primary/20", iconText: "text-primary" },
+    amber: { iconBg: "bg-primary/10 border-primary/20", iconText: "text-primary" },
+    rose: { iconBg: "bg-destructive/10 border-destructive/20", iconText: "text-destructive" },
   };
 
   const a = accentMap[accent];
+  const isEmptyValue = value === null || value === undefined || value.toString().includes("—");
 
   return (
     <Card
       className={cn(
-        "group overflow-hidden bg-card border-border hover:border-border/80 transition-all duration-300",
+        "group overflow-hidden border bg-card shadow-sm transition-colors duration-200 hover:border-primary/25",
         className,
       )}
     >
-      <CardContent className="p-3 sm:p-4">
-        <div className="flex items-start justify-between gap-2 sm:gap-3">
-          <div className="space-y-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-              {label}
-            </p>
-            <p className="text-lg sm:text-2xl font-bold tracking-tight text-foreground tabular-nums font-mono truncate">
-              {typeof value === "number" ? value.toLocaleString() : value}
-            </p>
-            {sub && <p className="text-xs text-muted-foreground/50">{sub}</p>}
-            {trend && (
-              <p
-                className={cn(
-                  "text-xs font-medium tabular-nums",
-                  trend.direction === "up" && "text-emerald-400",
-                  trend.direction === "down" && "text-destructive",
-                  trend.direction === "neutral" && "text-muted-foreground",
-                )}
-              >
-                {trend.direction === "up" && "↑ "}
-                {trend.direction === "down" && "↓ "}
-                {trend.value}
-              </p>
-            )}
-          </div>
-          <div
-            className={cn(
-              "flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg transition-all duration-300 group-hover:scale-110 shrink-0",
-              a.iconBg,
-              a.iconText,
-            )}
-          >
-            {icon}
-          </div>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 p-4 pb-0">
+        <div className="flex min-w-0 flex-col gap-1">
+          <CardDescription className="text-xs font-medium">{label}</CardDescription>
+          <CardTitle className="truncate font-mono text-2xl tabular-nums">
+            {isEmptyValue ? <Skeleton className="h-8 w-32" /> : typeof value === "number" ? value.toLocaleString() : value}
+          </CardTitle>
         </div>
+        <div
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-lg border transition-colors duration-200",
+            a.iconBg,
+            a.iconText,
+          )}
+        >
+          {icon}
+        </div>
+      </CardHeader>
+      {(sub || trend) && (
+        <CardContent className="flex flex-col gap-1 p-4 pt-3">
+          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+          {trend && (
+            <p
+              className={cn(
+                "text-xs font-medium tabular-nums",
+                trend.direction === "up" && "text-primary",
+                trend.direction === "down" && "text-destructive",
+                trend.direction === "neutral" && "text-muted-foreground",
+              )}
+            >
+              {trend.direction === "up" && "↑ "}
+              {trend.direction === "down" && "↓ "}
+              {trend.value}
+            </p>
+          )}
       </CardContent>
+      )}
     </Card>
   );
 }
@@ -259,94 +292,87 @@ export function ExplorerFilterBar({
   const activeFilters = filters?.filter((f) => f.value) ?? [];
 
   return (
-    <div className={cn("space-y-3", className)}>
-      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-        {/* Search */}
-        {onSearch !== undefined && (
-          <div className="relative flex-1 min-w-0 sm:min-w-[220px] max-w-md group/search w-full sm:w-auto">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50 group-focus-within/search:text-primary transition-colors" />
-            <Input
-              value={search}
-              onChange={(e) => onSearch(e.target.value)}
-              placeholder={searchPlaceholder}
-              className="h-9 pl-9 text-xs"
-            />
-            {search && (
-              <button
-                onClick={() => onSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+  <div className={cn("rounded-xl border bg-card p-3 shadow-sm", className)}>
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+      {/* Search */}
+      {onSearch !== undefined && (
+        <div className="group/search relative w-full min-w-0 sm:flex-1 sm:min-w-[260px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within/search:text-primary" />
 
-        {/* Sort */}
-        {sort && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Select value={sort.value} onValueChange={sort.onChange}>
-              <SelectTrigger className="h-9 w-auto min-w-[110px] sm:min-w-[140px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {sort.options.map((o) => (
-                  <SelectItem key={o.value} value={o.value} className="text-xs">
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {sort.onDirectionToggle && (
-              <button
-                onClick={sort.onDirectionToggle}
-                className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                title={sort.direction === "asc" ? "Ascending" : "Descending"}
-              >
-                {sort.direction === "asc" ? (
-                  <ArrowUp className="h-4 w-4" />
-                ) : (
-                  <ArrowDown className="h-4 w-4" />
-                )}
-              </button>
-            )}
-          </div>
-        )}
+          <Input
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="h-11 w-full pl-9 pr-10 text-sm"
+          />
 
-        {/* Extra controls */}
-        {children}
-      </div>
-
-      {/* Active filter chips */}
-      {activeFilters.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted-foreground/60 uppercase tracking-wider font-medium">
-            Filters:
-          </span>
-          {activeFilters.map((f) => (
-            <Badge
-              key={f.key}
-              variant="secondary"
-              className="gap-1.5 pl-2.5 pr-1.5 py-1 cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors group/chip"
-              onClick={f.onClear}
-            >
-              <span className="text-muted-foreground/60">{f.label}:</span>
-              {f.value}
-              <X className="h-3 w-3 text-muted-foreground/40 group-hover/chip:text-destructive transition-colors" />
-            </Badge>
-          ))}
-          {activeFilters.length > 1 && (
+          {search && (
             <button
-              onClick={() => activeFilters.forEach((f) => f.onClear())}
-              className="text-xs text-muted-foreground/50 hover:text-destructive transition-colors underline underline-offset-2"
+              type="button"
+              onClick={() => onSearch("")}
+              className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Clear search"
             >
-              Clear all
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
       )}
+
+      {/* Controls row */}
+      {(sort || children) && (
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          {/* Sort */}
+          {sort && (
+  <div className="flex w-full items-center gap-2 sm:w-auto">
+    <div className="w-full">
+      <Select value={sort.value} onValueChange={sort.onChange}>
+      <SelectTrigger className="h-11 w-full  flex-1 text-sm sm:w-auto min-w-[140px]">
+        <SelectValue />
+      </SelectTrigger>
+
+      <SelectContent>
+        {sort.options.map((o) => (
+          <SelectItem key={o.value} value={o.value} className="text-sm">
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
     </div>
-  );
+    
+
+    {sort.onDirectionToggle && (
+      <button
+        type="button"
+        onClick={sort.onDirectionToggle}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        title={sort.direction === "asc" ? "Ascending" : "Descending"}
+        aria-label={sort.direction === "asc" ? "Sort ascending" : "Sort descending"}
+      >
+        {sort.direction === "asc" ? (
+          <ArrowUp className="h-4 w-4" />
+        ) : (
+          <ArrowDown className="h-4 w-4" />
+        )}
+      </button>
+    )}
+  </div>
+)}
+
+          {/* Extra controls */}
+          {children && (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              {children}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Active filter chips */}
+  </div>
+);
 }
 
 /* ── ExplorerSortHeader ─────────────────────── */
@@ -368,10 +394,11 @@ export function ExplorerSortHeader({
   const active = currentSort === sortKey;
   return (
     <button
+      type="button"
       onClick={() => onSort(sortKey)}
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-colors",
-        active ? "text-primary" : "text-neutral-400 hover:text-white",
+        "inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        active ? "text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground",
         className,
       )}
     >
@@ -383,7 +410,7 @@ export function ExplorerSortHeader({
           <ArrowDown className="h-3 w-3" />
         )
       ) : (
-        <ArrowUpDown className="h-3 w-3 opacity-40" />
+        <ArrowUpDown className="h-3 w-3 opacity-70" />
       )}
     </button>
   );
@@ -407,7 +434,7 @@ export function ExplorerGrid({
   };
 
   return (
-    <div className={cn("grid gap-4", colsMap[cols], className)}>{children}</div>
+    <div className={cn("grid gap-4 sm:gap-5", colsMap[cols], className)}>{children}</div>
   );
 }
 
@@ -421,19 +448,17 @@ export function ExplorerLiveDot({
 }) {
   return (
     <Badge
-      variant={connected ? "neon-emerald" : "secondary"}
+      variant={connected ? "default" : "secondary"}
       className={cn("gap-1.5 px-2.5 py-1", className)}
     >
       <span className="relative flex h-1.5 w-1.5">
         {connected && (
-          <span className="absolute inline-flex h-full w-full rounded-full bg-[hsl(var(--neon-emerald))] opacity-50 animate-ping" />
+          <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-50 motion-safe:animate-ping" />
         )}
         <span
           className={cn(
             "relative inline-flex rounded-full h-1.5 w-1.5",
-            connected
-              ? "bg-[hsl(var(--neon-emerald))]"
-              : "bg-[hsl(var(--neon-amber))]",
+            connected ? "bg-primary" : "bg-muted-foreground",
           )}
         />
       </span>
@@ -444,7 +469,7 @@ export function ExplorerLiveDot({
 
 /* ── SectionDivider ─────────────────────────── */
 export function SectionDivider({ className }: { className?: string }) {
-  return <div className={cn("h-px w-full bg-neutral-800", className)} />;
+  return <div className={cn("h-px w-full bg-border", className)} />;
 }
 
 /* ── ExplorerEmptyRow ───────────────────────── */
@@ -458,7 +483,7 @@ export function ExplorerEmptyRow({
   return (
     <tr>
       <td colSpan={cols} className="py-12 text-center">
-        <p className="text-sm text-muted-foreground/60">{message}</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
       </td>
     </tr>
   );
@@ -475,10 +500,7 @@ export function DataSourceBadge({
   const config = {
     onchain: { label: "On-Chain", cls: "data-source-onchain" },
     offchain: { label: "Off-Chain", cls: "data-source-offchain" },
-    hybrid: {
-      label: "Hybrid",
-      cls: "gradient-text-arena text-hud font-semibold uppercase tracking-wider",
-    },
+    hybrid: { label: "Hybrid", cls: "text-primary font-medium" },
   };
   const c = config[source];
   return <span className={cn(c.cls, "ml-2", className)}>{c.label}</span>;
@@ -496,14 +518,14 @@ export function ArenaCard({
 }) {
   const glowMap = {
     primary: "hover:border-primary/30",
-    cyan: "hover:border-neutral-600",
-    emerald: "hover:border-neutral-600",
+    cyan: "hover:border-primary/25",
+    emerald: "hover:border-primary/25",
   };
 
   return (
     <div
       className={cn(
-        "rounded-xl p-4 bg-neutral-900 border border-neutral-700 transition-all duration-300",
+        "rounded-xl border bg-card p-4 shadow-sm transition-colors duration-200",
         glow && glowMap[glow],
         className,
       )}
@@ -528,8 +550,8 @@ export function ProtocolStats({
 }) {
   const accentColors = {
     primary: "text-primary",
-    cyan: "text-white",
-    emerald: "text-white",
+    cyan: "text-primary",
+    emerald: "text-primary",
     amber: "text-primary",
   };
 
@@ -539,7 +561,7 @@ export function ProtocolStats({
     >
       {items.map(({ label, value, source, accent }) => (
         <div key={label} className="flex items-center gap-2">
-          <span className="text-micro text-muted-foreground/50 uppercase tracking-wider">
+          <span className="text-micro uppercase tracking-wider text-muted-foreground">
             {label}
           </span>
           <span
@@ -550,14 +572,8 @@ export function ProtocolStats({
           >
             {typeof value === "number" ? value.toLocaleString() : value}
           </span>
-          <span
-            className={
-              source === "onchain"
-                ? "data-source-onchain"
-                : "data-source-offchain"
-            }
-          >
-            {source === "onchain" ? "◆" : "○"}
+          <span className={source === "onchain" ? "data-source-onchain" : "data-source-offchain"}>
+            {source}
           </span>
         </div>
       ))}

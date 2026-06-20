@@ -1,6 +1,6 @@
 
 import type { Pool } from 'pg';
-import { EventParser } from '@oobe-protocol-labs/synapse-sap-sdk/events';
+import { EventParser } from '~/lib/sap/sdk-compat';
 import { getSapClient } from '~/lib/sap/discovery';
 import { getSharedPool } from '~/db';
 

@@ -22,12 +22,12 @@ import { cn } from '~/lib/utils';
 
 /** Inline placeholder for missing values. Visually de-emphasised. */
 export function EmptyValue({ label = '—' }: { label?: string }) {
-  return <span className="text-neutral-600" aria-label="not available">{label}</span>;
+  return <span className="text-muted-foreground" aria-label="not available">{label}</span>;
 }
 
 /**
  * Small uppercase section label used above a content block.
- * Replaces ad-hoc `uppercase tracking-[0.15em] text-neutral-500` spans.
+ * Replaces ad-hoc uppercase spans.
  */
 export function SectionLabel({
   children,
@@ -40,9 +40,9 @@ export function SectionLabel({
   className?: string;
 }) {
   return (
-    <div className={cn('flex items-baseline gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500', className)}>
+    <div className={cn('flex items-baseline gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground', className)}>
       <span>{children}</span>
-      {hint && <span className="font-normal normal-case tracking-normal text-neutral-600">{hint}</span>}
+      {hint && <span className="font-normal normal-case tracking-normal text-muted-foreground/80">{hint}</span>}
     </div>
   );
 }
@@ -64,7 +64,7 @@ export function DetailRow({
   value: React.ReactNode;
   /** Optional small explanation appended after the label. */
   hint?: React.ReactNode;
-  /** Render value in monospace + emerald (for addresses). */
+  /** Render value in monospace + primary theme color (for addresses). */
   mono?: boolean;
   showEmpty?: boolean;
   className?: string;
@@ -74,11 +74,11 @@ export function DetailRow({
   }
   return (
     <div className={cn('flex items-baseline justify-between gap-3 text-xs py-1.5', className)}>
-      <span className="text-neutral-500 shrink-0" title={typeof hint === 'string' ? hint : undefined}>
+      <span className="text-muted-foreground shrink-0" title={typeof hint === 'string' ? hint : undefined}>
         {label}
-        {hint && <span className="ml-1 text-neutral-700 cursor-help" aria-hidden>ⓘ</span>}
+        {hint && <span className="ml-1 cursor-help text-muted-foreground/70" aria-hidden>ⓘ</span>}
       </span>
-      <span className={cn('text-right break-all min-w-0 tabular-nums', mono ? 'font-mono text-emerald-300' : 'text-neutral-200')}>
+      <span className={cn('text-right break-all min-w-0 tabular-nums', mono ? 'font-mono text-primary' : 'text-foreground')}>
         {value || <EmptyValue />}
       </span>
     </div>
@@ -114,32 +114,32 @@ export function MetricTile({
   const isEmpty = value == null || value === '' || value === '—' || value === 0 || value === '0';
 
   const valueColor = isEmpty
-    ? 'text-neutral-600'
+    ? 'text-muted-foreground'
     : tone === 'emerald'
-      ? 'text-emerald-300'
+      ? 'text-primary'
       : tone === 'amber'
-        ? 'text-amber-300'
+        ? 'text-primary'
         : tone === 'cyan'
-          ? 'text-cyan-300'
-          : tone === 'rose'
-            ? 'text-rose-300'
-            : 'text-neutral-100';
+          ? 'text-primary'
+        : tone === 'rose'
+            ? 'text-destructive'
+            : 'text-foreground';
 
   return (
     <div
       className={cn(
-        'rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5 transition-colors hover:border-neutral-700',
+        'rounded-lg border bg-card px-3 py-2.5 shadow-sm transition-colors hover:border-primary/30',
         className,
       )}
       title={hint}
     >
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-[0.1em] text-neutral-500">
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
         <span>{label}</span>
-        {hint && <span className="text-neutral-700 cursor-help" aria-hidden>ⓘ</span>}
+        {hint && <span className="cursor-help text-muted-foreground/70" aria-hidden>ⓘ</span>}
       </div>
       <div className={cn('mt-1 font-mono text-sm tabular-nums', valueColor)}>
         {value == null || value === '' ? <EmptyValue /> : value}
-        {unit && value != null && value !== '' && <span className="ml-1 text-[11px] text-neutral-500">{unit}</span>}
+        {unit && value != null && value !== '' && <span className="ml-1 text-[11px] text-muted-foreground">{unit}</span>}
       </div>
     </div>
   );
@@ -164,16 +164,16 @@ export function VerificationPill({
 }) {
   const okClasses =
     tone === 'cyan'
-      ? 'bg-cyan-500/10 text-cyan-200 border-cyan-400/30'
+      ? 'bg-primary/10 text-primary border-primary/30'
       : tone === 'amber'
-        ? 'bg-amber-500/10 text-amber-200 border-amber-400/30'
-        : 'bg-emerald-500/10 text-emerald-200 border-emerald-400/30';
+        ? 'bg-primary/10 text-primary border-primary/30'
+        : 'bg-primary/10 text-primary border-primary/30';
 
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px]',
-        verified ? okClasses : 'bg-neutral-900 text-neutral-500 border-neutral-800',
+        verified ? okClasses : 'bg-muted text-muted-foreground border-border',
       )}
       title={`${verified ? 'Verified' : 'Not verified'} · ${source}`}
     >
@@ -199,10 +199,10 @@ export function SectionEmpty({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-950/30 px-6 py-10 text-center">
-      {icon && <div className="mx-auto mb-3 flex h-8 w-8 items-center justify-center text-neutral-600">{icon}</div>}
-      <p className="text-sm text-neutral-300">{title}</p>
-      {description && <p className="mt-1 text-xs text-neutral-500 text-pretty">{description}</p>}
+    <div className="rounded-lg border border-dashed bg-muted/20 px-6 py-10 text-center">
+      {icon && <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-background text-muted-foreground">{icon}</div>}
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      {description && <p className="mt-1 text-xs text-muted-foreground text-pretty">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -231,7 +231,7 @@ export function TokenAvatar({
   return (
     <span
       className={cn(
-        'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-800 ring-1 ring-neutral-900',
+        'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border',
         className,
       )}
       style={dim}
@@ -250,7 +250,7 @@ export function TokenAvatar({
           loading="lazy"
         />
       ) : (
-        <span className="text-[8px] font-semibold uppercase text-neutral-400">{symbol.slice(0, 2)}</span>
+        <span className="text-[8px] font-semibold uppercase text-muted-foreground">{symbol.slice(0, 2)}</span>
       )}
     </span>
   );
@@ -286,7 +286,7 @@ export function TokenAvatarStack({
       {rest > 0 && (
         <span
           style={{ marginLeft: -overlap, width: size, height: size }}
-          className="relative inline-flex items-center justify-center overflow-hidden rounded-full bg-neutral-900 ring-1 ring-neutral-950 text-[9px] font-semibold tabular-nums text-neutral-300"
+          className="relative inline-flex items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border text-[9px] font-semibold tabular-nums text-muted-foreground"
           title={`${rest} more`}
         >
           +{rest}
@@ -317,16 +317,15 @@ export function PortfolioRow({
     <div className="flex items-center gap-2.5 py-1.5">
       <span className="shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
-        <div className="text-xs text-neutral-200 truncate">{label}</div>
-        {sublabel && <div className="text-[10px] text-neutral-500 truncate">{sublabel}</div>}
+        <div className="text-xs text-foreground truncate">{label}</div>
+        {sublabel && <div className="text-[10px] text-muted-foreground truncate">{sublabel}</div>}
       </div>
       <div className="text-right shrink-0">
-        <div className="font-mono text-xs tabular-nums text-neutral-100">{amount}</div>
-        {usd && <div className="font-mono text-[10px] tabular-nums text-neutral-500">{usd}</div>}
+        <div className="font-mono text-xs tabular-nums text-foreground">{amount}</div>
+        {usd && <div className="font-mono text-[10px] tabular-nums text-muted-foreground">{usd}</div>}
       </div>
     </div>
   );
 }
 
 // Re-import React for new client-state hook used in TokenAvatar
-

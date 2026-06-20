@@ -1,4 +1,4 @@
-import { db, getSharedPool, isDbDown } from '~/db';
+import { db, getSharedPool, markDbDown, markDbUp } from '~/db';
 import { syncCursors } from '~/db/schema';
 import { getSynapseConnection } from '~/lib/sap/discovery';
 import type { ApiComponentHealth, StatusResponseV1 } from '~/types';
@@ -12,18 +12,21 @@ function staleThresholdMs(entity: string): number {
 }
 
 async function probeDatabase(): Promise<ApiComponentHealth> {
-  if (isDbDown()) {
-    return { status: 'error', error: 'circuit-breaker-open' };
-  }
-
   const start = Date.now();
   try {
-    await getSharedPool().query('SELECT 1');
+    await Promise.race([
+      getSharedPool().query('SELECT 1'),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('db-health-timeout')), 2500);
+      }),
+    ]);
+    markDbUp();
     return {
       status: 'ok',
       latencyMs: Date.now() - start,
     };
   } catch (error: unknown) {
+    markDbDown();
     return {
       status: 'error',
       latencyMs: Date.now() - start,
@@ -57,10 +60,6 @@ async function probeRpc(): Promise<ApiComponentHealth> {
 }
 
 async function probeIndexer(): Promise<StatusResponseV1['components']['indexer']> {
-  if (isDbDown()) {
-    return { status: 'down', cursors: [] };
-  }
-
   try {
     const rows = await db.select().from(syncCursors);
     if (rows.length === 0) {
@@ -91,11 +90,14 @@ async function probeIndexer(): Promise<StatusResponseV1['components']['indexer']
 }
 
 export async function getPublicStatus(): Promise<StatusResponseV1> {
-  const [database, rpc, indexer] = await Promise.all([
+  const [database, rpc] = await Promise.all([
     probeDatabase(),
     probeRpc(),
-    probeIndexer(),
   ]);
+  const indexer =
+    database.status === 'ok'
+      ? await probeIndexer()
+      : { status: 'down' as const, cursors: [] };
 
   const anyHardDown = database.status === 'error' && rpc.status === 'error';
   const anyDegraded =
@@ -116,4 +118,3 @@ export async function getPublicStatus(): Promise<StatusResponseV1> {
     },
   };
 }
-

@@ -10,22 +10,97 @@ import type { RpcTransaction } from '~/types/indexer';
 
 let _rpcId = 0;
 
+// Retry configuration for x402 scanner
+const MAX_RETRIES = 2;
+const INITIAL_DELAY_MS = 500;
+const MAX_DELAY_MS = 5000;
+const RPC_TIMEOUT_MS = 8000;
+const NON_RETRYABLE_RPC_PATTERNS = [
+  'local index incomplete',
+  'refusing to return an untrusted empty result',
+];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function rpcCall(method: string, params: unknown[]) {
   const { url, headers } = getRpcConfig();
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: ++_rpcId,
-      method,
-      params,
-    }),
-  });
-  if (!resp.ok) throw new Error(`RPC HTTP ${resp.status}`);
-  const json = await resp.json();
-  if (json.error) throw new Error(json.error.message ?? JSON.stringify(json.error));
-  return json.result;
+  let lastError: Error | null = null;
+  let delay = INITIAL_DELAY_MS;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: ++_rpcId,
+          method,
+          params,
+        }),
+        signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+      });
+
+      // Handle rate limiting
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : delay + Math.random() * 500;
+        console.log(`[x402-scanner] Rate limited (429). Retrying after ${Math.round(waitTime)}ms...`);
+        await sleep(waitTime);
+        delay = Math.min(delay * 2, MAX_DELAY_MS);
+        continue;
+      }
+
+      if (!resp.ok) {
+        throw new Error(`RPC HTTP ${resp.status}`);
+      }
+
+      const json = await resp.json();
+      if (json.error) {
+        // Handle 504 Gateway Timeout
+        if (json.error.code === 504 || json.error.message?.includes('timeout')) {
+          const waitTime = delay + Math.random() * 500;
+          console.log(`[x402-scanner] Timeout (504). Retrying after ${Math.round(waitTime)}ms... (attempt ${attempt}/${MAX_RETRIES})`);
+          await sleep(waitTime);
+          delay = Math.min(delay * 2, MAX_DELAY_MS);
+          continue;
+        }
+        throw new Error(json.error.message ?? JSON.stringify(json.error));
+      }
+
+      return json.result;
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const lower = lastError.message.toLowerCase();
+
+      if (NON_RETRYABLE_RPC_PATTERNS.some((pattern) => lower.includes(pattern))) {
+        break;
+      }
+      
+      // Don't retry on client errors (4xx except 429)
+      if (lastError.message.includes('HTTP 4') && !lastError.message.includes('429')) {
+        break;
+      }
+
+      if (attempt === MAX_RETRIES) {
+        break;
+      }
+
+      const waitTime = delay + Math.random() * 500;
+      console.log(`[x402-scanner] Request failed. Retrying after ${Math.round(waitTime)}ms... (attempt ${attempt}/${MAX_RETRIES})`);
+      await sleep(waitTime);
+      delay = Math.min(delay * 2, MAX_DELAY_MS);
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error('RPC call failed');
 }
 
 async function rpcGetSignaturesForAddress(

@@ -2,7 +2,7 @@
 import { db } from '~/db';
 import { tools } from '~/db/schema';
 import { findAllTools } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, enumKey, hashToHex, conflictUpdateSet } from './utils';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, enumKey, hashToHex, conflictUpdateSet, conflictUpdateWhere } from './utils';
 import { setCursor } from './cursor';
 import { ToolDescriptorData } from '@oobe-protocol-labs/synapse-sap-sdk/types';
 
@@ -60,7 +60,8 @@ export async function syncTools(): Promise<number> {
         .values(rows)
         .onConflictDoUpdate({
           target: tools.pda,
-          set: conflictUpdateSet(tools, ['pda']),
+          set: conflictUpdateSet(tools, ['pda', 'createdAt']),
+          setWhere: conflictUpdateWhere(tools, ['pda', 'createdAt', 'indexedAt']),
         });
       upserted += rows.length;
     } catch (e: unknown) {
@@ -69,7 +70,8 @@ export async function syncTools(): Promise<number> {
         try {
           await db.insert(tools).values(row).onConflictDoUpdate({
             target: tools.pda,
-            set: conflictUpdateSet(tools, ['pda']),
+            set: conflictUpdateSet(tools, ['pda', 'createdAt']),
+            setWhere: conflictUpdateWhere(tools, ['pda', 'createdAt', 'indexedAt']),
           });
           upserted++;
         } catch (e2: unknown) {
@@ -83,4 +85,3 @@ export async function syncTools(): Promise<number> {
   log('tools', `Done: ${upserted} tools upserted`);
   return upserted;
 }
-

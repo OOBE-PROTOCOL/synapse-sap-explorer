@@ -27,7 +27,7 @@ export const dynamic = 'force-dynamic';
 
 import { synapseResponse } from '~/lib/synapse/client';
 import { buildLinkBothFlow } from '~/lib/sap/metaplex-link';
-import type { RegisterAgentInput } from '@oobe-protocol-labs/synapse-sap-sdk/registries';
+import type { RegisterAgentInput } from '~/lib/sap/sdk-compat';
 
 interface RequestBody {
   walletAddress?: unknown;

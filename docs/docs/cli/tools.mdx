@@ -1,11 +1,26 @@
 ---
-title: tools
-description: Generate, validate, publish, and document tool manifests. Covers JSON Schema hashing, TypeScript codegen, and side by side capability diffs.
+title: Tools and Manifests
+description: Generate, validate, publish, and document tool manifests. Covers JSON Schema hashing, TypeScript codegen, and side-by-side capability diffs. SDK v0.20.0 aligned.
 ---
 
 # `tools`
 
-The tool registry is what consumers query when they need a typed, verifiable description of what an agent can do.
+**SDK Version:** v0.20.0
+
+The tool registry is what consumers query when they need a typed, verifiable description of what an agent can do. Tools are published as on-chain PDAs with schema hashes inscribed in transaction logs.
+
+---
+
+## Why Tool Manifests?
+
+Tool manifests provide:
+
+1. **Type Safety** — JSON Schema for input/output validation
+2. **Discoverability** — Search tools by category, protocol, or capability
+3. **Verifiability** — Schema hashes stored on-chain, full schemas in logs
+4. **Code Generation** — Auto-generate TypeScript types, Zod schemas, SDK clients
+
+---
 
 ## `tools manifest generate <wallet>`
 
@@ -17,7 +32,52 @@ synapse-sap tools manifest generate <AGENT_WALLET> \
   --include-schema
 ```
 
-`--include-schema` embeds the full JSON Schema of every tool input and output.
+| Flag | Description |
+|------|-------------|
+| `--out <path>` | Output file path (required) |
+| `--include-schema` | Embed full JSON Schema for every tool |
+| `--json` | Pretty-print JSON (default when writing to file) |
+| `--stdout` | Print to stdout instead of file |
+
+### Example Output
+
+```json title="manifest.json"
+{
+  "agent": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+  "generatedAt": "2026-06-20T17:30:00Z",
+  "tools": [
+    {
+      "pda": "ToolPDA...",
+      "name": "jupiter-swap",
+      "protocol": "jupiter",
+      "category": "defi",
+      "httpMethod": "POST",
+      "description": "Execute token swaps via Jupiter aggregator",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "inputMint": { "type": "string", "description": "Input token mint" },
+          "outputMint": { "type": "string", "description": "Output token mint" },
+          "amount": { "type": "number", "description": "Amount in lamports" },
+          "slippageBps": { "type": "number", "default": 50 }
+        },
+        "required": ["inputMint", "outputMint", "amount"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "transaction": { "type": "string" },
+          "simulation": { "type": "object" },
+          "routePlan": { "type": "array" }
+        }
+      },
+      "invocationCount": 1247
+    }
+  ]
+}
+```
+
+---
 
 ## `tools manifest validate <file>`
 
@@ -27,17 +87,116 @@ Structural check on a manifest before publishing.
 synapse-sap tools manifest validate manifest.json
 ```
 
-Catches duplicate tool ids, malformed schemas, and missing required fields.
+### Validation Checks
+
+| Check | Description |
+|-------|-------------|
+| **Duplicate IDs** | No two tools can have the same name |
+| **Schema Format** | All schemas must be valid JSON Schema Draft-07+ |
+| **Required Fields** | `name`, `protocol`, `httpMethod`, `inputSchema` |
+| **HTTP Method** | Must be GET, POST, PUT, DELETE, PATCH |
+| **Category** | Must be one of: defi, nft, social, utility, ai, data |
+| **Name Format** | Lowercase, hyphens, max 64 chars |
+
+### Example Output
+
+```
+✅ Manifest is valid
+   Tools: 3
+   Schemas: 6 (3 input + 3 output)
+   Categories: defi (2), utility (1)
+```
+
+### Error Output
+
+```
+❌ Manifest validation failed
+
+Errors:
+  [0] Tool "jupiter-swap": duplicate name
+  [1] Tool "kamino-lend": missing required field "inputSchema"
+  [2] Tool "invalid-tool": httpMethod must be GET/POST/PUT/DELETE/PATCH
+
+Fix these errors before publishing.
+```
+
+| Flag | Description |
+|------|-------------|
+| `--strict` | Fail on warnings (not just errors) |
+| `--json` | Machine output |
+
+---
 
 ## `tools typify <manifest>`
 
 Generate TypeScript types from a manifest.
 
 ```bash
-synapse-sap tools typify manifest.json --out types/tools.ts --format ts
+synapse-sap tools typify manifest.json \
+  --out types/tools.ts \
+  --format ts
 ```
 
-Output formats: `ts` (interfaces), `dts` (declaration only), `zod` (Zod schemas).
+| Flag | Description |
+|------|-------------|
+| `--out <path>` | Output file path (required) |
+| `--format <fmt>` | Output format: `ts`, `dts`, `zod`, `arktype` (default: `ts`) |
+| `--namespace <name>` | Wrap types in namespace (default: `SapTools`) |
+| `--export` | Add `export` keyword to all types |
+
+### Format Examples
+
+**TypeScript Interfaces (`ts`):**
+
+```typescript title="types/tools.ts"
+export namespace SapTools {
+  export interface JupiterSwapInput {
+    inputMint: string;
+    outputMint: string;
+    amount: number;
+    slippageBps?: number;
+  }
+
+  export interface JupiterSwapOutput {
+    transaction: string;
+    simulation: object;
+    routePlan: Array<object>;
+  }
+
+  export type ToolName = "jupiter-swap" | "kamino-lend" | "drift-perp";
+}
+```
+
+**Zod Schemas (`zod`):**
+
+```typescript title="types/tools.zod.ts"
+import { z } from "zod";
+
+export const JupiterSwapInputSchema = z.object({
+  inputMint: z.string(),
+  outputMint: z.string(),
+  amount: z.number(),
+  slippageBps: z.number().optional(),
+});
+
+export const JupiterSwapOutputSchema = z.object({
+  transaction: z.string(),
+  simulation: z.object(),
+  routePlan: z.array(z.object()),
+});
+```
+
+**Declaration Only (`dts`):**
+
+```typescript title="types/tools.d.ts"
+declare namespace SapTools {
+  interface JupiterSwapInput { ... }
+  interface JupiterSwapOutput { ... }
+  type ToolName = "jupiter-swap" | "kamino-lend";
+}
+```
+
+---
 
 ## `tools publish <manifest>`
 
@@ -47,7 +206,47 @@ Upload the manifest to the on-chain tool registry.
 synapse-sap tools publish manifest.json
 ```
 
-The CLI hashes every JSON Schema with SHA-256 and stores the digest on-chain. Consumers can verify that the schema served by your endpoint matches the published one.
+| Flag | Description |
+|------|-------------|
+| `--simulate` | Dry run (recommended first) |
+| `--json` | Machine output |
+| `--save <path>` | Save signed transaction artifact |
+| `--confirm` | Skip confirmation prompt |
+
+### What Gets Published
+
+For each tool in the manifest:
+
+1. **PDA Created** — `["sap_tool", agent_wallet, nameHash]`
+2. **Stored On-Chain:**
+   - Tool name (string)
+   - Protocol (string)
+   - Category (enum)
+   - HTTP method (enum)
+   - Input schema hash (32-byte SHA-256)
+   - Output schema hash (32-byte SHA-256)
+3. **Inscribed in Logs:**
+   - Full input JSON Schema
+   - Full output JSON Schema
+
+<Callout type="info">
+**Why hashes on-chain?** Storing full schemas in Solana accounts costs ongoing rent. Instead, SAP stores only 32-byte hashes (constant cost) and writes full content in transaction logs (one-time fee, zero ongoing rent). Anyone can verify by hashing the log content.
+</Callout>
+
+### Example Output
+
+```
+Publishing 3 tools...
+  ✅ jupiter-swap → ToolPDA... (input: 0x5f4d..., output: 0x8a2c...)
+  ✅ kamino-lend → ToolPDA... (input: 0x3b1e..., output: 0x9c4f...)
+  ✅ drift-perp → ToolPDA... (input: 0x7a8d..., output: 0x1e5b...)
+
+Transaction: 5eykt4UuPvNb8...
+Status: Confirmed (32 confirmations)
+Fee: 0.000005 SOL
+```
+
+---
 
 ## `tools compare <walletA> <walletB>`
 
@@ -57,14 +256,183 @@ Diff capabilities between two agents.
 synapse-sap tools compare <AGENT_A> <AGENT_B>
 ```
 
+| Flag | Description |
+|------|-------------|
+| `--json` | Machine output |
+| `--verbose` | Show full schema diffs |
+
+### Example Output
+
+```
+Comparing: TradeBot vs SwapMaster
+
+Common Tools (2):
+  ✅ jupiter-swap (both support)
+  ✅ kamino-lend (both support)
+
+Only in TradeBot (1):
+  ➕ drift-perp
+
+Only in SwapMaster (2):
+  ➕ marginfi-borrow
+  ➕ solend-deposit
+
+Schema Differences (jupiter-swap):
+  - TradeBot accepts slippageBps (default: 50)
+  - SwapMaster requires priorityFee (no default)
+```
+
 Useful when picking between competing providers of the same protocol.
+
+---
 
 ## `tools doc <wallet>`
 
-Auto generate human readable documentation.
+Auto-generate human-readable documentation.
 
 ```bash
-synapse-sap tools doc <AGENT_WALLET> --format markdown --out docs/agent.md
+synapse-sap tools doc <AGENT_WALLET> \
+  --format markdown \
+  --out docs/agent.md
 ```
 
-Formats: `markdown`, `html`, `json`. Pair with `manifest generate` to bootstrap a public docs site for any agent in the network.
+| Flag | Description |
+|------|-------------|
+| `--format <fmt>` | Output format: `markdown`, `html`, `json` (default: `markdown`) |
+| `--out <path>` | Output file path |
+| `--stdout` | Print to stdout |
+| `--include-examples` | Add usage examples for each tool |
+| `--theme <name>` | HTML theme: `default`, `dark`, `light` (only for HTML) |
+
+### Markdown Example
+
+```markdown title="agent.md"
+# TradeBot Tools
+
+**Agent:** 8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD  
+**Generated:** 2026-06-20T17:30:00Z
+
+---
+
+## jupiter-swap
+
+**Protocol:** jupiter  
+**Category:** DeFi  
+**HTTP Method:** POST
+
+Execute token swaps via Jupiter aggregator.
+
+### Input
+
+```json
+{
+  "inputMint": "So11111111111111111111111111111111111111112",
+  "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "amount": 1000000,
+  "slippageBps": 50
+}
+```
+
+### Output
+
+```json
+{
+  "transaction": "5eykt4Uu...",
+  "simulation": {...},
+  "routePlan": [...]
+}
+```
+
+### Usage
+
+```bash
+synapse-sap x402 call <AGENT_WALLET> jupiter-swap \
+  --args '{"inputMint":"So111...","outputMint":"EPjFW...","amount":1000000}'
+```
+```
+
+Pair with `manifest generate` to bootstrap a public docs site for any agent in the network.
+
+---
+
+## `tools list <wallet>`
+
+List all tools published by an agent.
+
+```bash
+synapse-sap tools list <AGENT_WALLET>
+synapse-sap tools list <AGENT_WALLET> --category defi
+```
+
+| Flag | Description |
+|------|-------------|
+| `--category <cat>` | Filter by category (defi, nft, social, utility, ai, data) |
+| `--json` | Machine output |
+| `--verbose` | Show schema hashes and invocation counts |
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Validation failed (manifest structure) |
+| `2` | RPC error (timeout, 5xx, unreachable) |
+| `3` | On-chain failure (publish transaction failed) |
+| `4` | Agent not found (wallet has no registered agent) |
+| `5` | No tools found (agent has no published tools) |
+
+---
+
+## Common Errors
+
+### Duplicate Tool Name
+
+```
+Error: DuplicateToolName
+Tool "jupiter-swap" is defined twice in manifest.
+```
+
+**Fix:** Remove duplicate or rename one tool.
+
+### Invalid Schema Format
+
+```
+Error: InvalidSchemaFormat
+Tool "jupiter-swap": inputSchema must be valid JSON Schema Draft-07+
+Details: "properties" must be an object
+```
+
+**Fix:** Ensure schema follows JSON Schema specification.
+
+### Tool Name Too Long
+
+```
+Error: ToolNameTooLong
+Tool name "this-is-way-too-long-and-exceeds-the-64-character-limit" exceeds 64 characters.
+```
+
+**Fix:** Shorten tool name to 64 characters or less.
+
+### Invalid HTTP Method
+
+```
+Error: InvalidHttpMethod
+Tool "jupiter-swap": httpMethod must be GET, POST, PUT, DELETE, or PATCH (got: "RPC")
+```
+
+**Fix:** Use standard HTTP method.
+
+---
+
+## Next Steps
+
+- **[Agent](/docs/cli/agent)** — Register agent with capabilities
+- **[Discovery](/docs/cli/discovery)** — Find agents by tools
+- **[Tools Schemas](/docs/core/tools-schemas)** — Schema architecture
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3

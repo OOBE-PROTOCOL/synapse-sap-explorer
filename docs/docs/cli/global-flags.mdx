@@ -1,11 +1,17 @@
 ---
 title: Global Flags
-description: Flags that apply to every synapse-sap command. Network selection, output format, dry runs, and verbosity.
+description: Flags that apply to every synapse-sap command. Network selection, output format, dry runs, and verbosity. SDK v0.20.0 aligned.
 ---
 
-# Global flags
+# Global Flags
+
+**CLI Version:** 0.9.3
 
 These flags work on every command and resolve before the subcommand handler runs.
+
+---
+
+## Flag Reference
 
 | Flag | Type | Default | Effect |
 |------|------|---------|--------|
@@ -13,32 +19,274 @@ These flags work on every command and resolve before the subcommand handler runs
 | `--fallback-rpc-url <url>` | string | from config | Override the fallback endpoint |
 | `--keypair <path>` | string | from config | Override the signer keypair file |
 | `--network <name>` | string | `mainnet-beta` | `mainnet-beta`, `devnet`, or `localnet` |
+| `--cluster <name>` | string | `mainnet-beta` | Alias for `--network` (preferred) |
 | `--commitment <level>` | string | `confirmed` | `processed`, `confirmed`, or `finalized` |
 | `--simulate` | bool | false | Resolve and print instructions without sending the transaction |
-| `--json` | bool | false | Emit machine readable JSON to stdout |
-| `--quiet` | bool | false | Suppress non error output |
+| `--json` | bool | false | Emit machine-readable JSON to stdout |
+| `--quiet` | bool | false | Suppress non-error output |
 | `--verbose` | bool | false | Print detailed traces, timings, and decoded accounts |
 | `--no-color` | bool | false | Disable ANSI color codes |
-| `--timeout <ms>` | number | 30000 | Per request timeout |
+| `--timeout <ms>` | number | 30000 | Per-request timeout |
 | `--retries <n>` | number | 3 | Retry budget on transient errors |
 | `--config <path>` | string | `~/.config/synapse-sap/config.json` | Load an alternate config file |
+| `--confirm` | bool | false | Skip confirmation prompts |
+| `--dry-run` | bool | false | Alias for `--simulate` |
 
-## Resolution order
+---
 
-1. Built in defaults
-2. Config file (`config show --raw`)
-3. Environment variables (see [env](/docs/cli/env))
-4. CLI flags (highest priority)
+## Resolution Order
+
+Flags are resolved in this order (highest priority last):
+
+1. **Built-in defaults** — Hardcoded in CLI
+2. **Config file** — `~/.config/synapse-sap/config.json` or `--config` path
+3. **Environment variables** — See [env](/docs/cli/env)
+4. **CLI flags** — Command-line arguments (highest priority)
+
+```
+┌─────────────────────────────────────────┐
+│  1. Defaults (lowest priority)          │
+│     --timeout: 30000                    │
+│     --retries: 3                        │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│  2. Config File                         │
+│     { "timeout": 60000 }                │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│  3. Environment Variables               │
+│     SYNAPSE_SAP_TIMEOUT=90000           │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│  4. CLI Flags (highest priority)        │
+│     --timeout 120000                    │
+└─────────────────────────────────────────┘
+                 ↓
+          Final Value: 120000
+```
+
+---
 
 ## Examples
 
+### Override RPC Endpoint
+
 ```bash
 # Force the EU endpoint just for this call
-synapse-sap agent list --rpc-url "https://staging.oobeprotocol.ai/rpc?api_key=KEY"
+synapse-sap agent list \
+  --rpc-url "https://staging.oobeprotocol.ai/rpc?api_key=KEY"
+```
 
-# JSON pipeline into jq
+### JSON Pipeline
+
+```bash
+# JSON output into jq
 synapse-sap discovery scan --limit 200 --json | jq '.[] | .wallet'
 
-# Preflight without sending
-synapse-sap escrow open <WALLET> --token sol --deposit 0.5 --simulate
+# Filter active agents
+synapse-sap agent list --json | jq '.[] | select(.status == "active")'
 ```
+
+### Dry Run / Simulation
+
+```bash
+# Preflight without sending
+synapse-sap escrow open <WALLET> \
+  --token sol \
+  --deposit 0.5 \
+  --simulate
+
+# Verbose simulation
+synapse-sap agent register --manifest agent.json \
+  --simulate \
+  --verbose
+```
+
+### Quiet Mode (CI/CD)
+
+```bash
+# Suppress all output except errors
+synapse-sap doctor run --quiet
+
+# JSON for CI
+synapse-sap doctor run --json --quiet
+```
+
+### Verbose Debugging
+
+```bash
+# Full trace with timings
+synapse-sap agent info <WALLET> --verbose
+
+# Output:
+# [0ms] Resolving agent PDA...
+# [12ms] PDA: 8xPjQvN3...
+# [15ms] Fetching account...
+# [89ms] Account fetched (1247 bytes)
+# [92ms] Decoding account data...
+# [102ms] Done
+```
+
+### Alternate Config
+
+```bash
+# Use project-specific config
+synapse-sap agent list --config ./config.staging.json
+
+# Use production config
+synapse-sap escrow open <WALLET> --config ./config.prod.json
+```
+
+### Skip Confirmations
+
+```bash
+# Skip "Are you sure?" prompts
+synapse-sap agent close <WALLET> --confirm
+
+# Batch operations
+synapse-sap tools publish manifest.json --confirm
+```
+
+---
+
+## Environment Variable Equivalents
+
+Every global flag has an environment variable equivalent:
+
+| Flag | Environment Variable |
+|------|---------------------|
+| `--rpc-url` | `SYNAPSE_SAP_RPC_URL` |
+| `--fallback-rpc-url` | `SYNAPSE_SAP_FALLBACK_RPC_URL` |
+| `--keypair` | `SYNAPSE_SAP_KEYPAIR_PATH` |
+| `--cluster` | `SYNAPSE_SAP_CLUSTER` |
+| `--commitment` | `SYNAPSE_SAP_COMMITMENT` |
+| `--timeout` | `SYNAPSE_SAP_TIMEOUT` |
+| `--retries` | `SYNAPSE_SAP_RETRIES` |
+| `--config` | `SYNAPSE_SAP_CONFIG` |
+| `--no-color` | `NO_COLOR` (standard) |
+
+```bash
+# Set once, use everywhere
+export SYNAPSE_SAP_RPC_URL="https://us-1-mainnet.oobeprotocol.ai?api_key=KEY"
+export SYNAPSE_SAP_CLUSTER=mainnet-beta
+
+# Flags override env vars
+synapse-sap agent list --cluster devnet  # Uses devnet
+```
+
+---
+
+## Cluster Names
+
+| Alias | Full Name | RPC URL |
+|-------|-----------|---------|
+| `mainnet-beta` or `mainnet` | mainnet-beta | https://api.mainnet-beta.solana.com |
+| `devnet` | devnet | https://api.devnet.solana.com |
+| `localnet` or `local` | localnet | http://localhost:8899 |
+
+```bash
+# All equivalent
+synapse-sap agent list --cluster mainnet
+synapse-sap agent list --cluster mainnet-beta
+synapse-sap agent list --network mainnet
+```
+
+---
+
+## Commitment Levels
+
+| Level | Description | Use Case |
+|-------|-------------|----------|
+| `processed` | Most recent block processed by validator | Fastest, lowest confidence |
+| `confirmed` | Block confirmed by supermajority of validators | Default, balanced |
+| `finalized` | Block finalized (irreversible) | Highest confidence, slowest |
+
+```bash
+# Fast reads (may reorg)
+synapse-sap agent info <WALLET> --commitment processed
+
+# Default (recommended)
+synapse-sap agent info <WALLET> --commitment confirmed
+
+# Critical operations
+synapse-sap escrow close <WALLET> --commitment finalized
+```
+
+---
+
+## Output Modes
+
+### Human-Readable (Default)
+
+```
+Agent: TradeBot
+Wallet: 8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD
+Status: Active
+Reputation: 8542
+Total Calls: 1247
+```
+
+### JSON (`--json`)
+
+```json
+{
+  "wallet": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+  "name": "TradeBot",
+  "status": "active",
+  "reputationScore": 8542,
+  "totalCalls": 1247
+}
+```
+
+### Quiet (`--quiet`)
+
+```
+# Only errors are shown
+$ synapse-sap agent info <INVALID_WALLET> --quiet
+Error: AgentNotFound
+No agent registered for wallet 9xPj...
+```
+
+### Verbose (`--verbose`)
+
+```
+[0ms] Resolving agent PDA...
+[12ms] PDA: 8xPjQvN3... (seeds: ["sap_agent", "8xPj..."])
+[15ms] Fetching account from RPC...
+[89ms] Account fetched (1247 bytes, lamports: 2338800)
+[92ms] Decoding account data...
+[102ms] AgentAccount decoded (name: "TradeBot", status: active)
+[105ms] Fetching AgentStats...
+[145ms] AgentStats decoded (reputation: 8542, calls: 1247)
+[148ms] Done
+```
+
+---
+
+## Best Practices
+
+| Scenario | Recommended Flags |
+|----------|-------------------|
+| **Interactive use** | Default (human-readable) |
+| **Scripting / CI** | `--json --quiet` |
+| **Debugging** | `--verbose` |
+| **Production writes** | `--simulate` first, then `--commitment finalized` |
+| **Fast reads** | `--commitment processed` |
+| **Unreliable network** | `--timeout 60000 --retries 5` |
+| **No color (logs)** | `--no-color` |
+
+---
+
+## Next Steps
+
+- **[env](/docs/cli/env)** — Environment variable reference
+- **[config](/docs/cli/config)** — Configuration file format
+- **[doctor](/docs/cli/doctor)** — Diagnostic command
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3

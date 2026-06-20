@@ -12,7 +12,8 @@ import { useMemo } from 'react';
 import type {
   AggregatedReputation,
   AggregateOptions,
-} from '@oobe-protocol-labs/synapse-sap-sdk/registries/fairscale';
+} from '~/lib/sap/sdk-compat';
+import { pathSegment } from '~/lib/format';
 
 export type { AggregatedReputation, AggregateOptions };
 
@@ -48,8 +49,9 @@ export function useAggregatedReputation(
   opts?: ReputationOpts,
 ) {
   const qs = useMemo(() => buildQs(opts), [opts]);
-  const url = wallet
-    ? `/api/sap/agents/${wallet}/aggregate-reputation${qs}`
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment
+    ? `/api/sap/agents/${segment}/aggregate-reputation${qs}`
     : null;
 
   const q = useQuery<AggregatedReputation, Error>({

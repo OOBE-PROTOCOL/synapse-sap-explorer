@@ -1,51 +1,74 @@
 ---
 title: Architecture
-description: Modular design of the SAP SDK, the SapClient tree, module and registry layers, and data flow patterns.
+description: Modular design of the SAP SDK v0.20.0, the SapClient tree, module and registry layers, and data flow patterns.
 ---
 
 # Architecture
 
+**SDK Version:** v0.20.0  
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`
+
 The SAP SDK follows a layered, modular architecture. At the top sits a single entry point, `SapClient`, which exposes every protocol domain as a lazily-instantiated module or registry. There are no circular dependencies, no hidden singletons, and no ambient state.
 
-Before diving into the technical structure, it helps to understand the reasoning behind these design choices.
+---
 
 ## Why This Architecture?
 
 A blockchain SDK could be designed as a single monolithic class with hundreds of methods. SAP takes a different approach: small, focused modules that are composed into higher-level workflows. Here is why:
 
-**You only pay for what you use.** If your application only needs agent registration and memory, the payment and attestation modules are never even instantiated. This is not just a theoretical benefit. Each module creates internal state, allocates closures, and holds references. In a serverless environment where every millisecond of cold-start matters, lazy instantiation directly reduces startup time.
+### You Only Pay for What You Use
 
-**Changes in one domain cannot break another.** If a new payment feature is added to `EscrowModule`, the `AgentModule` is completely unaffected because they share no state. This is the same principle behind microservice architectures, but applied at the SDK level.
+If your application only needs agent registration and memory, the payment and attestation modules are never even instantiated. This is not just a theoretical benefit. Each module creates internal state, allocates closures, and holds references. In a serverless environment where every millisecond of cold-start matters, lazy instantiation directly reduces startup time.
 
-**Testing is straightforward.** Each module can be tested independently by mocking only the Anchor program it depends on. Registries can be tested by verifying they call the correct sequence of module methods.
+### Changes in One Domain Cannot Break Another
 
-## System Overview
+If a new payment feature is added to `EscrowModule`, the `AgentModule` is completely unaffected because they share no state. This is the same principle behind microservice architectures, but applied at the SDK level.
+
+### Testing is Straightforward
+
+Each module can be tested independently by mocking only the Anchor program it depends on. Registries can be tested by verifying they call the correct sequence of module methods.
+
+---
+
+## System Overview (v0.20.0)
 
 ```
-SapClient
-├── Modules (low-level instruction dispatch)
-│   ├── AgentModule        Agent identity and lifecycle
-│   ├── FeedbackModule     Reputation and reviews
-│   ├── IndexingModule     Discovery index management
-│   ├── ToolsModule        Tool schema registry
-│   ├── VaultModule        Encrypted memory storage
-│   ├── EscrowModule       Payment escrow
-│   ├── AttestationModule  Web of trust
-│   └── LedgerModule       Ring-buffer memory
-├── Registries (high-level workflows)
-│   ├── DiscoveryRegistry  Find agents and tools
-│   ├── X402Registry       End-to-end payments
-│   ├── SessionManager     Unified memory sessions
-│   └── AgentBuilder       Fluent registration
-├── Events
-│   └── EventParser        Decode on-chain logs
+@oobe-protocol-labs/synapse-sap-sdk@0.20.0
+│
+├── Domain Modules (8)          # Low-level instruction builders
+│   ├── agent                   # Register, update, close agents
+│   ├── escrow                  # V2 escrow lifecycle
+│   ├── vault                   # Memory vault operations
+│   ├── tools                   # Tool publishing + schemas
+│   ├── attestation             # Web-of-trust attestations
+│   ├── dispute                 # Dispute filing + resolution
+│   ├── indexing                # Capability/protocol indexes
+│   └── ledger                  # Ring buffer memory writes (renamed from staking)
+│
+├── High-Level Registries (4)   # Abstracted workflows
+│   ├── discovery               # Agent discovery + enrichment
+│   ├── x402                    # Payment headers + calls
+│   ├── sessionManager          # Session lifecycle
+│   └── agentBuilder            # Fluent agent registration
+│
+├── Plugin Adapter              # SynapseAgentKit integration
+│   └── plugin                  # 52 tools for LangChain/ACP
+│
 └── Shared Infrastructure
-    pda/ constants/ types/ utils/ errors/ idl/
+    ├── pda/                    # 17 PDA derivation functions
+    ├── events/                 # 38 event parsers
+    ├── errors/                 # Typed error handling
+    ├── types/                  # 17 account parsers
+    ├── constants/              # Program IDs, seeds, limits
+    ├── utils/                  # Hashing, serialization, validation
+    └── idl/                    # Embedded IDL (synapse_agent_sap.json)
 ```
 
 **Modules** handle low-level instruction dispatch. They map 1:1 to the on-chain program's instruction set. When you call `client.agent.register()`, the `AgentModule` constructs the Anchor transaction, derives the necessary PDAs, and sends it to the network. Modules are the "atoms" of the SDK.
 
 **Registries** compose modules into task-oriented workflows. For example, the `AgentBuilder` registry calls `AgentModule.register()`, then `IndexingModule.initCapabilityIndex()` for each capability, then `IndexingModule.initProtocolIndex()` for each protocol. Registries are the "molecules" that make common tasks convenient.
+
+---
 
 ## SapClient
 
@@ -57,6 +80,8 @@ SapClient
 |--------|-------|-------|
 | `SapClient.from(provider, programId?)` | `AnchorProvider` | Auto-loads the embedded IDL. Most common path. |
 | `SapClient.fromProgram(program)` | `Program` | When you already have a configured Anchor program. |
+| `SapClient.devnet()` | `Keypair?` | Quick setup for devnet testing. |
+| `SapClient.mainnet(rpcUrl)` | `string, Keypair?` | Quick setup for mainnet with custom RPC. |
 
 ```typescript
 import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
@@ -65,10 +90,11 @@ import { AnchorProvider } from "@coral-xyz/anchor";
 const client = SapClient.from(AnchorProvider.env());
 
 // Everything is now accessible through client:
-// client.agent     -> AgentModule
-// client.tools     -> ToolsModule
-// client.session   -> SessionManager
-// client.discovery -> DiscoveryRegistry
+// client.agent      -> AgentModule
+// client.tools      -> ToolsModule
+// client.session    -> SessionManager
+// client.discovery  -> DiscoveryRegistry
+// client.ledger     -> LedgerModule (renamed from client.staking in v0.20.0)
 // ... and so on
 ```
 
@@ -78,21 +104,29 @@ const client = SapClient.from(AnchorProvider.env());
 |----------|------|-------------|
 | `program` | `Program` | Underlying Anchor program for all RPC calls |
 | `walletPubkey` | `PublicKey` | Provider wallet, used as default authority and payer |
+| `rpcUrl` | `string` | Configured RPC endpoint |
+| `cluster` | `string` | Current cluster (mainnet-beta, devnet, localnet) |
 
-## Module Layer
+---
+
+## Module Layer (v0.20.0)
 
 Each module encapsulates a single protocol domain. They extend `BaseModule`, which provides access to the Anchor program, provider, wallet, and typed account fetchers.
 
-| Module | Domain | Key Operations |
-|--------|--------|---------------|
-| `AgentModule` | Identity lifecycle | register, update, deactivate, reactivate, close, reportCalls, updateReputation |
-| `FeedbackModule` | Trustless reputation | give, update, revoke, close |
-| `IndexingModule` | Discovery indexes | addCapability, addProtocol, addToolCategory |
-| `ToolsModule` | Tool schema registry | publish, inscribe, update, close |
-| `VaultModule` | Encrypted memory | initVault, openSession, inscribe, compactInscribe, closeSession, closeVault |
-| `EscrowModule` | Payment settlement | create, deposit, settle, withdraw, close |
-| `AttestationModule` | Web of trust | create, revoke, close |
-| `LedgerModule` | Ring-buffer memory | init, write, seal, close, decodeRingBuffer |
+| Module | Access | Domain | Key Operations |
+|--------|--------|--------|----------------|
+| `AgentModule` | `client.agent` | Identity lifecycle | register, update, deactivate, reactivate, close, reportCalls, updateReputation |
+| `FeedbackModule` | `client.feedback` | Trustless reputation | give, update, revoke, close |
+| `IndexingModule` | `client.indexing` | Discovery indexes | addCapability, addProtocol, addToolCategory |
+| `ToolsModule` | `client.tools` | Tool schema registry | publish, inscribe, update, close |
+| `VaultModule` | `client.vault` | Encrypted memory | initVault, openSession, inscribe, compactInscribe, closeSession, closeVault |
+| `EscrowModule` | `client.escrow` | Payment settlement | createEscrowV2, deposit, settleCallsV2, withdraw, close |
+| `AttestationModule` | `client.attestation` | Web of trust | create, revoke, close |
+| `LedgerModule` | `client.ledger` | Ring-buffer memory | init, write, seal, close, decodeRingBuffer |
+
+<Callout type="info">
+**v0.20.0 Change:** `client.staking` has been renamed to `client.ledger` for clarity. All staking-related ledger operations are now under the `ledger` namespace.
+</Callout>
 
 ### Lazy Singleton Pattern
 
@@ -109,38 +143,44 @@ get agent(): AgentModule {
 
 **What this means in practice:** If your application only registers agents and stores memory, only `AgentModule`, `LedgerModule`, and `SessionManager` are ever created. The six other modules exist in the SDK but consume zero memory and zero CPU in your process. The first time you access `client.escrow`, the `EscrowModule` is constructed. Every subsequent access returns the same cached instance.
 
-### BaseModule
+---
 
-All modules extend `BaseModule`, which provides:
-
-```typescript
-abstract class BaseModule {
-  constructor(protected readonly program: SapProgram) {}
-
-  protected get methods(): any;
-  protected get provider(): AnchorProvider;
-  protected get walletPubkey(): PublicKey;
-
-  protected fetchAccount<T>(name: string, pda: PublicKey): Promise<T>;
-  protected fetchAccountNullable<T>(name: string, pda: PublicKey): Promise<T | null>;
-  protected bn(value: number | bigint): BN;
-}
-```
-
-Modules never reach into each other. They communicate only through the shared `program` reference. This strict isolation means that a bug in `EscrowModule` cannot corrupt the state used by `AgentModule`. Composition happens at the registry layer, which coordinates calls across modules in the correct order.
-
-## Registry Layer
+## Registry Layer (v0.20.0)
 
 Registries are higher-level abstractions that compose multiple modules into task-oriented workflows. They exist because common operations span multiple modules, and requiring developers to orchestrate the correct sequence of calls manually would be error-prone.
 
-| Registry | Purpose | Composes | Example Use Case |
-|----------|---------|----------|-----------------|
-| `DiscoveryRegistry` | Find agents by capability, protocol, or wallet | Agent + Indexing | "Show me all agents that support Jupiter swaps" |
-| `X402Registry` | Micropayment lifecycle with pricing, headers, and settlement | Escrow + Agent | "Prepare an escrow, call the agent 50 times, settle" |
-| `SessionManager` | Unified memory sessions with vault and ledger in one API | Vault + Ledger | "Start a conversation, write messages, seal when done" |
-| `AgentBuilder` | Fluent registration with validation and tool batching | Agent + Indexing + Tools | "Register with capabilities, pricing, and tools in one call" |
+| Registry | Access | Purpose | Composes | Example Use Case |
+|----------|--------|---------|----------|------------------|
+| `DiscoveryRegistry` | `client.discovery` | Find agents by capability, protocol, or wallet | Agent + Indexing | "Show me all agents that support Jupiter swaps" |
+| `X402Registry` | `client.x402` | Micropayment lifecycle with pricing, headers, and settlement | Escrow + Agent | "Prepare an escrow, call the agent 50 times, settle" |
+| `SessionManager` | `client.session` | Unified memory sessions with vault and ledger in one API | Vault + Ledger | "Start a conversation, write messages, seal when done" |
+| `AgentBuilder` | `client.builder` | Fluent registration with validation and tool batching | Agent + Indexing + Tools | "Register with capabilities, pricing, and tools in one call" |
 
 **Why registries instead of just using modules directly?** Consider agent registration. Without the `AgentBuilder`, you would need to: call `AgentModule.register()`, then loop through capabilities and call `IndexingModule.initCapabilityIndex()` for each one, then loop through protocols and call `IndexingModule.initProtocolIndex()` for each one. The builder does all of this in the correct order with a clean, fluent API. The modules are still available for fine-grained control when you need it.
+
+---
+
+## Plugin Adapter (v0.20.0)
+
+The plugin adapter provides integration with LLM agent frameworks like LangChain and ACP (Agent Communication Protocol).
+
+| Component | Access | Description |
+|-----------|--------|-------------|
+| `SynapseAgentKit` | `new SynapseAgentKit(client)` | LangChain adapter with 52 tools |
+| Protocol Handlers | `client.plugin.protocols` | Built-in handlers for Jupiter, Kamino, etc. |
+| Zod Schemas | `client.plugin.schemas` | Input/output validation schemas |
+
+### Available Tools (52 Total)
+
+| Category | Tools | Examples |
+|----------|-------|----------|
+| **DeFi** | 18 | swap, lend, stake, bridge, limitOrder |
+| **Data** | 12 | price, volume, tvl, apy, metrics |
+| **NFT** | 8 | mint, list, buy, offer |
+| **Social** | 6 | post, follow, message, tip |
+| **Utility** | 8 | transfer, swap_tokens, resolve_domain |
+
+---
 
 ## Data Flow
 
@@ -184,19 +224,59 @@ Deserialized TypeScript object (AgentAccountData)
 
 Reads are significantly cheaper than writes. A read is a single `getAccountInfo` RPC call that returns the account data, deserialized into a typed TypeScript object. There is no transaction fee, no signature required, and no on-chain computation.
 
+---
+
 ## Embedded IDL
 
 The IDL (`synapse_agent_sap.json`) is shipped inside the SDK package. You never need to fetch or generate it. `SapClient.from()` loads it automatically. This means no build step is required, no external workspace dependency exists, and the SDK version always pins the IDL version.
 
-**Why embed the IDL?** In the Anchor ecosystem, it is common to fetch the IDL from the network or generate it from the program source. Both approaches introduce fragility: the network call can fail, or the generated IDL might be out of sync. Embedding eliminates both issues. When you install SDK version 1.2.0, you are guaranteed to get the exact IDL that version was built and tested against.
+**Why embed the IDL?** In the Anchor ecosystem, it is common to fetch the IDL from the network or generate it from the program source. Both approaches introduce fragility: the network call can fail, or the generated IDL might be out of sync. Embedding eliminates both issues. When you install SDK version 0.20.0, you are guaranteed to get the exact IDL that version was built and tested against.
+
+---
 
 ## Design Principles
 
 | Principle | Implementation | Why It Matters |
 |-----------|---------------|----------------|
-| Zero ambient state | No globals, no module-level caches. Everything lives on SapClient. | Enables multiple isolated clients in the same process (useful for testing and multi-tenant servers). |
-| Lazy by default | Modules and registries are instantiated only on first access. | Reduces cold-start time and memory usage. You pay only for the domains you actually use. |
-| Type safety | Every account, instruction, and event has a TypeScript interface. | Catches errors at compile time instead of runtime. IDE autocompletion guides correct usage. |
-| Deterministic PDAs | All addresses are derivable offline with no lookups needed. | Eliminates a class of race conditions and enables offline address computation for batching. |
-| Embedded IDL | SDK version equals IDL version. No build step, no mismatch. | Guarantees ABI compatibility. If the SDK compiles, the IDL is correct. |
-| Composition over inheritance | Registries compose modules. They do not extend them. | Each layer has a clear responsibility. Modules dispatch instructions. Registries orchestrate workflows. |
+| **Zero ambient state** | No globals, no module-level caches. Everything lives on SapClient. | Enables multiple isolated clients in the same process (useful for testing and multi-tenant servers). |
+| **Lazy by default** | Modules and registries are instantiated only on first access. | Reduces cold-start time and memory usage. You pay only for the domains you actually use. |
+| **Type safety** | Every account, instruction, and event has a TypeScript interface. | Catches errors at compile time instead of runtime. IDE autocompletion guides correct usage. |
+| **Deterministic PDAs** | All addresses are derivable offline with no lookups needed. | Eliminates a class of race conditions and enables offline address computation for batching. |
+| **Embedded IDL** | SDK version equals IDL version. No build step, no mismatch. | Guarantees ABI compatibility. If the SDK compiles, the IDL is correct. |
+| **Composition over inheritance** | Registries compose modules. They do not extend them. | Each layer has a clear responsibility. Modules dispatch instructions. Registries orchestrate workflows. |
+
+---
+
+## v0.20.0 Architecture Changes
+
+### Module Renames
+
+| Old (v0.19.x) | New (v0.20.0) | Reason |
+|---------------|---------------|--------|
+| `client.staking` | `client.ledger` | Clarity: staking was confusing for ledger operations |
+
+### New Additions
+
+- **Dispute Module** — New module for dispute filing and resolution
+- **Enhanced Error Types** — `SapAccountNotFoundError`, `SapInstructionError`, etc.
+- **Event Parsers** — 38 decoded events with typed parsers
+- **Account Parsers** — 17 typed account parsers
+
+### Deprecated
+
+- `client.staking.*` — Use `client.ledger.*` instead
+- `AgentModule.deprecateAgent()` — Use `AgentModule.closeAgent()` instead
+
+---
+
+## Next Steps
+
+- **[Client Setup](/docs/sdk/client-setup)** — Configure RPC, wallet, clusters
+- **[Agent Builder](/docs/sdk/agent-builder)** — Fluent agent registration API
+- **[PDA Reference](/docs/sdk/pda-reference)** — All 17 PDA derivations
+- **[Event System](/docs/sdk/event-system)** — Decode on-chain events
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

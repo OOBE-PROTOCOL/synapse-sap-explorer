@@ -1,13 +1,17 @@
 ---
 title: Diagrams and Flow
-description: Visual reference for the SAP protocol. Registration, x402 payment flow, memory writes, escrow lifecycle, and the indexing pipeline that powers the explorer.
+description: Visual reference for the SAP protocol. Registration, x402 payment flow, memory writes, escrow lifecycle, dispute resolution, and the indexing pipeline. SDK v0.20.0 aligned.
 ---
 
 # Diagrams and Flow
 
+**SDK Version:** v0.20.0
+
 Every SAP interaction reduces to a small set of state transitions. This page maps each one to a sequence diagram so you can reason about it before writing code.
 
-## Agent registration
+---
+
+## Agent Registration
 
 ```mermaid
 sequenceDiagram
@@ -26,7 +30,9 @@ sequenceDiagram
 
 The transaction is atomic: identity, stats, and index entries are all created or all rejected.
 
-## x402 paid call
+---
+
+## x402 Payment Flow
 
 ```mermaid
 sequenceDiagram
@@ -49,7 +55,9 @@ sequenceDiagram
 
 Settlement is batched on the merchant side. Consumers never wait for a transaction to receive a tool response.
 
-## Memory write (ring buffer)
+---
+
+## Memory Write (Ring Buffer)
 
 ```mermaid
 sequenceDiagram
@@ -64,9 +72,11 @@ sequenceDiagram
     SDK-->>A: ack
 ```
 
-The ledger is a fixed size ring buffer. Writes cost only the transaction fee (around 0.000005 SOL). Old entries are overwritten when the buffer fills.
+The ledger is a fixed size ring buffer (4096 entries per page). Writes cost only the transaction fee (~0.000005 SOL). Old entries are overwritten when the buffer fills unless sealed first.
 
-## Escrow lifecycle
+---
+
+## Escrow Lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -77,12 +87,41 @@ stateDiagram-v2
     Settling --> Funded: more calls remaining
     Settling --> Disputed: dispute_open (within window)
     Disputed --> Resolved: dispute_resolve
+    Resolved --> Funded: funds released
     Funded --> Closed: close_escrow
     Resolved --> Closed: close_escrow
     Closed --> [*]
 ```
 
-## Indexing pipeline
+**New in v0.20.0:** Dispute flow with configurable filing window and resolution by agent owner or neutral arbiter.
+
+---
+
+## Dispute Resolution Flow
+
+```mermaid
+sequenceDiagram
+    participant D as Depositor
+    participant M as Merchant
+    participant P as SAP Program
+    participant E as Escrow PDA
+
+    D->>P: dispute_open(escrow, reason)
+    P->>E: freeze balance, set disputed flag
+    P-->>D: DisputeOpened event
+    Note over D,M: Negotiation period (off-chain)
+    D->>P: dispute_resolve(escrow, split)
+    M->>P: dispute_resolve(escrow, split)
+    P->>E: distribute funds per split
+    P-->>D: DisputeResolved event
+    P-->>M: funds transferred
+```
+
+Either party can propose a resolution. The first valid resolution executes; subsequent calls are rejected.
+
+---
+
+## Indexing Pipeline
 
 ```mermaid
 flowchart LR
@@ -97,19 +136,21 @@ flowchart LR
 
 The explorer reads from two sources: the live RPC for fresh state and the indexed PostgreSQL mirror for historical queries and aggregates. The mirror is updated through a Yellowstone gRPC stream that decodes program accounts and events as they land on-chain.
 
-## Network topology
+---
+
+## Network Topology
 
 ```mermaid
 graph TB
     subgraph Solana
-        SAP[SAP Program]
+        SAP[SAP Program<br/>SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ]
         REG[Global Registry]
         IDX[Capability Index]
         TOK[SPL Token]
     end
 
     subgraph Off-chain
-        SDK[Synapse SAP SDK]
+        SDK[Synapse SAP SDK v0.20.0]
         CLI[synapse-sap CLI]
         EXP[Explorer]
     end
@@ -132,8 +173,60 @@ graph TB
     EXP --> REG
 ```
 
-## Where to go next
+---
 
-- [Architecture](/docs/core/architecture) for the textual model behind these diagrams.
-- [On-chain reference](/docs/core/on-chain-reference) for every instruction and account.
-- [SDK PDA reference](/docs/sdk/pda-reference) for the seed schemas.
+## Vault Session Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Agent Owner
+    participant SDK
+    participant V as Vault PDA
+    participant S as Session PDA
+    participant L as Ledger PDA
+
+    A->>SDK: initVault(nonce)
+    SDK->>V: create vault PDA
+    A->>SDK: openSession(sessionId)
+    SDK->>S: create session account
+    A->>SDK: inscribe(data, hash)
+    SDK->>L: append to ring buffer
+    A->>SDK: closeSession(sessionId)
+    SDK->>S: mark session closed
+    Note over A,L: Session data remains readable
+```
+
+---
+
+## Tool Publication Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Agent Owner
+    participant SDK
+    participant T as Tool PDA
+    participant TX as TX Logs
+
+    A->>SDK: publishByName(toolName, schemas)
+    SDK->>T: create tool descriptor PDA
+    SDK->>TX: inscribeSchema(full JSON)
+    Note over T: Stores only SHA-256 hashes
+    Note over TX: Full schema in logs (rent-free)
+    SDK-->>A: { toolPda, version: 1 }
+```
+
+On-chain storage: 32-byte hashes only (minimal rent). Full schemas in transaction logs (zero ongoing cost).
+
+---
+
+## Where to Go Next
+
+- **[Architecture](/docs/core/architecture)** — Textual model behind these diagrams
+- **[On-Chain Reference](/docs/core/on-chain-reference)** — Every instruction and account
+- **[SDK PDA Reference](/docs/sdk/pda-reference)** — Seed schemas and derivation
+- **[Dispute Resolution](/docs/core/payments)** — Dispute mechanics and windows
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

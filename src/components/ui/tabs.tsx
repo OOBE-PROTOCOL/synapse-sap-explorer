@@ -45,7 +45,7 @@ const TabsList = React.forwardRef<
     ref={ref}
     role="tablist"
     className={cn(
-      'inline-flex h-9 items-center gap-1 rounded-lg bg-muted/40 backdrop-blur-sm p-1 text-muted-foreground border border-border/30',
+      'inline-flex min-h-11 items-center gap-1 rounded-lg border bg-muted/40 p-1 text-muted-foreground',
       className,
     )}
     {...props}
@@ -70,13 +70,13 @@ const TabsTrigger = React.forwardRef<
       data-state={active ? 'active' : 'inactive'}
       onClick={() => ctx.onValueChange(value)}
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium tracking-wide',
-        'transition-all duration-200',
-        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-        'disabled:pointer-events-none disabled:opacity-40',
+        'inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium',
+        'transition-colors duration-200',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'disabled:pointer-events-none disabled:opacity-50',
         active
-          ? 'bg-card/90 text-foreground shadow-[0_0_8px_-3px_hsl(var(--glow)/0.15)] border border-border/40'
-          : 'hover:text-foreground/70 hover:bg-muted/40',
+          ? 'border bg-background text-foreground shadow-sm'
+          : 'hover:bg-accent hover:text-foreground',
         className,
       )}
       {...props}

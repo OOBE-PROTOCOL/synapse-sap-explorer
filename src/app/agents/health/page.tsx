@@ -24,7 +24,7 @@ import { DataSourceBadge } from '~/components/ui/explorer-primitives';
 import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { useAgents } from '~/hooks/use-sap';
-import { fmtNum } from '~/lib/format';
+import { asText, entityPath, fmtNum } from '~/lib/format';
 import type { SerializedDiscoveredAgent } from '~/lib/sap/discovery';
 
 /* ── Health derivation ─────────────────────── */
@@ -86,26 +86,26 @@ function deriveHealth(agent: SerializedDiscoveredAgent): {
 const HEALTH_CONFIG: Record<HealthLevel, { label: string; className: string; dotClass: string; ringClass: string }> = {
   excellent: {
     label: 'Excellent',
-    className: 'text-emerald-400',
-    dotClass: 'bg-emerald-500 shadow-[0_0_8px_hsl(var(--neon-emerald)/0.6)]',
+    className: 'text-emerald-700 dark:text-emerald-400',
+    dotClass: 'bg-emerald-500',
     ringClass: 'ring-emerald-500/30',
   },
   good: {
     label: 'Good',
     className: 'text-primary',
-    dotClass: 'bg-primary shadow-[0_0_8px_hsl(var(--neon-orange)/0.6)]',
+    dotClass: 'bg-primary',
     ringClass: 'ring-primary/30',
   },
   degraded: {
     label: 'Degraded',
-    className: 'text-amber-400',
-    dotClass: 'bg-amber-500 shadow-[0_0_8px_hsl(var(--neon-amber)/0.6)]',
+    className: 'text-amber-700 dark:text-amber-400',
+    dotClass: 'bg-amber-500',
     ringClass: 'ring-amber-500/30',
   },
   critical: {
     label: 'Critical',
-    className: 'text-red-400',
-    dotClass: 'bg-red-500 shadow-[0_0_8px_hsl(var(--destructive)/0.6)]',
+    className: 'text-red-700 dark:text-red-400',
+    dotClass: 'bg-red-500',
     ringClass: 'ring-red-500/30',
   },
   offline: {
@@ -187,19 +187,20 @@ export default function AgentHealthPage() {
       {/* Health grid */}
       {sorted.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {sorted.map((agent) => {
+          {sorted.map((agent, i) => {
             const hcfg = HEALTH_CONFIG[agent.health.level];
             const id = agent.identity;
             const rep = Number(id?.reputationScore ?? 0);
             const uptime = Number(id?.uptimePercent ?? 0);
             const latency = Number(id?.avgLatencyMs ?? 0);
             const calls = Number(id?.totalCallsServed ?? agent.stats?.totalCallsServed ?? 0);
+            const pda = asText(agent.pda);
+            const wallet = asText(id?.wallet);
 
             return (
-              <Link key={agent.pda} href={`/agents/${id?.wallet ?? agent.pda}`}>
+              <Link key={pda || wallet || i} href={entityPath('/agents', wallet || pda)}>
                 <Card className={cn(
-                  'arena-panel-active group transition-all duration-300 cursor-pointer',
-                  'hover:shadow-[0_0_24px_-6px_hsl(var(--glow)/0.25)]',
+                  'group cursor-pointer rounded-xl border bg-card shadow-sm transition-colors duration-200 hover:border-primary/30',
                   'ring-1',
                   hcfg.ringClass,
                 )}>
@@ -235,10 +236,10 @@ export default function AgentHealthPage() {
                         <div
                           className={cn(
                             'h-full rounded-full transition-all duration-700',
-                            agent.health.level === 'excellent' ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' :
-                            agent.health.level === 'good' ? 'bg-gradient-to-r from-primary to-primary' :
-                            agent.health.level === 'degraded' ? 'bg-gradient-to-r from-amber-500 to-amber-400' :
-                            agent.health.level === 'critical' ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                            agent.health.level === 'excellent' ? 'bg-emerald-500' :
+                            agent.health.level === 'good' ? 'bg-primary' :
+                            agent.health.level === 'degraded' ? 'bg-amber-500' :
+                            agent.health.level === 'critical' ? 'bg-red-500' :
                             'bg-zinc-600',
                           )}
                           style={{ width: `${agent.health.score}%` }}

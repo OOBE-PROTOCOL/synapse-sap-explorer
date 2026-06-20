@@ -3,7 +3,7 @@
 import {
   SapPostgres,
   SapSyncEngine,
-} from '@oobe-protocol-labs/synapse-sap-sdk';
+} from './sdk-compat';
 import { getSapClient, getFallbackSapClient } from './discovery';
 import { markDbUp, getSharedPool } from '~/db';
 import { syncAllX402DirectPayments, reclassifyX402Payments } from './x402-scanner';

@@ -1,8 +1,8 @@
 // src/indexer/utils.ts
 
-import { getTableColumns, sql } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
 import type { BNLike, NumLike, PKLike, AnchorEnum } from '~/types';
+import { asPublicKeyText } from '~/lib/format';
+export { conflictUpdateSet, conflictUpdateWhere } from '~/lib/db/upsert';
 
 export function log(label: string, msg: string) {
   const ts = new Date().toISOString().slice(11, 23);
@@ -12,6 +12,38 @@ export function log(label: string, msg: string) {
 export function logErr(label: string, msg: string) {
   const ts = new Date().toISOString().slice(11, 23);
   console.error(`[${ts}] [indexer:${label}] ❌ ${msg}`);
+}
+
+export function formatError(err: unknown): string {
+  const error = err as Error & {
+    cause?: unknown;
+    code?: string;
+    detail?: string;
+    constraint?: string;
+    table?: string;
+    schema?: string;
+  };
+  const cause = error.cause as
+    | (Error & {
+        code?: string;
+        detail?: string;
+        constraint?: string;
+        table?: string;
+        schema?: string;
+      })
+    | undefined;
+
+  const parts = [
+    error.message,
+    cause?.message && `cause=${cause.message}`,
+    (cause?.code ?? error.code) && `code=${cause?.code ?? error.code}`,
+    (cause?.schema ?? error.schema) && `schema=${cause?.schema ?? error.schema}`,
+    (cause?.table ?? error.table) && `table=${cause?.table ?? error.table}`,
+    (cause?.constraint ?? error.constraint) && `constraint=${cause?.constraint ?? error.constraint}`,
+    (cause?.detail ?? error.detail) && `detail=${cause?.detail ?? error.detail}`,
+  ].filter(Boolean);
+
+  return parts.join(' | ');
 }
 
 
@@ -56,6 +88,8 @@ export async function withRetry<T>(
 /** PublicKey → base58 string, handles null/undefined/already-string */
 export function pk(val: PKLike | unknown): string {
   if (!val) return '';
+  const normalized = asPublicKeyText(val);
+  if (normalized) return normalized;
   if (typeof val === 'string') return val;
   if (typeof val === 'object' && 'toBase58' in val && typeof val.toBase58 === 'function') return val.toBase58();
   return String(val);
@@ -100,22 +134,4 @@ export function enumKey(val: AnchorEnum | null | undefined | unknown): string | 
 }
 
 
-/**
- * Build the `set` object for onConflictDoUpdate using `excluded.*` references.
- * Excludes the specified columns (typically the PK) from the update.
- */
-export function conflictUpdateSet<T extends PgTable>(
-  table: T,
-  exclude: string[] = [],
-): Record<string, ReturnType<typeof sql.raw>> {
-  const cols = getTableColumns(table);
-  const set: Record<string, ReturnType<typeof sql.raw>> = {};
-  for (const [tsKey, col] of Object.entries(cols)) {
-    if (exclude.includes(tsKey)) continue;
-    set[tsKey] = sql.raw(`excluded."${(col as { name: string }).name}"`);
-  }
-  return set;
-}
-
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-

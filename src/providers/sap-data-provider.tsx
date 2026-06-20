@@ -52,6 +52,7 @@ const SapDataContext = createContext<SapDataContextValue | null>(null);
  * ═══════════════════════════════════════════════════════════ */
 
 const AGENT_MAP_POLL = 120_000;   // refresh agent map every 2 min
+const AGENT_MAP_STORAGE_KEY = 'sap-explorer:agent-map:v1';
 
 /* ═══════════════════════════════════════════════════════════
  * Provider
@@ -65,9 +66,15 @@ export function SapDataProvider({ children }: { children: ReactNode }) {
   const fetchAgentMap = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch('/api/sap/agents/map', { signal });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setAgentMapLoading(false);
+        return;
+      }
       const data: AgentMap = await res.json();
       setAgentMap(data);
+      try {
+        sessionStorage.setItem(AGENT_MAP_STORAGE_KEY, JSON.stringify(data));
+      } catch { /* best-effort hot cache */ }
       setAgentMapLoading(false);
     } catch {
       setAgentMapLoading(false);
@@ -76,6 +83,14 @@ export function SapDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const ac = new AbortController();
+    try {
+      const cached = sessionStorage.getItem(AGENT_MAP_STORAGE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as AgentMap;
+        setAgentMap(parsed);
+        setAgentMapLoading(false);
+      }
+    } catch { /* ignore corrupt cache */ }
     fetchAgentMap(ac.signal);
     const id = setInterval(() => fetchAgentMap(ac.signal), AGENT_MAP_POLL);
     return () => { ac.abort(); clearInterval(id); };
@@ -84,9 +99,10 @@ export function SapDataProvider({ children }: { children: ReactNode }) {
   /* ── Full Agent List ─────────────────────────────────── */
   const [agents, setAgents] = useState<SerializedDiscoveredAgent[]>([]);
   const [agentsTotal, setAgentsTotal] = useState(0);
-  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [agentsLoading, setAgentsLoading] = useState(false);
 
   const fetchAgents = useCallback(async (signal?: AbortSignal) => {
+    setAgentsLoading(true);
     try {
       const res = await fetch('/api/sap/agents?limit=200', { signal });
       if (!res.ok) return;
@@ -102,7 +118,7 @@ export function SapDataProvider({ children }: { children: ReactNode }) {
   // Keep this dataset on-demand only: avoids an extra heavy global request
   // on every page load because most pages don't consume full agent list context.
 
-  /* ── Global SSE Event Stream (lazy/on-demand) ──── */
+  /* ── Global SSE Event Stream (opt-in via useEventStream) ── */
   const [events] = useState<StreamEvent[]>([]);
   const [sseConnected] = useState(false);
 

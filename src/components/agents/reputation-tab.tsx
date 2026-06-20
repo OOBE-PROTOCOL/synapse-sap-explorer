@@ -32,17 +32,17 @@ import {
 type Tier = AggregatedReputation['combined']['tier'];
 
 const TIER_HERO: Record<Tier, string> = {
-  low: 'from-rose-500/20 via-rose-500/5 to-transparent border-rose-500/30',
-  medium: 'from-amber-500/20 via-amber-500/5 to-transparent border-amber-500/30',
-  high: 'from-emerald-500/20 via-emerald-500/5 to-transparent border-emerald-500/30',
-  elite: 'from-violet-500/25 via-violet-500/5 to-transparent border-violet-400/40',
+  low: 'border-rose-500/30 bg-rose-500/5',
+  medium: 'border-amber-500/30 bg-amber-500/5',
+  high: 'border-emerald-500/30 bg-emerald-500/5',
+  elite: 'border-primary/30 bg-primary/5',
 };
 
 const TIER_TEXT: Record<Tier, string> = {
-  low: 'text-rose-300',
-  medium: 'text-amber-300',
-  high: 'text-emerald-300',
-  elite: 'text-violet-200',
+  low: 'text-rose-700 dark:text-rose-400',
+  medium: 'text-amber-700 dark:text-amber-400',
+  high: 'text-emerald-700 dark:text-emerald-400',
+  elite: 'text-primary',
 };
 
 export function ReputationTab({ wallet }: { wallet: string }) {
@@ -62,7 +62,7 @@ export function ReputationTab({ wallet }: { wallet: string }) {
     return (
       <ExplorerSection title="Reputation" icon={<Sparkles className="h-4 w-4" />}>
         <div className="flex items-center justify-between gap-3 rounded-md border border-rose-500/30 bg-rose-500/5 p-3">
-          <div className="text-sm text-rose-300">Failed to load reputation: {error}</div>
+          <div className="text-sm text-rose-700 dark:text-rose-400">Failed to load reputation: {error}</div>
           <Button size="sm" variant="outline" onClick={() => refetch()}>
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Retry
           </Button>
@@ -80,7 +80,7 @@ export function ReputationTab({ wallet }: { wallet: string }) {
       {/* ── Hero ── */}
       <div
         className={cn(
-          'rounded-xl border bg-gradient-to-br p-5',
+          'rounded-xl border p-5 shadow-sm',
           TIER_HERO[combined.tier],
         )}
       >
@@ -118,10 +118,7 @@ export function ReputationTab({ wallet }: { wallet: string }) {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Recommendation
               </div>
-              <div
-                className="text-sm font-semibold"
-                style={{ color: fairscale.recommendation.color }}
-              >
+              <div className="text-sm font-semibold text-foreground">
                 {fairscale.recommendation.label}
               </div>
             </div>
@@ -176,7 +173,7 @@ export function ReputationTab({ wallet }: { wallet: string }) {
               icon={<AlertTriangle className="h-4 w-4" />}
               count={fairscale.red_flags.length}
             >
-              <ul className="space-y-1 text-xs text-rose-300">
+              <ul className="space-y-1 text-xs text-rose-700 dark:text-rose-400">
                 {fairscale.red_flags.map((r, i) => (
                   <li key={i} className="flex gap-2">
                     <span className="text-rose-500">·</span>
@@ -275,7 +272,7 @@ function FairScaleBlock({
       </Row>
       {fs.recommendation && (
         <Row label="Recommendation">
-          <span style={{ color: fs.recommendation.color }} className="font-medium">
+          <span className="font-medium text-foreground">
             {fs.recommendation.label}
           </span>
         </Row>

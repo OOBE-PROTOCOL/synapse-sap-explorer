@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { cn } from '~/lib/utils';
+import { asText, entityPath, short } from '~/lib/format';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
@@ -124,7 +125,7 @@ export function CopyableField({
             target={external ? '_blank' : undefined}
             rel={external ? 'noopener noreferrer' : undefined}
             className={cn(
-              'text-xs text-primary/80 hover:text-primary transition-colors',
+              'rounded-sm text-xs text-primary/80 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               shouldTruncate ? 'truncate' : '[overflow-wrap:anywhere] text-right',
               mono && 'font-mono',
             )}
@@ -147,8 +148,10 @@ export function CopyableField({
         )}
         {stringValue && (
           <button
+            type="button"
             onClick={handleCopy}
-            className="shrink-0 rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-all"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:size-8"
+            aria-label={`Copy ${label}`}
             title="Copy"
           >
             {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
@@ -171,9 +174,14 @@ export function SolscanLink({
   label?: string;
   className?: string;
 }) {
+  const stringValue = asText(value);
   const base = 'https://solscan.io';
-  const path = type === 'tx' ? `/tx/${value}` : type === 'block' ? `/block/${value}` : `/${type}/${value}`;
-  const display = label ?? (value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value);
+  const path = type === 'tx'
+    ? entityPath('/tx', stringValue)
+    : type === 'block'
+      ? entityPath('/block', stringValue)
+      : entityPath(`/${type}`, stringValue);
+  const display = label ?? short(stringValue, 8, 6);
 
   return (
     <a
@@ -181,7 +189,7 @@ export function SolscanLink({
       target="_blank"
       rel="noopener noreferrer"
       className={cn('inline-flex items-center gap-1 text-xs text-primary/80 hover:text-primary transition-colors font-mono', className)}
-      title={`View on Solscan: ${value}`}
+      title={`View on Solscan: ${stringValue}`}
     >
       {display}
       <ExternalLink className="h-3 w-3 shrink-0" />
@@ -252,7 +260,7 @@ export function DIDIdentity({
             <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
             <span className="text-xs text-muted-foreground">No DID registered on-chain</span>
             {wallet && (
-              <span className="text-xs text-muted-foreground/60 font-mono ml-auto">{wallet.slice(0, 8)}…</span>
+              <span className="text-xs text-muted-foreground/60 font-mono ml-auto">{short(wallet, 8, 4)}</span>
             )}
           </div>
         )}
@@ -313,8 +321,10 @@ export function InstructionView({
   return (
     <Card className={cn('overflow-hidden', className)}>
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        aria-expanded={expanded}
       >
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-xs font-mono text-muted-foreground shrink-0">
           #{index}
@@ -362,8 +372,10 @@ export function InstructionView({
           {instruction.accounts && instruction.accounts.length > 0 && (
             <div className="mt-2">
               <button
+                type="button"
                 onClick={() => setShowAccounts(!showAccounts)}
-                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                className="flex min-h-10 items-center gap-1 rounded-md text-xs font-semibold uppercase text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-expanded={showAccounts}
               >
                 {showAccounts ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 Accounts ({instruction.accounts.length})
@@ -373,8 +385,8 @@ export function InstructionView({
                   {instruction.accounts.map((acc, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground/50 w-4 text-right">{i}</span>
-                      <a href={`/address/${acc}`} className="text-xs font-mono text-primary/70 hover:text-primary transition-colors truncate">
-                        {acc.length > 20 ? `${acc.slice(0, 8)}…${acc.slice(-6)}` : acc}
+                      <a href={entityPath('/address', acc)} className="rounded-sm text-xs font-mono text-primary/70 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 truncate">
+                        {short(acc, 8, 6)}
                       </a>
                     </div>
                   ))}
@@ -428,8 +440,10 @@ export function OnChainDataSection({
   return (
     <Card className={cn('overflow-hidden', className)}>
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        aria-expanded={expanded}
       >
         {expanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
         <span className="text-sm font-medium text-foreground/80">{title}</span>

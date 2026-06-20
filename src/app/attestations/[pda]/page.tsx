@@ -17,6 +17,7 @@ import {
   DetailPageShell,
 } from '~/components/ui/explorer';
 import { useAttestations, useAgents } from '~/hooks/use-sap';
+import { asText, entityPath } from '~/lib/format';
 
 export default function AttestationDetailPage() {
   const { pda } = useParams<{ pda: string }>();
@@ -27,18 +28,18 @@ export default function AttestationDetailPage() {
 
   const attestation = useMemo(() => {
     if (!data?.attestations) return null;
-    return data.attestations.find((a) => a.pda === pda) ?? null;
+    return data.attestations.find((a) => asText(a.pda) === pda) ?? null;
   }, [data, pda]);
 
   const agent = useMemo(() => {
     if (!attestation || !agentsData?.agents) return null;
-    return agentsData.agents.find((a) => a.pda === attestation.agent) ?? null;
+    return agentsData.agents.find((a) => asText(a.pda) === asText(attestation.agent)) ?? null;
   }, [attestation, agentsData]);
 
   const attesterAgent = useMemo(() => {
     if (!attestation || !agentsData?.agents) return null;
     return agentsData.agents.find((a) =>
-      a.pda === attestation.attester || a.identity?.wallet === attestation.attester
+      asText(a.pda) === asText(attestation.attester) || asText(a.identity?.wallet) === asText(attestation.attester)
     ) ?? null;
   }, [attestation, agentsData]);
 
@@ -108,11 +109,11 @@ export default function AttestationDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <SectionHeader title="Subject Agent" />
-          <CopyableField label="Agent PDA" value={attestation.agent} href={`/address/${attestation.agent}`} truncate />
+          <CopyableField label="Agent PDA" value={attestation.agent} href={entityPath('/address', attestation.agent)} truncate />
           {agent?.identity && (
             <>
               <CopyableField label="Agent Name" value={agent.identity.name} mono={false} />
-              <CopyableField label="Agent Wallet" value={agent.identity.wallet} href={`/agents/${agent.identity.wallet}`} truncate />
+              <CopyableField label="Agent Wallet" value={agent.identity.wallet} href={entityPath('/agents', agent.identity.wallet)} truncate />
             </>
           )}
           <DIDIdentity
@@ -128,7 +129,7 @@ export default function AttestationDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <SectionHeader title="Attester" />
-          <CopyableField label="Attester Address" value={attestation.attester} href={`/address/${attestation.attester}`} truncate />
+          <CopyableField label="Attester Address" value={attestation.attester} href={entityPath('/address', attestation.attester)} truncate />
           {attesterAgent?.identity && (
             <>
               <CopyableField label="Attester Name" value={attesterAgent.identity.name} mono={false} />

@@ -1,11 +1,15 @@
 ---
-title: agent
-description: Register, list, inspect, and monitor agents from the terminal. Covers manifest registration, capability filtering, endpoint health, and tool discovery.
+title: Agent Commands
+description: Register, list, inspect, and monitor agents from the terminal. Covers manifest registration, capability filtering, endpoint health, and tool discovery. SDK v0.20.0 compatible.
 ---
 
 # `agent`
 
 Manage the on-chain identity, profile, and health of SAP agents.
+
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`
+
+---
 
 ## `agent list`
 
@@ -21,57 +25,191 @@ synapse-sap agent list \
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `--active` | bool | Restrict to agents with non zero call counters in the last window |
+| `--active` | bool | Restrict to agents with non-zero call counters in the last window |
 | `--capability <id>` | string | Filter by capability id (`protocol:tool`) |
 | `--protocol <id>` | string | Filter by registered protocol |
 | `--search <term>` | string | Substring match on name and description |
 | `--json` | bool | Emit raw JSON for piping |
+| `--limit <n>` | number | Max results (default: 50) |
+| `--cluster <c>` | string | Filter by cluster (mainnet, devnet, localnet) |
+
+### Example Output
+
+```json
+{
+  "agents": [
+    {
+      "wallet": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+      "name": "TradeBot",
+      "status": "active",
+      "reputationScore": 8542,
+      "totalCalls": 1247,
+      "capabilities": ["jupiter:swap", "kamino:lend"],
+      "protocols": ["jupiter", "kamino"]
+    }
+  ],
+  "total": 1,
+  "limit": 50
+}
+```
+
+---
 
 ## `agent info <wallet>`
 
 Print the full agent profile: identity, pricing, protocols, capabilities, stats, and optional tool manifest.
 
 ```bash
-synapse-sap agent info <AGENT_WALLET> --fetch-tools --fetch-endpoints
+synapse-sap agent info <AGENT_WALLET> \
+  --fetch-tools \
+  --fetch-endpoints
 ```
 
 | Flag | Effect |
 |------|--------|
 | `--fetch-tools` | Pulls the tool registry account and prints declared tools |
 | `--fetch-endpoints` | Resolves the x402 endpoint and runs a connectivity probe |
+| `--json` | Emit raw JSON for piping |
+
+### Example Output
+
+```json
+{
+  "wallet": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+  "name": "TradeBot",
+  "description": "AI-powered Jupiter swap agent",
+  "endpointUri": "https://api.tradebot.dev/x402",
+  "capabilities": [
+    { "id": "jupiter:swap", "protocolId": "jupiter", "version": "6.0" }
+  ],
+  "pricing": [
+    { "tierId": "default", "pricePerCall": 100000, "rateLimit": 100 }
+  ],
+  "protocols": ["jupiter", "A2A"],
+  "stats": {
+    "reputationScore": 8542,
+    "totalCalls": 1247,
+    "activeEscrows": 3
+  },
+  "endpoint": {
+    "reachable": true,
+    "latencyMs": 42
+  }
+}
+```
+
+---
 
 ## `agent tools <wallet>`
 
 Discover the tools an agent exposes, with optional category filter and JSON Schema dump.
 
 ```bash
-synapse-sap agent tools <AGENT_WALLET> --category defi --schema
+synapse-sap agent tools <AGENT_WALLET> \
+  --category defi \
+  --schema
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--category <cat>` | Filter by tool category (defi, nft, social, utility) |
+| `--schema` | Include full JSON Schema for input/output |
+| `--json` | Emit raw JSON for piping |
+
+### Example Output
+
+```json
+{
+  "tools": [
+    {
+      "pda": "ToolPDA...",
+      "name": "jupiter-swap",
+      "protocol": "jupiter",
+      "category": "defi",
+      "httpMethod": "POST",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "inputMint": { "type": "string" },
+          "outputMint": { "type": "string" },
+          "amount": { "type": "number" }
+        },
+        "required": ["inputMint", "outputMint", "amount"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "transaction": { "type": "string" },
+          "simulation": { "type": "object" }
+        }
+      }
+    }
+  ]
+}
+```
+
+---
 
 ## `agent health <wallet>`
 
-Multi step probe over the agent endpoint and on-chain state.
+Multi-step probe over the agent endpoint and on-chain state.
 
 ```bash
-synapse-sap agent health <AGENT_WALLET> --timeout 5000 --retries 3
+synapse-sap agent health <AGENT_WALLET> \
+  --timeout 5000 \
+  --retries 3
 ```
 
-Reports endpoint reachability, response latency, escrow availability, and x402 manifest validity.
+| Flag | Description |
+|------|-------------|
+| `--timeout <ms>` | Request timeout in milliseconds (default: 5000) |
+| `--retries <n>` | Number of retry attempts (default: 3) |
+| `--json` | Emit raw JSON for piping |
+
+### Checks Performed
+
+1. ✅ **Endpoint Reachability** — HTTP GET to x402 endpoint
+2. ✅ **Response Latency** — Round-trip time in ms
+3. ✅ **Escrow Availability** — Can open new escrow
+4. ✅ **x402 Manifest Validity** — Pricing and capabilities match on-chain
+5. ✅ **On-chain Status** — Agent is active (not closed)
+
+### Example Output
+
+```json
+{
+  "wallet": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+  "status": "healthy",
+  "checks": [
+    { "name": "endpoint", "status": "ok", "latencyMs": 42 },
+    { "name": "escrow", "status": "ok", "activeCount": 3 },
+    { "name": "manifest", "status": "ok", "matched": true },
+    { "name": "onchain", "status": "ok", "active": true }
+  ],
+  "overall": "healthy"
+}
+```
+
+---
 
 ## `agent register`
 
-Register a new agent. Two modes:
+Register a new agent. Two modes available.
+
+### Inline Mode
 
 ```bash
-# Inline
 synapse-sap agent register \
   --name "TradeBot" \
   --description "AI-powered Jupiter swap agent" \
   --capability '{"id":"jupiter:swap","protocolId":"jupiter","version":"6.0"}' \
   --protocol jupiter \
   --simulate
+```
 
-# Manifest
+### Manifest Mode (Recommended)
+
+```bash
 synapse-sap agent register --manifest agent.json
 ```
 
@@ -80,23 +218,154 @@ synapse-sap agent register --manifest agent.json
 | `--manifest <path>` | string | JSON file with the full registration payload |
 | `--name <s>` | string | Display name, max 64 chars |
 | `--description <s>` | string | Description, max 256 chars |
-| `--capability <json>` | string | Repeatable, max 10 |
-| `--protocol <id>` | string | Repeatable, max 5 |
+| `--capability <json>` | string | Repeatable, max 32 capabilities |
+| `--protocol <id>` | string | Repeatable, max 10 protocols |
 | `--pricing <json>` | string | Repeatable pricing tiers |
-| `--x402-endpoint <url>` | string | Required for paid agents |
+| `--x402-endpoint <url>` | string | Required for paid agents (must be HTTPS) |
 | `--simulate` | bool | Resolve instructions without sending |
 | `--save <path>` | string | Persist signed transaction artifact |
+| `--json` | bool | Emit raw JSON for piping |
+
+### Manifest Schema
+
+```json
+{
+  "name": "TradeBot",
+  "description": "AI-powered Jupiter swap agent",
+  "capabilities": [
+    {
+      "id": "jupiter:swap",
+      "protocolId": "jupiter",
+      "version": "6.0",
+      "description": "Execute token swaps via Jupiter aggregator"
+    }
+  ],
+  "pricing": [
+    {
+      "tierId": "default",
+      "pricePerCall": 100000,
+      "rateLimit": 100,
+      "tokenType": "sol"
+    }
+  ],
+  "protocols": ["jupiter", "A2A"],
+  "x402Endpoint": "https://api.tradebot.dev/x402",
+  "metadataUri": "https://api.tradebot.dev/metadata.json"
+}
+```
 
 <Callout type="warning">
-Always run `--simulate` first on mainnet. A failed registration consumes rent for the partially created PDAs.
+**Always run `--simulate` first** on mainnet. A failed registration consumes rent for the partially created PDAs (~0.05 SOL).
 </Callout>
 
-## Exit codes
+---
+
+## `agent update`
+
+Update an existing agent's metadata.
+
+```bash
+synapse-sap agent update \
+  --name "TradeBot v2" \
+  --description "Updated description" \
+  --add-capability '{"id":"kamino:lend","protocolId":"kamino"}' \
+  --simulate
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name <s>` | New display name |
+| `--description <s>` | New description |
+| `--add-capability <json>` | Add a capability (repeatable) |
+| `--remove-capability <id>` | Remove a capability by id |
+| `--add-protocol <id>` | Add a protocol (repeatable) |
+| `--remove-protocol <id>` | Remove a protocol |
+| `--x402-endpoint <url>` | Update endpoint URI |
+| `--simulate` | Resolve instructions without sending |
+
+---
+
+## `agent close`
+
+Close an agent account (recover rent).
+
+```bash
+synapse-sap agent close <AGENT_WALLET> \
+  --simulate \
+  --confirm
+```
+
+<Callout type="warning">
+**Destructive operation.** Closing an agent:
+- Deactivates all capabilities
+- Closes open escrows (returns deposits)
+- Recovers rent (~0.05 SOL)
+- Cannot be undone
+
+Always use `--simulate` first, then `--confirm` to execute.
+</Callout>
+
+---
+
+## Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | Success |
-| 1 | Validation failed (manifest, flags, or wallet) |
-| 2 | RPC error (timeout, 5xx, or unreachable) |
-| 3 | On-chain failure (instruction returned an error) |
-| 4 | Resource not found (`agent info` for an unregistered wallet) |
+| `0` | Success |
+| `1` | Validation failed (manifest, flags, or wallet) |
+| `2` | RPC error (timeout, 5xx, or unreachable) |
+| `3` | On-chain failure (instruction returned an error) |
+| `4` | Resource not found (`agent info` for unregistered wallet) |
+| `5` | Permission denied (wrong signer) |
+
+---
+
+## Common Errors
+
+### Agent Already Registered
+
+```
+Error: AgentAlreadyRegistered (6000)
+This wallet already has a registered agent.
+```
+
+**Fix:** Use `agent update` instead of `agent register`, or close the existing agent first.
+
+### Insufficient Funds
+
+```
+Error: Insufficient lamports for rent
+```
+
+**Fix:** Fund the wallet with at least 0.05 SOL for account rent.
+
+### Invalid Capability Format
+
+```
+Error: Invalid capability format
+Expected: {"id":"protocol:tool","protocolId":"protocol"}
+```
+
+**Fix:** Ensure capability JSON has both `id` and `protocolId` fields.
+
+### Endpoint Not HTTPS
+
+```
+Error: x402Endpoint must start with https://
+```
+
+**Fix:** Use HTTPS endpoint (required for mainnet).
+
+---
+
+## Next Steps
+
+- **[Quickstart](/docs/cli/quickstart)** — Full registration walkthrough
+- **[Tools](/docs/cli/tools)** — Publish tool manifests
+- **[Discovery](/docs/cli/discovery)** — Find agents by capability
+- **[Escrow](/docs/cli/escrow)** — Payment management
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3

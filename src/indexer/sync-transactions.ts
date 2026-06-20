@@ -1,7 +1,7 @@
-import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
+import { SAP_PROGRAM_ADDRESS } from '~/lib/sap/sdk-compat';
 import { getRpcConfig } from '~/lib/sap/discovery';
 import type { TransactionError } from '~/types/indexer';
-import { log, logErr, withRetry, sleep } from './utils';
+import { formatError, log, logErr, withRetry, sleep } from './utils';
 import { getCursor, setCursor } from './cursor';
 import { hydrateTx, upsertHydratedTx, type SignatureLike } from './tx-pipeline';
 import { extractAndInsertEvents } from './event-extractor';
@@ -54,6 +54,10 @@ async function rawGetTransaction(signature: string, rpcUrl: string, rpcHeaders: 
   return json.result ?? null;
 }
 
+function isRpcNotFound(err: unknown): boolean {
+  return /not found/i.test(formatError(err));
+}
+
 /** Process a single transaction: hydrate → upsert → extract events */
 async function processTx(
   sig: SignatureLike,
@@ -93,10 +97,20 @@ async function syncForward(): Promise<number> {
     fetchOpts.until = cursor.lastSignature;
   }
 
-  const signatures = await withRetry(
-    () => rawGetSignaturesForAddress(SAP_PROGRAM_ADDRESS, fetchOpts, rpcUrl, rpcHeaders),
-    'tx:signatures:forward',
-  );
+  let signatures: Awaited<ReturnType<typeof rawGetSignaturesForAddress>>;
+  try {
+    signatures = await withRetry(
+      () => rawGetSignaturesForAddress(SAP_PROGRAM_ADDRESS, fetchOpts, rpcUrl, rpcHeaders),
+      'tx:signatures:forward',
+    );
+  } catch (e) {
+    if (!fetchOpts.until || !isRpcNotFound(e)) throw e;
+    logErr('tx', `Cursor signature unavailable; refetching latest page without until (${fetchOpts.until.slice(0, 12)})`);
+    signatures = await withRetry(
+      () => rawGetSignaturesForAddress(SAP_PROGRAM_ADDRESS, { limit: fetchOpts.limit }, rpcUrl, rpcHeaders),
+      'tx:signatures:forward:reset',
+    );
+  }
 
   if (signatures.length === 0) {
     await setCursor('transactions', {
@@ -146,10 +160,18 @@ async function syncBackfill(): Promise<number> {
     const fetchOpts: { limit: number; before?: string } = { limit: 100 };
     if (beforeSig) fetchOpts.before = beforeSig;
 
-    const signatures = await withRetry(
-      () => rawGetSignaturesForAddress(SAP_PROGRAM_ADDRESS, fetchOpts, rpcUrl, rpcHeaders),
-      `tx:signatures:backfill:p${pageCount}`,
-    );
+    let signatures: Awaited<ReturnType<typeof rawGetSignaturesForAddress>>;
+    try {
+      signatures = await withRetry(
+        () => rawGetSignaturesForAddress(SAP_PROGRAM_ADDRESS, fetchOpts, rpcUrl, rpcHeaders),
+        `tx:signatures:backfill:p${pageCount}`,
+      );
+    } catch (e) {
+      if (!fetchOpts.before || !isRpcNotFound(e)) throw e;
+      logErr('tx', `[backfill] Cursor signature unavailable; pausing at ${fetchOpts.before.slice(0, 12)}`);
+      await setCursor('transactions_backfill', { lastSlot: -1, lastSignature: 'COMPLETE' });
+      return totalInserted;
+    }
 
     if (signatures.length === 0) {
       // Reached the beginning — mark backfill complete
@@ -205,4 +227,3 @@ export async function syncTransactions(): Promise<number> {
 
   return forward + backfill;
 }
-

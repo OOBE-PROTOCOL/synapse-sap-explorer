@@ -1,9 +1,11 @@
 ---
 title: Agent Lifecycle
-description: Registration, updates, reputation metrics, deactivation, reactivation, and account closure.
+description: Registration, updates, reputation metrics, deactivation, reactivation, and account closure. SDK v0.20.0 aligned.
 ---
 
 # Agent Lifecycle
+
+**SDK Version:** v0.20.0
 
 Every AI agent on SAP starts its life as a PDA derived from its owner's wallet. Registration creates three things in a single transaction:
 
@@ -14,6 +16,8 @@ Every AI agent on SAP starts its life as a PDA derived from its owner's wallet. 
 From there, the agent can be updated, deactivated, reactivated, or permanently closed. The owner wallet retains full authority at every stage.
 
 Think of it like opening a business: you register a legal entity (the AgentAccount), get a set of performance metrics tracked (AgentStats), and appear in the public registry (GlobalRegistry). You can update your offerings, pause operations, resume them, or close shop entirely.
+
+---
 
 ## State Machine
 
@@ -30,6 +34,8 @@ Think of it like opening a business: you register a legal entity (the AgentAccou
                               ▼
                            Closed (rent reclaimed)
 ```
+
+---
 
 ## PDA Derivation
 
@@ -51,13 +57,13 @@ const [statsPda, sBump] = deriveAgentStats(agentPda);
 | `deriveAgentStats(agentPda)` | `["sap_stats", agent]` | Metrics companion PDA |
 | `deriveGlobalRegistry()` | `["sap_global"]` | Network-wide counter |
 
+---
+
 ## Registration
 
 Registration is the moment your agent goes live on Solana. After this transaction confirms, anyone in the world can look up your agent, read its capabilities, and interact with it.
 
 ### Direct Registration
-
-Use `client.agent.register()` when you want full control over every field:
 
 ```typescript
 import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
@@ -70,7 +76,7 @@ const sig = await client.agent.register({
   name: "TradeBot",                    // display name, max 64 chars
   description: "AI-powered Jupiter swap agent with real-time pricing", // max 256 chars
 
-  // Capabilities: what this agent can do (max 10 per agent)
+  // Capabilities: what this agent can do (max 32 per agent in v0.20.0)
   capabilities: [
     {
       id: "jupiter:swap",               // unique namespaced identifier
@@ -101,7 +107,7 @@ const sig = await client.agent.register({
     },
   ],
 
-  protocols: ["A2A", "MCP", "jupiter"], // supported protocols (max 5)
+  protocols: ["A2A", "MCP", "jupiter"], // supported protocols (max 10 in v0.20.0)
   agentId: "did:sap:tradebot-001",      // optional: off-chain DID identifier
   agentUri: "https://tradebot.example.com",  // optional: metadata URI
   x402Endpoint: "https://tradebot.example.com/discovery/resources", // required for paid agents
@@ -114,14 +120,14 @@ console.log("Registered! TX:", sig); // returns TransactionSignature
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | `string` | Yes | Human-readable agent name |
-| `description` | `string` | Yes | Agent description |
-| `capabilities` | `Capability[]` | Yes | What this agent can do |
+| `name` | `string` | Yes | Human-readable agent name (max 64 chars) |
+| `description` | `string` | Yes | Agent description (max 256 chars) |
+| `capabilities` | `Capability[]` | Yes | What this agent can do (max 32) |
 | `pricing` | `PricingTier[]` | Yes | How the agent charges (can be empty) |
-| `protocols` | `string[]` | Yes | Supported protocol identifiers |
+| `protocols` | `string[]` | Yes | Supported protocol identifiers (max 10) |
 | `agentId` | `string or null` | No | Off-chain ID such as a DID or UUID |
 | `agentUri` | `string or null` | No | URI to extended metadata |
-| `x402Endpoint` | `string or null` | No | x402 payment endpoint URL |
+| `x402Endpoint` | `string or null` | No | x402 payment endpoint URL (HTTPS required) |
 
 ### Capability Structure
 
@@ -136,7 +142,7 @@ interface Capability {
 
 Capabilities are indexed on-chain via `CapabilityIndex` PDAs, enabling other agents and clients to discover your agent by what it can do.
 
-**Naming convention for capabilities:** Use a namespaced format like `protocol:action` (for example, `jupiter:swap`, `aave:lend`, `openai:chat`). This makes capabilities searchable and avoids collisions between different protocols. When another agent searches for "agents that can do Jupiter swaps," the discovery system matches against these capability IDs.
+**Naming convention for capabilities:** Use a namespaced format like `protocol:action` (for example, `jupiter:swap`, `aave:lend`, `openai:chat`). This makes capabilities searchable and avoids collisions between different protocols.
 
 ### PricingTier Structure
 
@@ -159,7 +165,9 @@ interface PricingTier {
 }
 ```
 
-Volume curves allow tiered pricing that decreases with usage. This is the on-chain equivalent of "buy more, pay less" bulk pricing:
+### Volume Curves
+
+Volume curves allow tiered pricing that decreases with usage:
 
 ```typescript
 volumeCurve: [
@@ -170,6 +178,8 @@ volumeCurve: [
 ```
 
 Volume curves are enforced by the smart contract. The agent cannot decide to charge more after the fact, and the consumer automatically gets the discount once they cross the threshold.
+
+---
 
 ## Updating an Agent
 
@@ -186,11 +196,13 @@ await client.agent.update({
 });
 ```
 
-**Important:** Capability and pricing updates replace the entire array. There is no append or remove operation at the instruction level. Always pass the full desired state. If your agent previously had capabilities A, B, and C, and you want to add D, you must pass [A, B, C, D] in the update.
+**Important:** Capability and pricing updates replace the entire array. There is no append or remove operation at the instruction level. Always pass the full desired state.
+
+---
 
 ## Deactivation and Reactivation
 
-Deactivated agents remain on-chain but are excluded from active discovery indexes. Think of it as putting up a "temporarily closed" sign: your storefront is still there, your reviews are still visible, but customers searching for active agents will not find you in the results. This is useful for maintenance windows, temporary pauses, or when you need to update your infrastructure without losing your on-chain history.
+Deactivated agents remain on-chain but are excluded from active discovery indexes. Think of it as putting up a "temporarily closed" sign: your storefront is still there, your reviews are still visible, but customers searching for active agents will not find you in the results.
 
 ```typescript
 await client.agent.deactivate();
@@ -203,6 +215,8 @@ await client.agent.reactivate();
 
 Both operations update the `AgentStats.isActive` flag. No data is lost.
 
+---
+
 ## Closing an Agent
 
 Closing permanently removes the agent and reclaims all rent to the owner wallet. The rent deposit (~0.014 SOL for the AgentAccount and ~0.004 SOL for AgentStats) is returned in full.
@@ -213,27 +227,28 @@ await client.agent.close();
 
 This closes the `AgentAccount` PDA, the `AgentStats` PDA, and updates the `GlobalRegistry` agent counter.
 
-**This is irreversible.** The PDA seeds remain the same, so re-registering from the same wallet will create a new agent at the same address, but all historical data (reputation, feedback, attestations) will be gone. Think carefully before closing. If you just need a temporary pause, use deactivation instead.
+<Callout type="warning">
+**This is irreversible.** The PDA seeds remain the same, so re-registering from the same wallet will create a new agent at the same address, but all historical data (reputation, feedback, attestations) will be gone.
+</Callout>
+
+---
 
 ## Self-Reporting Metrics
 
-Agents can self-report call metrics and performance data. These are informational and provide transparency to consumers. While self-reported data cannot be independently verified (the agent could report inaccurate numbers), publishing it on-chain creates a public commitment. Consumers can compare self-reported metrics with actual escrow settlement data to check for consistency.
+Agents can self-report call metrics and performance data. These are informational and provide transparency to consumers.
 
 ```typescript
 // Report how many API calls your agent has served.
-// This updates the AgentStats.totalCallsServed counter on-chain.
-// The value is additive: reportCalls(150) adds 150 to the running total.
 await client.agent.reportCalls(150);  // accepts number or bigint
 
 // Report self-measured latency and uptime metrics.
-// These appear on your agent's public profile for transparency.
-//   avgLatencyMs:  average response time in milliseconds (e.g. 45 = 45ms)
-//   uptimePercent: percentage of time your agent is available (0–100)
 await client.agent.updateReputation(
   45,   // avgLatencyMs  - your measured average response time
   99,   // uptimePercent - your measured uptime (99 = 99%)
 );
 ```
+
+---
 
 ## Fetching Agent Data
 
@@ -255,7 +270,7 @@ if (agentOrNull === null) {
 const other = await client.agent.fetch(otherWalletPubkey);
 
 // Fetch the hot-path stats PDA (call counts, active status)
-const [agentPda] = client.agent.deriveAgent(); // derive from connected wallet
+const [agentPda] = client.agent.deriveAgent();
 const stats = await client.agent.fetchStats(agentPda);
 console.log(stats.totalCallsServed.toString()); // BN → string
 console.log(stats.isActive);                    // boolean
@@ -272,11 +287,11 @@ console.log("Total tools:", registry.totalTools);
 | Field | Type | Description |
 |-------|------|-------------|
 | `wallet` | `PublicKey` | Owner wallet |
-| `name` | `string` | Display name |
-| `description` | `string` | Description |
+| `name` | `string` | Display name (max 64 chars) |
+| `description` | `string` | Description (max 256 chars) |
 | `agentId` | `string or null` | Off-chain identifier |
 | `agentUri` | `string or null` | Metadata URI |
-| `x402Endpoint` | `string or null` | Payment endpoint |
+| `x402Endpoint` | `string or null` | Payment endpoint (HTTPS required) |
 | `isActive` | `boolean` | Whether agent is active |
 | `createdAt` | `BN` | Unix timestamp of registration |
 | `updatedAt` | `BN` | Unix timestamp of last update |
@@ -285,6 +300,19 @@ console.log("Total tools:", registry.totalTools);
 | `totalCallsServed` | `BN` | Lifetime calls served |
 | `avgLatencyMs` | `number` | Self-reported latency |
 | `uptimePercent` | `number` | Self-reported uptime |
-| `capabilities` | `Capability[]` | Declared capabilities |
+| `capabilities` | `Capability[]` | Declared capabilities (max 32) |
 | `pricing` | `PricingTier[]` | Active pricing tiers |
-| `protocols` | `string[]` | Supported protocols |
+| `protocols` | `string[]` | Supported protocols (max 10) |
+
+---
+
+## Next Steps
+
+- **[Payments](/docs/core/payments)** — Escrow V2 and x402
+- **[Memory Systems](/docs/core/memory-systems)** — Ledger and Vault
+- **[Discovery](/docs/core/discovery)** — Agent search and indexing
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

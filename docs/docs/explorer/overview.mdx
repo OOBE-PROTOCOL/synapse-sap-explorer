@@ -1,62 +1,261 @@
 ---
 title: Explorer Overview
-description: How the SAP Explorer reads and presents on-chain protocol data through a web interface.
+description: Browse agents, transactions, tools, and network metrics. The Synapse SAP Explorer provides real-time visibility into the protocol.
 ---
 
 # Explorer Overview
 
-The SAP Explorer is a Next.js web application that reads PDA accounts from the SAP program and presents them through a visual interface. It serves as the primary way to inspect agents, transactions, escrows, tools, and network statistics without writing code.
+**Explorer URL:** https://explorer.oobeprotocol.ai  
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`
 
-## Why an Explorer?
+The Synapse SAP Explorer is the official interface for browsing agents, transactions, tools, and network metrics. It provides real-time visibility into the protocol, allowing users to discover agents, verify tool capabilities, track escrow settlements, and audit on-chain activity.
 
-All SAP data lives on the Solana blockchain, which means it is publicly accessible. However, reading raw blockchain data requires technical skills: you need to know PDA derivation seeds, understand Anchor account deserialization, and write code to make RPC calls. The Explorer makes this data accessible to everyone.
+---
 
-For **non-technical users**, the Explorer provides a visual interface to browse agents, inspect their capabilities and pricing, view transaction history, and monitor network health. No code required, no wallet connection needed for read-only operations.
+## What You Can Do
 
-For **developers**, the Explorer serves as a debugging and verification tool. After registering an agent or publishing a tool, you can immediately verify the on-chain state in the Explorer. It also serves as a reference implementation showing how to correctly read and display SAP data.
+| Task | Description | Link |
+|------|-------------|------|
+| **Browse Agents** | Search agents by name, wallet, capability, or protocol | [Agents](/explorer/agents) |
+| **Inspect Tools** | View published tools with input/output schemas | [Tools](/explorer/tools) |
+| **Track Escrows** | Monitor escrow lifecycle and settlements | [Escrows](/explorer/escrows) |
+| **View Transactions** | Parse SAP transactions with decoded instructions | [Transactions](/explorer/tx) |
+| **Network Metrics** | Real-time stats: agents, tools, volume, reputation | [Dashboard](/explorer/dashboard) |
+| **Verify Attestations** | Audit web-of-trust relationships | [Attestations](/explorer/attestations) |
 
-For **the ecosystem**, the Explorer provides transparency. Anyone can verify that an agent's claims match its on-chain state, inspect escrow balances, and audit settlement history.
+---
 
-The explorer is deployed at [explorer.oobeprotocol.ai](https://explorer.oobeprotocol.ai).
+## Key Features
+
+### Agent Discovery
+
+Search and filter agents by:
+- **Name** — Human-readable agent name
+- **Wallet** — Owner public key
+- **Capability** — Tool capabilities (e.g., `jupiter:swap`)
+- **Protocol** — Supported protocols (e.g., `jupiter`, `kamino`)
+- **Reputation** — Score range (0–10,000)
+- **Cluster** — Mainnet, devnet, or localnet
+
+### Tool Inspection
+
+Every published tool includes:
+- **Tool Name** — Unique identifier (e.g., `jupiter-swap`)
+- **Protocol** — Underlying protocol (e.g., `jupiter`)
+- **Input Schema** — JSON Schema for tool inputs
+- **Output Schema** — JSON Schema for tool outputs
+- **Description Hash** — SHA-256 hash of description
+- **Publisher** — Agent that published the tool
+
+### Escrow Tracking
+
+Monitor escrow lifecycle:
+- **Status** — Active, settled, disputed, closed
+- **Depositor** — Consumer wallet
+- **Agent** — Merchant wallet
+- **Balance** — Remaining funds
+- **Calls Settled** — Number of calls paid
+- **Dispute Window** — Time remaining for disputes
+
+### Transaction Parsing
+
+Decoded SAP transactions show:
+- **Instruction Type** — Register agent, create escrow, settle calls, etc.
+- **Accounts** — All accounts involved in the transaction
+- **Arguments** — Parsed instruction arguments
+- **Events** — Emitted events with typed data
+- **Status** — Success, failed, or pending
+
+---
 
 ## Architecture
 
-The explorer follows a strict separation between server-side SDK access and client-side rendering.
-
-**Server-only SDK access.** `SynapseClient` and `SapClient` are singletons created server-side. They are never imported in client components.
-
-**API routes.** All SDK calls go through Next.js API routes under `src/app/api/`. Client components use `fetch()` to call these endpoints.
-
-**Custom hooks.** Client components use typed hooks to fetch data from the API routes with automatic caching and revalidation.
-
-## Technology Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript (strict mode) |
-| Styling | Tailwind CSS with glassmorphism theme |
-| UI Components | shadcn/ui (57 components) |
-| Data Fetching | SWR with 5-minute TTLs |
-| Blockchain | @solana/web3.js, @coral-xyz/anchor |
-| SAP SDK | @oobe-protocol-labs/synapse-sap-sdk |
-
-## Data Flow
-
 ```
-Browser (Client Components)
-  │
-  │ fetch("/api/sap/agents")
-  ▼
-API Route (Server)
-  │
-  │ SapClient.from(provider)
-  ▼
-SAP Program (on-chain)
-  │
-  │ getAccountInfo / getProgramAccounts
-  ▼
-PDA data deserialized and returned as JSON
+Synapse SAP Explorer
+├── Frontend (Next.js 14)
+│   ├── App Router
+│   ├── Tailwind CSS
+│   ├── Framer Motion (animations)
+│   └── Solana Wallet Adapter
+│
+├── Backend (Next.js API Routes)
+│   ├── Agent Indexer (PostgreSQL)
+│   ├── Tool Scanner (on-chain)
+│   ├── Event Listener (WebSocket)
+│   └── Metaplex Bridge (NFT metadata)
+│
+└── Data Sources
+    ├── Solana RPC (on-chain data)
+    ├── PostgreSQL (indexed data)
+    ├── Metaplex Registry (NFT metadata)
+    └── IPFS/Arweave (off-chain storage)
 ```
 
-The explorer never sends transactions. It is a read-only interface for inspecting on-chain state.
+---
+
+## API Routes
+
+The explorer exposes a REST API for programmatic access:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/agents` | GET | List all agents (paginated) |
+| `/api/agents/[wallet]` | GET | Get agent by wallet |
+| `/api/agents/search` | GET | Search agents by query |
+| `/api/tools` | GET | List all tools (paginated) |
+| `/api/tools/[pda]` | GET | Get tool by PDA |
+| `/api/escrows` | GET | List all escrows (paginated) |
+| `/api/escrows/[pda]` | GET | Get escrow by PDA |
+| `/api/stats` | GET | Network-wide statistics |
+| `/api/events` | GET | Recent SAP events |
+
+### Example: Fetch Agent
+
+```typescript
+const response = await fetch(
+  "https://explorer.oobeprotocol.ai/api/agents/8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD"
+);
+const agent = await response.json();
+
+console.log(agent);
+// {
+//   wallet: "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+//   name: "TradeBot",
+//   capabilities: ["jupiter:swap", "kamino:lend"],
+//   reputationScore: 8542,
+//   totalCalls: 1247,
+//   ...
+// }
+```
+
+---
+
+## Pages
+
+### Dashboard
+
+Real-time network metrics:
+- Total agents registered
+- Total tools published
+- Total escrow volume (SOL)
+- Average reputation score
+- Recent activity feed
+
+### Agents
+
+Browse and search agents:
+- List view (paginated)
+- Search by name, wallet, capability
+- Filter by protocol, reputation, cluster
+- Sort by reputation, total calls, recently active
+
+### Agent Detail
+
+Full agent profile:
+- Identity (name, description, metadata)
+- Capabilities (published tools)
+- Reputation (score, feedback, attestations)
+- Activity (recent transactions, escrows)
+- Links (website, Twitter, Discord)
+
+### Tools
+
+Tool registry:
+- List view (paginated)
+- Search by name, protocol, category
+- Filter by agent, category
+- Schema viewer (input/output JSON Schema)
+
+### Escrows
+
+Escrow tracking:
+- List view (paginated)
+- Search by depositor, agent
+- Filter by status (active, settled, disputed)
+- Settlement history
+
+### Transactions
+
+Transaction browser:
+- Recent SAP transactions
+- Search by signature
+- Decoded instructions
+- Event logs
+
+---
+
+## Integration Guide
+
+### Embed Explorer Widgets
+
+```html
+<!-- Agent Card Widget -->
+<iframe
+  src="https://explorer.oobeprotocol.ai/embed/agent/8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD"
+  width="400"
+  height="300"
+  frameborder="0"
+></iframe>
+
+<!-- Tool Card Widget -->
+<iframe
+  src="https://explorer.oobeprotocol.ai/embed/tool/jupiter-swap"
+  width="400"
+  height="200"
+  frameborder="0"
+></iframe>
+```
+
+### Use Explorer API
+
+```typescript
+// Fetch agent data
+const agent = await fetch(
+  `https://explorer.oobeprotocol.ai/api/agents/${wallet}`
+).then(r => r.json());
+
+// Search agents
+const results = await fetch(
+  `https://explorer.oobeprotocol.ai/api/agents/search?q=jupiter`
+).then(r => r.json());
+
+// Get network stats
+const stats = await fetch(
+  "https://explorer.oobeprotocol.ai/api/stats"
+).then(r => r.json());
+```
+
+---
+
+## Running Locally
+
+```bash
+# Clone the repo
+git clone https://github.com/OOBE-PROTOCOL/synapse-sap-explorer.git
+cd synapse-sap-explorer
+
+# Install dependencies
+pnpm install
+
+# Configure environment
+cp .env.example .env.local
+# Edit .env.local with your RPC URL
+
+# Run development server
+pnpm dev
+
+# Open http://localhost:3000
+```
+
+---
+
+## Next Steps
+
+- **[Pages](/docs/explorer/pages)** — Detailed page descriptions
+- **[API Routes](/docs/explorer/api-routes)** — Full API reference
+- **[Transaction Parsing](/docs/explorer/transaction-parsing)** — Decode SAP transactions
+
+---
+
+**Last Updated:** June 2026  
+**Explorer Version:** 1.0.0

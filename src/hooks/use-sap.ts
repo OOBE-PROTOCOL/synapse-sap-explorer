@@ -7,7 +7,9 @@
 
 'use client';
 
+import { useMemo, useRef } from 'react';
 import { useSapQuery } from '~/hooks/use-sap-query';
+import { pathSegment } from '~/lib/format';
 import type {
   SerializedDiscoveredAgent,
   SerializedAgentProfile,
@@ -98,6 +100,29 @@ type ToolsResponse = {
   total: number;
 };
 
+export type SapActivityPoint = {
+  capturedAt: string;
+  agentPda?: string;
+  toolPda?: string;
+  totalCallsServed?: string;
+  totalInvocations?: string;
+  avgLatencyMs?: number;
+  uptimePercent?: number;
+  agents?: number;
+  activeAgents?: number;
+  tools?: number;
+  transactions?: number;
+  feeLamports?: string;
+};
+
+export type SapActivityResponse = {
+  scope: 'network' | 'agent' | 'tool';
+  points: SapActivityPoint[];
+  total: number;
+  source: string;
+  error?: string;
+};
+
 /** Default polling intervals (ms). 0 = off. */
 const POLL = {
   // Lowered from 120s \u2192 30s so the UI re-renders soon after the indexer
@@ -121,7 +146,23 @@ export type { EnrichedAgentsResponse, EnrichedAgent, TokenBalance, AgentBalanceS
 type EnrichedAgentsRes = import('~/app/api/sap/agents/enriched/route').EnrichedAgentsResponse;
 
 export function useEnrichedAgents() {
-  return useFetch<EnrichedAgentsRes>('/api/sap/agents/enriched', { pollInterval: POLL.agents, keepStale: true });
+  const state = useFetch<EnrichedAgentsRes>('/api/sap/agents/enriched', { pollInterval: POLL.agents, keepStale: true });
+  const lastSolPrice = useRef<number | null>(null);
+
+  if (typeof state.data?.solPrice === 'number' && Number.isFinite(state.data.solPrice) && state.data.solPrice > 0) {
+    lastSolPrice.current = state.data.solPrice;
+  }
+
+  const data = useMemo(() => {
+    if (!state.data) return state.data;
+    const stableSolPrice = typeof state.data.solPrice === 'number' && state.data.solPrice > 0
+      ? state.data.solPrice
+      : lastSolPrice.current;
+    if (stableSolPrice === state.data.solPrice) return state.data;
+    return { ...state.data, solPrice: stableSolPrice };
+  }, [state.data]);
+
+  return { ...state, data };
 }
 
 /* ── Progressive listing (Solscan-style) ─────────────────
@@ -154,19 +195,22 @@ export function useAgentEnrichment(
   if (opts?.agentPda) qs.set('agentPda', opts.agentPda);
   if (opts?.endpoint) qs.set('endpoint', opts.endpoint);
   if (opts?.agentUri) qs.set('agentUri', opts.agentUri);
-  const url = wallet && enabled
-    ? `/api/sap/agents/${wallet}/enrich${qs.toString() ? '?' + qs.toString() : ''}`
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment && enabled
+    ? `/api/sap/agents/${segment}/enrich${qs.toString() ? '?' + qs.toString() : ''}`
     : null;
   return useFetch<AgentEnrichRes>(url, { keepStale: true });
 }
 
 export function useAgent(wallet: string | null) {
-  const url = wallet ? `/api/sap/agents/${wallet}` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}` : null;
   return useFetch<AgentProfileResponse>(url);
 }
 
 export function useAgentStaking(agentPda: string | null) {
-  const url = agentPda ? `/api/sap/agents/${agentPda}/staking` : null;
+  const segment = agentPda ? pathSegment(agentPda) : '';
+  const url = segment ? `/api/sap/agents/${segment}/staking` : null;
   return useFetch<import('~/app/api/sap/agents/enriched/route').AgentStakeSummary | null>(url);
 }
 
@@ -175,7 +219,8 @@ export type { WalletBalancesResponse, TokenBalance as WalletTokenBalance } from 
 type WalletBalancesRes = import('~/app/api/sap/agents/[wallet]/balances/route').WalletBalancesResponse;
 
 export function useAgentBalances(wallet: string | null) {
-  const url = wallet ? `/api/sap/agents/${wallet}/balances` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}/balances` : null;
   return useFetch<WalletBalancesRes>(url, { pollInterval: 30_000, keepStale: true });
 }
 
@@ -187,6 +232,7 @@ export type AgentMetaplexLink = {
   expectedUrl: string;
   linked: boolean;
   agentIdentityUri: string | null;
+  pluginCount?: number;
   registration: {
     schema?: string;
     synapseAgent?: string;
@@ -208,7 +254,8 @@ export type AgentMetaplexLink = {
  * carries an AgentIdentity URI pointing at this SAP agent's PDA.
  */
 export function useAgentMetaplex(wallet: string | null) {
-  const url = wallet ? `/api/sap/agents/${wallet}/metaplex` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}/metaplex` : null;
   return useFetch<AgentMetaplexLink>(url, { keepStale: true });
 }
 
@@ -267,8 +314,24 @@ export type CanonicalEip8004Card = {
  * UI shows exactly what third-party consumers see.
  */
 export function useCanonicalEip8004(wallet: string | null) {
-  const url = wallet ? `/agents/${wallet}/eip-8004.json` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/agents/${segment}/eip-8004.json` : null;
   return useFetch<CanonicalEip8004Card>(url, { keepStale: true });
+}
+
+export function useSapActivity(
+  scope: 'network' | 'agent' | 'tool',
+  ids?: readonly string[] | null,
+  limit = 96,
+) {
+  const qs = new URLSearchParams({ scope, limit: String(limit) });
+  const normalizedIds = (ids ?? []).filter(Boolean);
+  if (normalizedIds.length > 0) qs.set('ids', normalizedIds.join(','));
+  const shouldFetch = scope === 'network' || normalizedIds.length > 0;
+  return useFetch<SapActivityResponse>(shouldFetch ? `/api/sap/activity?${qs.toString()}` : null, {
+    pollInterval: POLL.metrics,
+    keepStale: true,
+  });
 }
 
 /* ── MPL Core / EIP-8004 NFT inventory ───────────────────── */
@@ -330,7 +393,8 @@ export type AgentNftsResponse = {
 
 /** All MPL Core NFTs owned by the wallet, with EIP-8004 AgentIdentity flags. */
 export function useAgentNfts(wallet: string | null) {
-  const url = wallet ? `/api/sap/agents/${wallet}/nfts` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}/nfts` : null;
   return useFetch<AgentNftsResponse>(url, { keepStale: true });
 }
 
@@ -365,7 +429,8 @@ export type MetaplexRegistryResponse = {
 
 /** Lists all agents the wallet has registered on api.metaplex.com. */
 export function useMetaplexRegistry(wallet: string | null) {
-  const url = wallet ? `/api/sap/agents/${wallet}/metaplex-registry` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}/metaplex-registry` : null;
   return useFetch<MetaplexRegistryResponse>(url, { keepStale: true });
 }
 
@@ -395,7 +460,8 @@ export type AgentLaunchTokensResponse = {
  * Does not include MPL Core identity NFTs.
  */
 export function useAgentLaunchTokens(wallet: string | null) {
-  const url = wallet ? `/api/sap/agents/${wallet}/launch-tokens` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}/launch-tokens` : null;
   return useFetch<AgentLaunchTokensResponse>(url, { keepStale: true });
 }
 
@@ -452,11 +518,21 @@ export function useTools(params?: Record<string, string>) {
 type ToolSchemasResponse = {
   schemas: InscribedSchema[];
   total: number;
+  expectedTypes?: number[];
+  missingTypes?: number[];
+  missingSchemaLabels?: string[];
+  source?: string;
+  warning?: string;
 };
 
 /** Fetch inscribed schemas for a tool PDA (from TX logs) */
-export function useToolSchemas(pda: string | null) {
-  return useFetch<ToolSchemasResponse>(pda ? `/api/sap/tools/${pda}/schemas` : null);
+export function useToolSchemas(pda: string | null, options?: { deep?: boolean }) {
+  const segment = pda ? pathSegment(pda) : '';
+  const deepQuery = options?.deep ? '?deep=1' : '';
+  return useFetch<ToolSchemasResponse>(segment ? `/api/sap/tools/${segment}/schemas${deepQuery}` : null, {
+    pollInterval: 30_000,
+    keepStale: true,
+  });
 }
 
 type ToolEventsResponse = {
@@ -466,8 +542,9 @@ type ToolEventsResponse = {
 
 /** Fetch lifecycle events for a tool PDA */
 export function useToolEvents(pda: string | null, limit = 50) {
+  const segment = pda ? pathSegment(pda) : '';
   return useFetch<ToolEventsResponse>(
-    pda ? `/api/sap/tools/${pda}/events?limit=${limit}` : null,
+    segment ? `/api/sap/tools/${segment}/events?limit=${limit}` : null,
   );
 }
 
@@ -528,7 +605,8 @@ export function useEscrows() {
 
 /** Single escrow by PDA — no N+1 */
 export function useEscrow(pda: string | null) {
-  const url = pda ? `/api/sap/escrows/${pda}` : null;
+  const segment = pda ? pathSegment(pda) : '';
+  const url = segment ? `/api/sap/escrows/${segment}` : null;
   return useFetch<{ escrow: SerializedEscrow }>(url, { keepStale: true });
 }
 
@@ -599,14 +677,16 @@ export function useAddressEvents(
   if (opts?.limit) qs.set('limit', String(opts.limit));
   if (opts?.filter) qs.set('filter', opts.filter);
   const query = qs.toString();
-  const url = addr ? `/api/sap/address/${addr}/events${query ? `?${query}` : ''}` : null;
+  const segment = addr ? pathSegment(addr) : '';
+  const url = segment ? `/api/sap/address/${segment}/events${query ? `?${query}` : ''}` : null;
   return useFetch<AddressEventsResponse>(url);
 }
 
 /* ── Agent revenue series ─────────────────────────────── */
 
 export function useAgentRevenue(wallet: string | null, days = 30) {
-  const url = wallet ? `/api/sap/agents/${wallet}/revenue?days=${days}` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}/revenue?days=${days}` : null;
   return useFetch<AgentRevenueResponse>(url);
 }
 
@@ -655,7 +735,8 @@ export function useX402Payments(wallet: string | null, opts?: { limit?: number; 
   if (opts?.limit) params.set('limit', String(opts.limit));
   if (opts?.scan) params.set('scan', 'true');
   const qs = params.toString();
-  const url = wallet ? `/api/sap/agents/${wallet}/x402${qs ? `?${qs}` : ''}` : null;
+  const segment = wallet ? pathSegment(wallet) : '';
+  const url = segment ? `/api/sap/agents/${segment}/x402${qs ? `?${qs}` : ''}` : null;
   return useFetch<X402PaymentsResponse>(url, { pollInterval: POLL.escrows, keepStale: true });
 }
 

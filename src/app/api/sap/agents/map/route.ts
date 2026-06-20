@@ -5,6 +5,7 @@ import { findAllAgents, serializeDiscoveredAgent } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
 import { selectAllAgents } from '~/lib/db/queries';
 import { isDbDown, markDbDown } from '~/db';
+import { asPublicKeyText } from '~/lib/format';
 
 type AgentMap = Record<string, { name: string; pda: string; score: number }>;
 
@@ -37,10 +38,11 @@ export async function GET() {
       if (dbRows.length > 0) {
         const map: AgentMap = {};
         for (const row of dbRows) {
-          if (row.wallet) {
-            map[row.wallet] = {
+          const wallet = asPublicKeyText(row.wallet);
+          if (wallet) {
+            map[wallet] = {
               name: row.name || row.agentId || '',
-              pda: row.pda,
+              pda: asPublicKeyText(row.pda),
               score: row.reputationScore ?? 0,
             };
           }

@@ -1,44 +1,83 @@
-'use client';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+"use client";
 
-import { useState, useMemo, Suspense } from 'react';
-import Link from 'next/link';
 import {
-  Bot, Activity, ArrowRight, Heart,
-  LayoutGrid, LayoutList, Globe, ShieldCheck,
-  ExternalLink, Star, Wrench, Wallet,
-  Copy, Check, Coins, Clock,
-} from 'lucide-react';
+  useCallback,
+  useMemo,
+  useState,
+  Suspense,
+  type ReactNode,
+} from "react";
 import {
-  EmptyState, Skeleton,
-  AgentAvatar, ExplorerPagination, usePagination,
-  ExplorerPageShell, ExplorerMetric, ExplorerFilterBar,
-} from '~/components/ui';
-import { Card } from '~/components/ui/card';
-import { Button } from '~/components/ui/button';
+  Bot,
+  Activity,
+  BarChart3,
+  LayoutGrid,
+  LayoutList,
+  ShieldCheck,
+  Clock,
+  Store,
+  TrendingUp,
+  Badge,
+  X,
+} from "lucide-react";
 import {
-  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
-} from '~/components/ui/tooltip';
-import { useEnrichedAgents, type EnrichedAgent, type TokenBalance, type AgentStakeSummary } from '~/hooks/use-sap';
+  EmptyState,
+  Skeleton,
+  ExplorerPagination,
+  usePagination,
+  ExplorerPageShell,
+  ExplorerFilterBar,
+  VolumeMetricCard,
+} from "~/components/ui";
+import { Card } from "~/components/ui/card";
+import { Button } from "~/components/ui/button";
 import {
-  useAggregatedReputationBatch,
-  type AggregatedReputation,
-} from '~/hooks/use-aggregated-reputation';
-import { ReputationChip } from '~/components/agents/reputation-chip';
-import { useQueryState, QueryParam } from '~/hooks/use-query-state';
-import type { AgentWellKnown } from '~/lib/sap/well-known';
-import { fmtNum } from '~/lib/format';
-import { cn } from '~/lib/utils';
-import type { FilterChip } from '~/components/ui';
+  useEnrichedAgents,
+  useEscrows,
+  type AgentBalanceSummary,
+  type EnrichedAgent,
+  type AgentStakeSummary,
+} from "~/hooks/use-sap";
+import { useAggregatedReputationBatch } from "~/hooks/use-aggregated-reputation";
+import {
+  AgentCard as DirectoryAgentCard,
+  AgentListRow as DirectoryAgentListRow,
+  type AgentCommerceVolume,
+} from "~/components/agents/agent-card";
+import { useQueryState, QueryParam } from "~/hooks/use-query-state";
+import { asPublicKeyText, asText, fmtNum } from "~/lib/format";
+import { cn } from "~/lib/utils";
+import type { FilterChip } from "~/components/ui";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
 
 /* ═══════════════════════════════════════════════════════
    Health derivation
    ═══════════════════════════════════════════════════════ */
 
-type HealthLevel = 'excellent' | 'good' | 'untested' | 'degraded' | 'critical' | 'offline';
+type HealthLevel =
+  | "excellent"
+  | "good"
+  | "untested"
+  | "degraded"
+  | "critical"
+  | "offline";
+type CardData = EnrichedAgent & {
+  health: { level: HealthLevel; score: number };
+};
 
-function deriveHealth(agent: EnrichedAgent): { level: HealthLevel; score: number } {
+function deriveHealth(agent: EnrichedAgent): {
+  level: HealthLevel;
+  score: number;
+} {
   const id = agent.agent.identity;
-  if (!id?.isActive) return { level: 'offline', score: 0 };
+  if (!id?.isActive) return { level: "offline", score: 0 };
 
   const feedbacks = Number(id.totalFeedbacks ?? 0);
   const rep = Number(id.reputationScore ?? 0);
@@ -58,125 +97,180 @@ function deriveHealth(agent: EnrichedAgent): { level: HealthLevel; score: number
   else score += 5;
 
   const level: HealthLevel =
-    feedbacks === 0 ? 'untested' :
-    score >= 85 ? 'excellent' :
-    score >= 65 ? 'good' :
-    score >= 40 ? 'degraded' : 'critical';
+    feedbacks === 0
+      ? "untested"
+      : score >= 85
+        ? "excellent"
+        : score >= 65
+          ? "good"
+          : score >= 40
+            ? "degraded"
+            : "critical";
 
   return { level, score: Math.round(score) };
 }
 
-const HEALTH_META: Record<HealthLevel, { dot: string; text: string; bar: string; label: string }> = {
-  excellent: { dot: 'bg-emerald-400', text: 'text-emerald-400', bar: 'bg-emerald-400', label: 'Excellent' },
-  good:      { dot: 'bg-primary/70',  text: 'text-primary/80',  bar: 'bg-primary/70',  label: 'Good' },
-  untested:  { dot: 'bg-muted-foreground/50', text: 'text-muted-foreground/60', bar: 'bg-muted-foreground/40', label: 'Untested' },
-  degraded:  { dot: 'bg-amber-400',   text: 'text-amber-400',   bar: 'bg-amber-400',   label: 'Degraded' },
-  critical:  { dot: 'bg-destructive', text: 'text-destructive', bar: 'bg-destructive', label: 'Critical' },
-  offline:   { dot: 'bg-muted-foreground/30', text: 'text-muted-foreground/40', bar: 'bg-muted-foreground/20', label: 'Offline' },
-};
+const MLP_LOGO = "https://pbs.twimg.com/profile_images/2054187326415220736/kjHxRctc_400x400.jpg"
 
 /* ═══════════════════════════════════════════════════════
    Micro helpers
    ═══════════════════════════════════════════════════════ */
 
 const SORT_OPTIONS = [
-  { value: 'health',       label: 'Health' },
-  { value: 'reputation',  label: 'Reputation' },
-  { value: 'balance',     label: 'Balance' },
-  { value: 'staking',     label: 'Staking' },
-  { value: 'capabilities', label: 'Capabilities' },
-  { value: 'newest',      label: 'Newest' },
-  { value: 'oldest',      label: 'Oldest' },
+  { value: "activity", label: "Usage" },
+  { value: "health", label: "Health" },
+  { value: "reputation", label: "Reputation" },
+  { value: "balance", label: "Balance" },
+  { value: "staking", label: "Staking" },
+  { value: "capabilities", label: "Capabilities" },
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
 ];
 
-const SOLSCAN = 'https://solscan.io';
-const SOL_LOGO = 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png';
-const USDC_LOGO = 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png';
-
-function fmtAmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  if (n >= 1) return n.toFixed(2);
-  if (n > 0) return n.toFixed(4);
-  return '0';
+function lamportsToSolValue(raw: unknown): number {
+  if (typeof raw === "string") return Number(raw) / 1e9;
+  const value = Number(raw ?? 0);
+  return Number.isFinite(value) ? value / 1e9 : 0;
 }
 
-function buildSocials(wk: AgentWellKnown | null) {
-  if (!wk) return [];
-  return [
-    wk.twitter && { label: 'X', url: wk.twitter.startsWith('http') ? wk.twitter : `https://x.com/${wk.twitter}` },
-    wk.github && { label: 'GitHub', url: wk.github.startsWith('http') ? wk.github : `https://github.com/${wk.github}` },
-    wk.discord && { label: 'Discord', url: wk.discord },
-    wk.telegram && { label: 'Telegram', url: wk.telegram.startsWith('http') ? wk.telegram : `https://t.me/${wk.telegram}` },
-    wk.website && { label: 'Website', url: wk.website },
-    wk.docs && { label: 'Docs', url: wk.docs },
-  ].filter(Boolean) as { label: string; url: string }[];
+function rawUsdcToValue(raw: unknown): number {
+  const value = Number(raw ?? 0);
+  return Number.isFinite(value) ? value / 1e6 : 0;
 }
 
-/** Copy button with checkmark feedback */
-function CopyBtn({ value, className }: { value: string; className?: string }) {
-  const [copied, setCopied] = useState(false);
+function fmtUsdcCompact(rawAmount: unknown): string {
+  const usdc = rawUsdcToValue(rawAmount);
+  if (usdc >= 1_000_000) return `${formatNumber(usdc / 1_000_000, 2)}M USDC`;
+  if (usdc >= 1_000) return `${formatNumber(usdc / 1_000, 2)}K USDC`;
+  if (usdc >= 100) return `${formatNumber(usdc, 2)} USDC`;
+  if (usdc >= 1) return `${formatNumber(usdc, 3)} USDC`;
+  if (usdc >= 0.01) return `${formatNumber(usdc, 4)} USDC`;
+  if (usdc > 0) return `${formatNumber(usdc, 6)} USDC`;
+  return "0 USDC";
+}
+
+function fmtSolCompact(rawLamports: unknown): string {
+  const sol = lamportsToSolValue(rawLamports);
+  if (sol >= 1_000) return `${formatNumber(sol / 1_000, 2)}K SOL`;
+  if (sol >= 100) return `${formatNumber(sol, 2)} SOL`;
+  if (sol >= 1) return `${formatNumber(sol, 4)} SOL`;
+  if (sol >= 0.01) return `${formatNumber(sol, 4)} SOL`;
+  if (sol >= 0.0001) return `${formatNumber(sol, 6)} SOL`;
+  if (sol > 0) return `${formatNumber(sol, 8)} SOL`;
+  return "0 SOL";
+}
+
+function formatNumber(value: number, maxFractionDigits: number): string {
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxFractionDigits,
+  });
+}
+
+function fmtUsd(value: number): string {
+  const abs = Math.abs(value);
+  return `$${value.toLocaleString("en-US", {
+    minimumFractionDigits: abs >= 1 ? 2 : 0,
+    maximumFractionDigits: abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6,
+  })} USD`;
+}
+
+function fmtUsdApprox(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "~$0";
+  const abs = Math.abs(value);
+  return `~$${value.toLocaleString("en-US", {
+    minimumFractionDigits: abs >= 100 ? 0 : 2,
+    maximumFractionDigits: abs >= 100 ? 0 : 2,
+  })}`;
+}
+
+function formatSettlementAssets(solRaw: number, usdcRaw: number): string {
+  const parts: string[] = [];
+  if (solRaw > 0) parts.push(fmtSolCompact(solRaw));
+  if (usdcRaw > 0) parts.push(fmtUsdcCompact(usdcRaw));
+  return parts.length > 0 ? parts.join(" + ") : "0 SOL";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function lamportsToUsdValue(rawLamports: unknown, solPrice: number): number {
+  const sol = lamportsToSolValue(rawLamports);
+  return sol * solPrice;
+}
+
+function getToolsCount(agent: EnrichedAgent): number {
   return (
-    <button
-      className={cn('text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors', className)}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        navigator.clipboard.writeText(value);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-    >
-      {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-    </button>
+    (agent as { onChainToolCount?: number }).onChainToolCount ??
+    agent.metadata?.tools?.length ??
+    0
   );
 }
 
-/** Token avatar stack with tooltip */
-function TokenStack({ tokens, max = 4 }: { tokens: TokenBalance[]; max?: number }) {
-  const shown = tokens.slice(0, max);
-  const extra = tokens.length - max;
-  if (!tokens.length) return null;
+function getCalls7d(agent: EnrichedAgent): number {
+  return Number(agent.revenue?.calls7d ?? agent.revenue?.totalCalls ?? 0);
+}
 
+function volumeLamports(agent: EnrichedAgent): number {
+  return Math.max(
+    Number(agent.revenue?.volume24hLamports ?? 0),
+    Number(agent.revenue?.volume7dLamports ?? 0),
+    Number(agent.revenue?.totalSettledLamports ?? 0),
+  );
+}
+
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+function settlementTokenKind(
+  tokenMint: string,
+  decimals: number,
+): "SOL" | "USDC" {
+  if (tokenMint === USDC_MINT || decimals === 6) return "USDC";
+  if (!tokenMint || tokenMint === SOL_MINT) return "SOL";
+  return "SOL";
+}
+
+function activityScore(agent: CardData): number {
+  const tools = getToolsCount(agent);
+  const volume = Math.max(
+    lamportsToSolValue(agent.revenue?.volume7dLamports),
+    lamportsToSolValue(agent.revenue?.totalSettledLamports),
+  );
+  const calls7d = getCalls7d(agent);
+  const totalCalls = Number(agent.agent.identity?.totalCallsServed ?? 0);
+  const caps = agent.agent.identity?.capabilities.length ?? 0;
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger className="w-fit">
-          <div className="flex items-center -space-x-1.5">
-            {shown.map((t, i) => (
-              <div
-                key={t.mint}
-                className="h-[18px] w-[18px] rounded-full border border-card bg-muted/20 overflow-hidden flex items-center justify-center"
-                style={{ zIndex: max - i }}
-              >
-                {t.logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={t.logo} alt={t.symbol} className="h-full w-full object-cover" />
-                ) : (
-                  <span className="text-[6px] font-bold text-muted-foreground">{t.symbol.slice(0, 2)}</span>
-                )}
-              </div>
-            ))}
-            {extra > 0 && (
-              <div className="h-[18px] w-[18px] rounded-full border border-card bg-muted/30 flex items-center justify-center">
-                <span className="text-[7px] font-bold text-muted-foreground">+{extra}</span>
-              </div>
-            )}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-[14rem]">
-          <div className="space-y-1">
-            {tokens.slice(0, 8).map((t) => (
-              <div key={t.mint} className="flex items-center justify-between gap-3 text-xs">
-                <span className="truncate font-medium">{t.symbol}</span>
-                <span className="text-muted-foreground tabular-nums shrink-0">{fmtAmt(t.uiAmount)}</span>
-              </div>
-            ))}
-            {tokens.length > 8 && <p className="text-muted-foreground text-center text-xs">+{tokens.length - 8} more</p>}
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    (tools > 0 ? 1_000_000_000 : 0) +
+    tools * 10_000_000 +
+    volume * 100_000 +
+    calls7d * 1_000 +
+    totalCalls +
+    caps * 25 +
+    (hasMetaplexSignal(agent) ? 15 : 0) +
+    agent.health.score
+  );
+}
+
+function hasMetaplexSignal(agent: EnrichedAgent): boolean {
+  const m = (
+    agent as { metaplex?: import("~/hooks/use-sap").AgentMetaplexBadge | null }
+  ).metaplex;
+  const logos = (
+    agent as {
+      logos?: { mplAsset?: string | null; mplImage?: string | null } | null;
+    }
+  ).logos;
+  const agentUri = asText(agent.agent.identity?.agentUri).toLowerCase();
+  const metadataText = agent.metadata
+    ? JSON.stringify(agent.metadata).toLowerCase()
+    : "";
+  return Boolean(
+    m?.linked ||
+    (m?.pluginCount ?? 0) > 0 ||
+    (m?.registryCount ?? 0) > 0 ||
+    logos?.mplAsset ||
+    logos?.mplImage ||
+    agentUri.includes("metaplex") ||
+    metadataText.includes("metaplex"),
   );
 }
 
@@ -192,36 +286,130 @@ export default function AgentsPage() {
   );
 }
 
-function AgentsInner() {
-  const [search, setSearch] = useQueryState('q', '', QueryParam.string);
-  const [sortBy, setSortBy] = useQueryState(
-    'sort',
-    'health',
-    QueryParam.enum('health', ['health', 'reputation', 'balance', 'staking', 'capabilities', 'newest', 'oldest'] as const),
+function DirectoryMetricCard({
+  icon,
+  label,
+  value,
+  sub,
+  tone = "default",
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  sub: string | JSX.Element;
+  tone?: "default" | "success";
+}) {
+  return (
+    <Card className="rounded-xl min-h-[180px] relative border bg-card shadow-sm">
+      <div className="flex items-start justify-between gap-4 p-4">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="mt-2 truncate font-mono text-2xl font-semibold tabular-nums text-foreground">
+            {value}
+          </p>
+        </div>
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border",
+            tone === "success"
+              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+              : "border-primary/20 bg-primary/10 text-primary",
+          )}
+        >
+          {icon}
+        </div>
+      </div>
+      <div className=" absolute right-4 bottom-4 text-xs text-muted-foreground">
+        {sub}
+      </div>
+    </Card>
   );
-  const [activeOnly, setActiveOnly] = useQueryState('active', true, {
-    parse: (raw) => (raw == null ? true : raw !== '0' && raw !== 'false'),
-    serialize: (v) => (v ? null : '0'),
+}
+
+function AgentsInner() {
+  const [search, setSearch] = useQueryState("q", "", QueryParam.string);
+  const [sortBy, setSortBy] = useQueryState(
+    "sort",
+    "activity",
+    QueryParam.enum("activity", [
+      "activity",
+      "health",
+      "reputation",
+      "balance",
+      "staking",
+      "capabilities",
+      "newest",
+      "oldest",
+    ] as const),
+  );
+  const [activeOnly, setActiveOnly] = useQueryState("active", true, {
+    parse: (raw) => (raw == null ? true : raw !== "0" && raw !== "false"),
+    serialize: (v) => (v ? null : "0"),
   });
-  const [mplOnly, setMplOnly] = useQueryState('metaplex', false, QueryParam.bool);
-  const [recentOnly, setRecentOnly] = useQueryState('recent', false, QueryParam.bool);
-  const [view, setView] = useQueryState('view', 'grid', QueryParam.enum('grid', ['grid', 'list'] as const));
+  const [mplOnly, setMplOnly] = useQueryState(
+    "metaplex",
+    false,
+    QueryParam.bool,
+  );
+  const [recentOnly, setRecentOnly] = useQueryState(
+    "recent",
+    false,
+    QueryParam.bool,
+  );
+  const [merchantOnly, setMerchantOnly] = useQueryState(
+    "merchant",
+    false,
+    QueryParam.bool,
+  );
+  const [volumeSort, setVolumeSort] = useQueryState<"desc" | "asc" | null>(
+    "volume",
+    null,
+    {
+      parse: (raw) => (raw === "desc" || raw === "asc" ? raw : null),
+      serialize: (v) => v,
+    },
+  );
+  const [view, setView] = useQueryState(
+    "view",
+    "grid",
+    QueryParam.enum("grid", ["grid", "list"] as const),
+  );
 
   const { data, loading, error } = useEnrichedAgents();
+  const { data: escrowData } = useEscrows();
   const agents = useMemo(() => data?.agents ?? [], [data]);
+  const [balanceOverrides, setBalanceOverrides] = useState<
+    Record<string, AgentBalanceSummary>
+  >({});
+  const handleBalanceResolved = useCallback(
+    (wallet: string, balances: AgentBalanceSummary) => {
+      setBalanceOverrides((prev) => {
+        const current = prev[wallet];
+        if (
+          current &&
+          current.sol === balances.sol &&
+          current.usdc === balances.usdc &&
+          current.solUsd === balances.solUsd &&
+          current.tokens.length === balances.tokens.length
+        ) {
+          return prev;
+        }
+        return { ...prev, [wallet]: balances };
+      });
+    },
+    [],
+  );
 
-  const enriched = useMemo(() =>
-    agents.map((a) => ({ ...a, health: deriveHealth(a) })),
-  [agents]);
+  const enriched = useMemo(
+    () => agents.map((a) => ({ ...a, health: deriveHealth(a) })),
+    [agents],
+  );
 
   const filtered = useMemo(() => {
     let list = enriched;
     if (activeOnly) list = list.filter((a) => a.agent.identity?.isActive);
     if (mplOnly) {
-      list = list.filter((a) => {
-        const m = (a as { metaplex?: import('~/hooks/use-sap').AgentMetaplexBadge | null }).metaplex;
-        return !!m && (m.linked || m.pluginCount > 0 || m.registryCount > 0);
-      });
+      list = list.filter(hasMetaplexSignal);
     }
     if (recentOnly) {
       const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -233,16 +421,26 @@ function AgentsInner() {
         return ms >= cutoff;
       });
     }
+    if (merchantOnly) {
+      list = list.filter((a) => getToolsCount(a) > 0);
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((a) => {
         const id = a.agent.identity;
         if (!id) return false;
-        return id.name.toLowerCase().includes(q) || id.description.toLowerCase().includes(q) || a.agent.pda.toLowerCase().includes(q) || id.wallet.toLowerCase().includes(q);
+        const pda = asPublicKeyText(a.agent.pda).toLowerCase();
+        const wallet = asPublicKeyText(id.wallet).toLowerCase();
+        return (
+          id.name.toLowerCase().includes(q) ||
+          id.description.toLowerCase().includes(q) ||
+          pda.includes(q) ||
+          wallet.includes(q)
+        );
       });
     }
     return list;
-  }, [enriched, search, activeOnly, mplOnly, recentOnly]);
+  }, [enriched, search, activeOnly, mplOnly, recentOnly, merchantOnly]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -251,19 +449,69 @@ function AgentsInner() {
       const n = Number(raw);
       return n > 1e12 ? n : n * 1000;
     };
-    switch (sortBy) {
-      case 'health': return copy.sort((a, b) => b.health.score - a.health.score);
-      case 'reputation': return copy.sort((a, b) => (b.agent.identity?.reputationScore ?? 0) - (a.agent.identity?.reputationScore ?? 0));
-      case 'balance': return copy.sort((a, b) => (b.balances?.sol ?? 0) - (a.balances?.sol ?? 0));
-      case 'staking': return copy.sort((a, b) => ((b as CardData & { staking?: AgentStakeSummary | null }).staking?.stakedSol ?? 0) - ((a as CardData & { staking?: AgentStakeSummary | null }).staking?.stakedSol ?? 0));
-      case 'capabilities': return copy.sort((a, b) => (b.agent.identity?.capabilities.length ?? 0) - (a.agent.identity?.capabilities.length ?? 0));
-      case 'newest': return copy.sort((a, b) => parseTs(b.agent.identity?.createdAt) - parseTs(a.agent.identity?.createdAt));
-      case 'oldest': return copy.sort((a, b) => parseTs(a.agent.identity?.createdAt) - parseTs(b.agent.identity?.createdAt));
-      default: return copy;
-    }
-  }, [filtered, sortBy]);
+    const balanceSol = (agent: CardData) => {
+      const wallet = asPublicKeyText(agent.agent.identity?.wallet);
+      return balanceOverrides[wallet]?.sol ?? agent.balances?.sol ?? 0;
+    };
 
-  const { page, perPage, setPage, setPerPage, paginate } = usePagination(sorted.length, 6);
+    if (volumeSort) {
+      return copy.sort((a, b) => {
+        const byVolume =
+          volumeSort === "desc"
+            ? volumeLamports(b) - volumeLamports(a)
+            : volumeLamports(a) - volumeLamports(b);
+        return byVolume || activityScore(b) - activityScore(a);
+      });
+    }
+
+    switch (sortBy) {
+      case "activity":
+        return copy.sort((a, b) => activityScore(b) - activityScore(a));
+      case "health":
+        return copy.sort((a, b) => b.health.score - a.health.score);
+      case "reputation":
+        return copy.sort(
+          (a, b) =>
+            (b.agent.identity?.reputationScore ?? 0) -
+            (a.agent.identity?.reputationScore ?? 0),
+        );
+      case "balance":
+        return copy.sort((a, b) => balanceSol(b) - balanceSol(a));
+      case "staking":
+        return copy.sort(
+          (a, b) =>
+            ((b as CardData & { staking?: AgentStakeSummary | null }).staking
+              ?.stakedSol ?? 0) -
+            ((a as CardData & { staking?: AgentStakeSummary | null }).staking
+              ?.stakedSol ?? 0),
+        );
+      case "capabilities":
+        return copy.sort(
+          (a, b) =>
+            (b.agent.identity?.capabilities.length ?? 0) -
+            (a.agent.identity?.capabilities.length ?? 0),
+        );
+      case "newest":
+        return copy.sort(
+          (a, b) =>
+            parseTs(b.agent.identity?.createdAt) -
+            parseTs(a.agent.identity?.createdAt),
+        );
+      case "oldest":
+        return copy.sort(
+          (a, b) =>
+            parseTs(a.agent.identity?.createdAt) -
+            parseTs(b.agent.identity?.createdAt),
+        );
+      default:
+        return copy;
+    }
+  }, [balanceOverrides, filtered, sortBy, volumeSort]);
+
+  const { page, perPage, setPage, setPerPage, paginate } = usePagination(
+    sorted.length,
+    6,
+  );
   const paginated = useMemo(() => paginate(sorted), [paginate, sorted]);
 
   // ── Batch FairScale × SAP reputation for visible wallets only ──
@@ -271,108 +519,389 @@ function AgentsInner() {
     () =>
       paginated
         .map((p) => p.agent.identity?.wallet)
-        .filter((w): w is string => typeof w === 'string' && w.length > 0),
+        .map(asPublicKeyText)
+        .filter((w) => w.length > 0),
     [paginated],
   );
   const { byWallet: reputationByWallet } =
     useAggregatedReputationBatch(visibleWallets);
 
+  const commerceVolumeByAgent = useMemo(() => {
+    const map = new Map<string, AgentCommerceVolume>();
+    for (const escrow of (escrowData?.escrows ?? []) as Array<{
+      agent?: unknown;
+      tokenMint?: unknown;
+      tokenDecimals?: unknown;
+      totalSettled?: unknown;
+      totalCallsSettled?: unknown;
+      pda?: unknown;
+    }>) {
+      const agentPda = asPublicKeyText(escrow.agent);
+      if (!agentPda) continue;
+      const tokenMint = asPublicKeyText(escrow.tokenMint);
+      const decimals = Number(
+        escrow.tokenDecimals ?? (tokenMint === USDC_MINT ? 6 : 9),
+      );
+      const rawSettled = Number(escrow.totalSettled ?? 0);
+      const calls = Number(escrow.totalCallsSettled ?? 0);
+      const current = map.get(agentPda) ?? {
+        solRaw: 0,
+        usdcRaw: 0,
+        calls: 0,
+        escrows: 0,
+      };
+      if (settlementTokenKind(tokenMint, decimals) === "USDC")
+        current.usdcRaw += rawSettled;
+      else current.solRaw += rawSettled;
+      current.calls += Number.isFinite(calls) ? calls : 0;
+      current.escrows += 1;
+      map.set(agentPda, current);
+    }
+    return map;
+  }, [escrowData?.escrows]);
+
   const stats = useMemo(() => {
     const total = agents.length;
     const active = agents.filter((a) => a.agent.identity?.isActive).length;
-    const avgHealth = enriched.length > 0 ? Math.round(enriched.reduce((s, a) => s + a.health.score, 0) / enriched.length) : 0;
-    const excellent = enriched.filter((a) => a.health.level === 'excellent').length;
-    return { total, active, avgHealth, excellent };
-  }, [agents, enriched]);
+    const avgHealth =
+      enriched.length > 0
+        ? Math.round(
+            enriched.reduce((s, a) => s + a.health.score, 0) / enriched.length,
+          )
+        : 0;
+    const excellent = enriched.filter(
+      (a) => a.health.level === "excellent",
+    ).length;
+    const mpl = enriched.filter(hasMetaplexSignal).length;
+    const merchants = enriched.filter((a) => getToolsCount(a) > 0).length;
 
-  const mplCount = useMemo(() => enriched.filter((a) => {
-    const m = (a as { metaplex?: import('~/hooks/use-sap').AgentMetaplexBadge | null }).metaplex;
-    return !!m && (m.linked || m.pluginCount > 0 || m.registryCount > 0);
-  }).length, [enriched]);
+    // Use the same current-volume source as the dashboard cards: 24h, then 7d, then settled total.
+    const fallbackUsdcRaw = enriched.reduce((sum, agent) => {
+      return sum + volumeLamports(agent);
+    }, 0);
+    const commerceTotals = Array.from(commerceVolumeByAgent.values()).reduce(
+      (acc, item) => {
+        acc.usdcRaw += item.usdcRaw;
+        acc.solRaw += item.solRaw;
+        acc.calls += item.calls;
+        return acc;
+      },
+      { usdcRaw: 0, solRaw: 0, calls: 0 },
+    );
+
+    // Calculate SOL price from first agent with revenue data (or use default)
+    const solPrice = data?.solPrice ?? 0;
+    const hasCommerceVolume =
+      commerceTotals.usdcRaw > 0 || commerceTotals.solRaw > 0;
+    const totalVolumeUsdcRaw = hasCommerceVolume ? commerceTotals.usdcRaw : 0;
+    const totalVolumeSolRaw = hasCommerceVolume
+      ? commerceTotals.solRaw
+      : fallbackUsdcRaw;
+    const totalVolumeUsd =
+      lamportsToSolValue(totalVolumeSolRaw) * solPrice +
+      rawUsdcToValue(totalVolumeUsdcRaw);
+    const totalCalls =
+      commerceTotals.calls > 0
+        ? commerceTotals.calls
+        : enriched.reduce(
+            (sum, agent) => sum + Number(agent.revenue?.totalCalls ?? 0),
+            0,
+          );
+    const depositedTotals = (
+      (escrowData?.escrows ?? []) as Array<{
+        tokenMint?: unknown;
+        tokenDecimals?: unknown;
+        totalDeposited?: unknown;
+      }>
+    ).reduce(
+      (acc, escrow) => {
+        const tokenMint = asPublicKeyText(escrow.tokenMint);
+        const decimals = Number(
+          escrow.tokenDecimals ?? (tokenMint === USDC_MINT ? 6 : 9),
+        );
+        const rawDeposited = Number(escrow.totalDeposited ?? 0);
+        if (!Number.isFinite(rawDeposited) || rawDeposited <= 0) return acc;
+        if (settlementTokenKind(tokenMint, decimals) === "USDC")
+          acc.usdcRaw += rawDeposited;
+        else acc.solRaw += rawDeposited;
+        return acc;
+      },
+      { solRaw: 0, usdcRaw: 0 },
+    );
+    const depositedUsd =
+      lamportsToSolValue(depositedTotals.solRaw) * solPrice +
+      rawUsdcToValue(depositedTotals.usdcRaw);
+    const utilization =
+      depositedUsd > 0
+        ? Math.min((totalVolumeUsd / depositedUsd) * 100, 100)
+        : null;
+
+    return {
+      total,
+      active,
+      avgHealth,
+      excellent,
+      mpl,
+      merchants,
+      totalVolumeUsdcRaw,
+      totalVolumeSolRaw,
+      totalVolumeUsd,
+      totalCalls,
+      solPrice,
+      utilization,
+    };
+  }, [
+    agents,
+    commerceVolumeByAgent,
+    enriched,
+    data?.solPrice,
+    escrowData?.escrows,
+  ]);
+
+  const mplCount = stats.mpl;
+
+  const isMobile = window.innerWidth < 280;
 
   const filterChips: FilterChip[] = [];
-  if (activeOnly) filterChips.push({ key: 'active', label: 'Active only', value: 'true', onClear: () => setActiveOnly(false) });
-  if (mplOnly) filterChips.push({ key: 'mpl', label: 'Metaplex', value: 'on', onClear: () => setMplOnly(false) });
-  if (recentOnly) filterChips.push({ key: 'recent', label: 'Recently added', value: 'on', onClear: () => setRecentOnly(false) });
-  if (sortBy !== 'health') filterChips.push({ key: 'sort', label: 'Sort', value: SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? sortBy, onClear: () => setSortBy('health') });
+  if (activeOnly)
+    filterChips.push({
+      key: "active",
+      label: "Active only",
+      value: "true",
+      onClear: () => setActiveOnly(false),
+    });
+  if (mplOnly)
+    filterChips.push({
+      key: "mpl",
+      label: "Metaplex",
+      value: "on",
+      onClear: () => setMplOnly(false),
+    });
+  if (recentOnly)
+    filterChips.push({
+      key: "recent",
+      label: "Recently added",
+      value: "on",
+      onClear: () => setRecentOnly(false),
+    });
+  if (merchantOnly)
+    filterChips.push({
+      key: "merchant",
+      label: "Merchant only",
+      value: "on",
+      onClear: () => setMerchantOnly(false),
+    });
+  if (volumeSort)
+    filterChips.push({
+      key: "volume",
+      label: `Volume ${volumeSort === "desc" ? "↓" : "↑"}`,
+      value: volumeSort,
+      onClear: () => setVolumeSort(null),
+    });
+  if (sortBy !== "activity")
+    filterChips.push({
+      key: "sort",
+      label: "Sort",
+      value: SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? sortBy,
+      onClear: () => setSortBy("activity"),
+    });
 
   return (
     <ExplorerPageShell
       title="Agent Directory"
-      subtitle={`${data?.total ?? '...'} agents registered on the Synapse Agent Protocol`}
+      subtitle={`${data?.total ?? "..."} agents registered on the Synapse Agent Protocol. Live registry, merchant activity, balances, and immutable settlement history in one view.`}
       icon={<Bot className="h-5 w-5" />}
       stats={
         <>
-          <ExplorerMetric icon={<Bot className="h-3.5 w-3.5" />} label="Registered" value={loading ? '...' : fmtNum(stats.total)} sub="agents" accent="primary" />
-          <ExplorerMetric icon={<Activity className="h-3.5 w-3.5" />} label="Active" value={loading ? '...' : fmtNum(stats.active)} sub={`${stats.total > 0 ? Math.round(stats.active / stats.total * 100) : 0}%`} accent="emerald" />
-          <ExplorerMetric icon={<Heart className="h-3.5 w-3.5" />} label="Avg Health" value={loading ? '...' : `${stats.avgHealth}%`} accent={stats.avgHealth >= 70 ? 'emerald' : 'amber'} />
-          <ExplorerMetric icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Excellent" value={loading ? '...' : fmtNum(stats.excellent)} sub="agents" accent="cyan" />
+          <DirectoryMetricCard
+            icon={<Bot className="h-4 w-4" aria-hidden="true" />}
+            label="Total agents"
+            value={loading ? "..." : fmtNum(stats.total)}
+            sub={<AvatarGroup>
+              {
+                enriched.filter((agent) => !!agent.logos?.mplImage || !!agent.logos?.mplAsset).slice(0,5).map((agent) => {
+                  return (
+                    <Avatar key={agent.agent.pda} className="h-8 w-8">
+                      <AvatarImage
+                        src={
+                          agent.logos?.mplImage ??
+                          agent.logos?.mplAsset ??
+                          undefined
+                        }
+                        alt={agent.agent.identity?.name ?? "Agent logo"}
+                      />
+                      <AvatarFallback>
+                        {agent.agent.identity?.name
+                          ? agent.agent.identity.name[0]
+                          : "?"}
+                      </AvatarFallback>
+                      
+                    </Avatar>
+                  );
+                })
+              }
+              <AvatarGroupCount>
+                +{enriched.length - 4}
+              </AvatarGroupCount>
+            </AvatarGroup>}
+          />
+          <DirectoryMetricCard
+            icon={<Activity className="h-4 w-4" aria-hidden="true" />}
+            label="Active agents"
+            value={loading ? "..." : fmtNum(stats.active)}
+            sub={<span> <span className="text-lg text-white font-bold">{stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%</span> online</span>}
+            tone="success"
+          />
+          <VolumeMetricCard
+            icon={<BarChart3 className="h-4 w-4" aria-hidden="true" />}
+            value={
+              loading
+                ? "..."
+                : formatSettlementAssets(
+                    stats.totalVolumeSolRaw,
+                    stats.totalVolumeUsdcRaw,
+                  )
+            }
+            fiatValue={
+              stats.solPrice > 0 ? fmtUsdApprox(stats.totalVolumeUsd) : null
+            }
+            calls={fmtNum(stats.totalCalls)}
+            utilization={stats.utilization}
+            loading={loading}
+          />
+          <DirectoryMetricCard
+            icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
+            label="Avg health"
+            value={loading ? "..." : `${stats.avgHealth}%`}
+            sub={ <span><span className="text-lg text-white font-bold">{fmtNum(stats.mpl)}</span> MPL x SAP</span> }
+          />
         </>
       }
-      actions={
-        <div className="flex items-center gap-1 border border-border/40 rounded-lg p-0.5 bg-muted/5">
+      actions={isMobile ? <></> : 
+        
+        <div className="flex items-center gap-1 rounded-lg border bg-card p-1 shadow-sm">
           <button
-            onClick={() => setView('grid')}
-            className={cn('p-1.5 rounded-md transition-all', view === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground/50 hover:text-foreground')}
+            onClick={() => setView("grid")}
+            className={cn(
+              "inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              view === "grid"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
             aria-label="Grid view"
           >
-            <LayoutGrid className="h-4 w-4" />
+            <LayoutGrid className="h-4 w-4" aria-hidden="true" />
           </button>
           <button
-            onClick={() => setView('list')}
-            className={cn('p-1.5 rounded-md transition-all', view === 'list' ? 'bg-primary/10 text-primary' : 'text-muted-foreground/50 hover:text-foreground')}
+            onClick={() => setView("list")}
+            className={cn(
+              "inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              view === "list"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
             aria-label="List view"
           >
-            <LayoutList className="h-4 w-4" />
+            <LayoutList className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+        
       }
     >
       <ExplorerFilterBar
         search={search}
         onSearch={setSearch}
         searchPlaceholder="Search by name, PDA, or wallet..."
-        sort={{ value: sortBy, options: SORT_OPTIONS, onChange: (v) => setSortBy(v as typeof sortBy) }}
+        sort={{
+          value: sortBy,
+          options: SORT_OPTIONS,
+          onChange: (v) => setSortBy(v as typeof sortBy),
+        }}
         filters={filterChips}
       >
         <Button
-          variant={activeOnly ? 'default' : 'outline'}
+          variant={activeOnly ? "default" : "outline"}
           size="sm"
           onClick={() => setActiveOnly(!activeOnly)}
         >
-          {activeOnly ? 'Active only' : 'All agents'}
+          {activeOnly ? "Active only" : "All agents"}
         </Button>
         <Button
-          variant={mplOnly ? 'default' : 'outline'}
+          variant={mplOnly ? "default" : "outline"}
           size="sm"
           onClick={() => setMplOnly(!mplOnly)}
           disabled={mplCount === 0}
           className={cn(
             mplOnly
-              ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-black border-amber-400 hover:from-amber-300 hover:to-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
-              : 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:text-amber-200 hover:border-amber-400/60',
+              ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+              : "border-primary/30 text-primary hover:bg-primary/10 hover:text-primary",
           )}
-          title={mplCount === 0 ? 'No Metaplex-coordinated agents discovered yet' : `${mplCount} agent${mplCount === 1 ? '' : 's'} on Metaplex`}
+          title={
+            mplCount === 0
+              ? "No Metaplex-coordinated agents discovered yet"
+              : `${mplCount} of ${stats.total} SAP agents have a Metaplex signal`
+          }
         >
-          <span className={cn('mr-1.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-black', mplOnly ? 'bg-black/20 text-black' : 'bg-amber-500/20 text-amber-300')}>
-            ✓
-          </span>
+          <ShieldCheck className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           MPL × SAP
-          <span className="ml-1.5 tabular-nums opacity-80">{mplCount}</span>
+          <span className="ml-1.5 tabular-nums opacity-80">
+            {mplCount}/{stats.total}
+          </span>
         </Button>
         <Button
-          variant={recentOnly ? 'default' : 'outline'}
+          variant={recentOnly ? "default" : "outline"}
           size="sm"
-          onClick={() => { setRecentOnly(!recentOnly); if (!recentOnly) setSortBy('newest'); else setSortBy('health'); }}
+          onClick={() => {
+            setRecentOnly(!recentOnly);
+            if (!recentOnly) setSortBy("newest");
+            else setSortBy("activity");
+          }}
           className={cn(
             recentOnly
-              ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40 hover:bg-cyan-500/30'
-              : 'border-cyan-500/30 text-cyan-400/80 hover:bg-cyan-500/10 hover:text-cyan-300 hover:border-cyan-400/50',
+              ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+              : "border-border text-foreground hover:bg-accent",
           )}
           title="Show agents registered in the last 30 days"
         >
-          <Clock className="mr-1.5 h-3.5 w-3.5" />
+          <Clock className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           Recently Added
+        </Button>
+        <Button
+          variant={merchantOnly ? "default" : "outline"}
+          size="sm"
+          onClick={() => setMerchantOnly(!merchantOnly)}
+          className={cn(
+            merchantOnly
+              ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+              : "border-primary/30 text-primary hover:bg-primary/10 hover:text-primary",
+          )}
+          title="Show only agents with published tools (merchants)"
+        >
+          <Store className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          Merchants Only
+        </Button>
+        <Button
+          variant={volumeSort ? "default" : "outline"}
+          size="sm"
+          onClick={() =>
+            setVolumeSort(
+              volumeSort === "desc"
+                ? "asc"
+                : volumeSort === "asc"
+                  ? null
+                  : "desc",
+            )
+          }
+          className={cn(
+            volumeSort
+              ? "border-emerald-500 bg-emerald-600 text-primary-foreground hover:bg-emerald-700"
+              : "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400",
+          )}
+          title="Sort by 24h volume"
+        >
+          <TrendingUp className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          Volume{" "}
+          {volumeSort === "desc" ? "↓" : volumeSort === "asc" ? "↑" : "↓↑"}
         </Button>
       </ExplorerFilterBar>
 
@@ -383,35 +912,67 @@ function AgentsInner() {
           <p className="text-sm text-destructive">{error}</p>
         </Card>
       ) : filtered.length === 0 ? (
-        <EmptyState message={search ? 'No agents match your search' : 'No agents discovered on-chain'} />
+        <EmptyState
+          message={
+            search
+              ? "No agents match your search"
+              : "No agents discovered on-chain"
+          }
+        />
       ) : (
         <>
-          {view === 'grid' ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
-              {paginated.map((item) => (
-                <AgentCard
-                  key={item.agent.pda}
+          {view === "grid" ? (
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              {paginated.map((item, i) => (
+                <DirectoryAgentCard
+                  key={
+                    asPublicKeyText(item.agent.pda) ||
+                    asPublicKeyText(item.agent.identity?.wallet) ||
+                    i
+                  }
                   data={item}
+                  solPrice={data?.solPrice ?? null}
+                  commerceVolume={
+                    commerceVolumeByAgent.get(
+                      asPublicKeyText(item.agent.pda),
+                    ) ?? null
+                  }
                   reputation={
                     item.agent.identity?.wallet
-                      ? reputationByWallet.get(item.agent.identity.wallet) ?? null
+                      ? (reputationByWallet.get(
+                          asPublicKeyText(item.agent.identity.wallet),
+                        ) ?? null)
                       : null
                   }
+                  onBalanceResolved={handleBalanceResolved}
                 />
               ))}
             </div>
           ) : (
             <div className="space-y-2">
               {paginated.map((item, i) => (
-                <AgentListRow
-                  key={item.agent.pda}
+                <DirectoryAgentListRow
+                  key={
+                    asPublicKeyText(item.agent.pda) ||
+                    asPublicKeyText(item.agent.identity?.wallet) ||
+                    i
+                  }
                   data={item}
+                  solPrice={data?.solPrice ?? null}
+                  commerceVolume={
+                    commerceVolumeByAgent.get(
+                      asPublicKeyText(item.agent.pda),
+                    ) ?? null
+                  }
                   index={(page - 1) * perPage + i + 1}
                   reputation={
                     item.agent.identity?.wallet
-                      ? reputationByWallet.get(item.agent.identity.wallet) ?? null
+                      ? (reputationByWallet.get(
+                          asPublicKeyText(item.agent.identity.wallet),
+                        ) ?? null)
                       : null
                   }
+                  onBalanceResolved={handleBalanceResolved}
                 />
               ))}
             </div>
@@ -432,478 +993,6 @@ function AgentsInner() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   Agent Card — Clean marketplace style
-   ═══════════════════════════════════════════════════════ */
-
-type CardData = EnrichedAgent & { health: { level: HealthLevel; score: number } };
-
-function AgentCard({
-  data,
-  reputation,
-}: {
-  data: CardData;
-  reputation: AggregatedReputation | null;
-}) {
-  const { agent, balances, wellKnown, metadata, health } = data;
-  const id = agent.identity;
-  if (!id) return null;
-
-  const staking = (data as CardData & { staking?: AgentStakeSummary | null }).staking ?? null;
-  const metaplex = (data as CardData & { metaplex?: import('~/hooks/use-sap').AgentMetaplexBadge | null }).metaplex ?? null;
-  const onMetaplex = !!metaplex && (metaplex.linked || metaplex.pluginCount > 0 || metaplex.registryCount > 0);
-  const metaplexVerified = !!metaplex?.linked;
-  const metaplexTooltip = !metaplex
-    ? null
-    : metaplex.linked
-      ? `Metaplex · URI-bound to SAP host${metaplex.registryCount > 0 ? ` · also on api.metaplex.com (${metaplex.registryCount})` : ''}`
-      : metaplex.registryCount > 0 && metaplex.pluginCount > 0
-        ? `Metaplex · ${metaplex.pluginCount} on-chain plugin${metaplex.pluginCount === 1 ? '' : 's'} + ${metaplex.registryCount} registry entr${metaplex.registryCount === 1 ? 'y' : 'ies'}`
-        : metaplex.registryCount > 0
-          ? `Metaplex · ${metaplex.registryCount} agent${metaplex.registryCount === 1 ? '' : 's'} on api.metaplex.com`
-          : `Metaplex · ${metaplex.pluginCount} on-chain AgentIdentity plugin${metaplex.pluginCount === 1 ? '' : 's'}`;
-  const hc = HEALTH_META[health.level];
-  const capCount = id.capabilities.length;
-  const feedbacks = Number(id.totalFeedbacks ?? 0);
-  const socials = buildSocials(wellKnown);
-  const tokens = balances?.tokens ?? [];
-  const toolsCount = (data as { onChainToolCount?: number }).onChainToolCount ?? metadata?.tools?.length ?? 0;
-  const protocols = (id as unknown as { protocols?: string[] }).protocols ?? metadata?.protocols ?? [];
-  const caps = id.capabilities ?? [];
-
-  // Categorize tags: protocols first, then caps — max 4 visible
-  const protocolTags = protocols.slice(0, 2).map((p: string) => ({ label: typeof p === 'string' ? p : String(p), type: 'protocol' as const }));
-  const capTags = caps.slice(0, Math.max(0, 4 - protocolTags.length)).map((c: { id: string }) => ({
-    label: c.id.includes(':') ? c.id.split(':')[1] : c.id,
-    type: 'capability' as const,
-  }));
-  const visibleTags = [...protocolTags, ...capTags];
-  const overflowCount = protocols.length + caps.length - visibleTags.length;
-
-  return (
-    <Link href={`/agents/${id.wallet}`} className="group block">
-      <div className={cn(
-        'relative rounded-xl overflow-hidden transition-all duration-300',
-        'bg-card/60 backdrop-blur-sm border',
-        onMetaplex
-          ? metaplexVerified
-            ? 'border-amber-400/55 shadow-[0_0_0_1px_rgba(251,191,36,0.18)_inset,0_8px_36px_-14px_rgba(251,191,36,0.35)] hover:border-amber-300/75 hover:shadow-[0_0_0_1px_rgba(251,191,36,0.28)_inset,0_10px_44px_-12px_rgba(251,191,36,0.5)]'
-            : 'border-amber-500/35 shadow-[0_0_0_1px_rgba(217,160,30,0.12)_inset] hover:border-amber-400/55 hover:shadow-[0_0_0_1px_rgba(217,160,30,0.2)_inset,0_8px_36px_-16px_rgba(217,160,30,0.3)]'
-          : 'border-border/30 hover:border-border/60 hover:shadow-[0_8px_40px_-12px_hsl(var(--glow)/0.08)]',
-        'h-full flex flex-col',
-      )}>
-        {/* ────────────── HEADER ────────────── */}
-        <div className="p-4 sm:p-6 pb-0">
-          <div className="flex items-start gap-3 sm:gap-4">
-            {/* Avatar */}
-            <div className="relative shrink-0">
-              <AgentAvatar
-                name={id.name}
-                endpoint={id.x402Endpoint}
-                logo={data.logos?.wellKnownLogo ?? wellKnown?.logo ?? null}
-                mplImage={data.logos?.mplImage ?? null}
-                size={48}
-              />
-              {/* Metaplex verification mark — overlay on avatar (bottom-right),
-                  like a verified checkmark. Gold = on Metaplex via any signal,
-                  stronger gold + ring = SAP-bound URI verified. */}
-              {onMetaplex && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (metaplex?.linked && metaplex.asset) {
-                            window.open(`${SOLSCAN}/token/${metaplex.asset}`, '_blank', 'noopener');
-                          }
-                        }}
-                        aria-label={metaplexTooltip ?? 'Metaplex'}
-                        className={cn(
-                          'absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full',
-                          'text-[8px] font-black leading-none ring-2 ring-card transition-transform hover:scale-110',
-                          metaplexVerified
-                            ? 'bg-gradient-to-br from-amber-300 to-amber-500 text-black shadow-[0_0_8px_rgba(251,191,36,0.5)]'
-                            : 'bg-gradient-to-br from-amber-500/90 to-amber-700/90 text-amber-50',
-                        )}
-                      >
-                        {metaplexVerified ? '✓' : 'M'}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <span className="text-xs">{metaplexTooltip}</span>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
-
-            {/* Identity */}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-[14px] sm:text-[15px] font-semibold tracking-tight truncate text-foreground group-hover:text-primary transition-colors duration-200 max-w-full">
-                  {id.name}
-                </h3>
-                {/* Status pill */}
-                <span className={cn(
-                  'inline-flex items-center gap-1 px-1.5 py-px rounded-full text-xs font-medium tracking-wide shrink-0',
-                  id.isActive
-                    ? 'text-emerald-500 dark:text-emerald-400/90 bg-emerald-500/10 dark:bg-emerald-400/8'
-                    : 'text-muted-foreground/40 bg-muted/20',
-                )}>
-                  <span className={cn('h-1 w-1 rounded-full', id.isActive ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground/30')} />
-                  {id.isActive ? 'ONLINE' : 'OFFLINE'}
-                </span>
-              </div>
-
-              {/* Address with copy */}
-              <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
-                <button
-                  className="min-w-0 flex-1 truncate text-left text-xs sm:text-xs font-mono text-muted-foreground/55 transition-colors hover:text-muted-foreground/80"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`${SOLSCAN}/account/${agent.pda}`, '_blank', 'noopener'); }}
-                >
-                  <span className="sm:hidden">{agent.pda.slice(0, 6)}…{agent.pda.slice(-4)}</span>
-                  <span className="hidden sm:inline">{agent.pda}</span>
-                </button>
-                <CopyBtn value={agent.pda} />
-              </div>
-            </div>
-
-            {/* Health score — top right */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex flex-col items-center gap-0.5 shrink-0">
-                    <span className={cn('text-sm font-bold tabular-nums', hc.text)}>{health.score}</span>
-                    <div className="w-8 h-1 rounded-full bg-muted/20 overflow-hidden">
-                      <div className={cn('h-full rounded-full transition-all duration-700', hc.bar)} style={{ width: `${health.score}%` }} />
-                    </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>{hc.label} — {health.score}% health</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          {/* Description */}
-          {(wellKnown?.description || id.description) && (
-            <p className="text-[12px] leading-relaxed text-muted-foreground/60 line-clamp-2 mt-3 sm:mt-4">
-              {wellKnown?.description || id.description}
-            </p>
-          )}
-        </div>
-
-        {/* ────────────── STATS ROW ────────────── */}
-        <div className="mt-4 border-t border-border/10 px-4 sm:px-6 py-3 sm:py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/45">STATS</span>
-            <span className="h-px flex-1 bg-border/65" />
-            <ReputationChip data={reputation} />
-          </div>
-          <div className="flex items-center">
-            {[
-              { label: 'REP', value: feedbacks === 0 ? '\u2014' : fmtNum(id.reputationScore) },
-              { label: 'CAPS', value: `${capCount}` },
-              { label: 'TOOLS', value: `${toolsCount}` },
-              { label: 'REVIEWS', value: `${feedbacks}` },
-            ].map((stat, i) => (
-              <div key={stat.label} className={cn('flex-1 text-center', i > 0 && 'border-l border-border/15')}>
-                <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground/40 leading-none">{stat.label}</p>
-                <p className="text-[14px] font-bold tabular-nums text-foreground/90 leading-tight mt-1.5">{stat.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ────────────── BALANCES ────────────── */}
-        <div className="border-t border-border/10 px-6 py-4">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/45">BALANCES</span>
-            <span className="h-px flex-1 bg-border/65" />
-          </div>
-          <div className="flex items-center gap-4">
-            {/* SOL */}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={SOL_LOGO} alt="SOL" className="h-5 w-5 rounded-full shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold tabular-nums text-foreground leading-none">{balances ? fmtAmt(balances.sol) : '\u2014'}</p>
-                {balances?.solUsd != null && (
-                  <p className="text-xs text-muted-foreground/35 tabular-nums mt-0.5">${balances.solUsd.toFixed(2)}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="w-px h-8 bg-border/65 shrink-0" />
-
-            {/* USDC */}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={USDC_LOGO} alt="USDC" className="h-5 w-5 rounded-full shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold tabular-nums text-foreground leading-none">{balances ? fmtAmt(balances.usdc) : '\u2014'}</p>
-                <p className="text-xs text-muted-foreground/35 mt-0.5">USDC</p>
-              </div>
-            </div>
-
-            {/* Other tokens */}
-            {tokens.length > 0 && (
-              <>
-                <div className="w-px h-8 bg-border/65 shrink-0" />
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <TokenStack tokens={tokens} max={3} />
-                  <span className="text-xs text-muted-foreground/35">{tokens.length}</span>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Staking */}
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-primary/5 border border-primary/10 px-2.5 py-1.5">
-            <Coins className="h-3.5 w-3.5 text-primary/70 shrink-0" />
-            <span className="text-xs text-muted-foreground/50 uppercase tracking-wider">Staked</span>
-            {staking ? (
-              <>
-                <span className="ml-auto text-xs font-bold tabular-nums text-primary">{staking.stakedSol.toFixed(3)} SOL</span>
-                {staking.unstakeAmountSol > 0 && (
-                  <span className="text-xs text-amber-400/70 tabular-nums">{staking.unstakeAmountSol.toFixed(3)} unstaking</span>
-                )}
-              </>
-            ) : (
-              <span className="ml-auto text-xs text-muted-foreground/30">Not initialized</span>
-            )}
-          </div>
-        </div>
-
-        {/* ────────────── TAGS ────────────── */}
-        {visibleTags.length > 0 && (
-          <div className="border-t border-border/10 px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-2 flex-wrap">
-            {visibleTags.map((tag) => (
-              <span
-                key={tag.label}
-                className={cn(
-                  'inline-flex text-xs font-medium px-2 py-0.5 rounded-md truncate max-w-[6rem]',
-                  tag.type === 'protocol'
-                    ? 'bg-primary/8 text-primary/70 border border-primary/10'
-                    : 'bg-muted/10 text-muted-foreground/50 border border-border/15',
-                )}
-              >
-                {tag.label}
-              </span>
-            ))}
-            {overflowCount > 0 && (
-              <span className="text-xs text-muted-foreground/25">+{overflowCount}</span>
-            )}
-          </div>
-        )}
-
-        {/* ────────────── FOOTER ────────────── */}
-        <div className="mt-auto border-t border-border/10 px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
-          {/* Left: wallet + protocols */}
-          <div className="flex items-center gap-2 min-w-0 text-xs text-muted-foreground/45">
-            <span className="font-mono min-w-0 max-w-[8rem] sm:max-w-[10rem] truncate text-muted-foreground/70">{id.wallet}</span>
-            {protocols.length > 0 && (
-              <>
-                <span className="text-border/30">&middot;</span>
-                <span className="shrink-0">{protocols.length} protocol{protocols.length !== 1 ? 's' : ''}</span>
-              </>
-            )}
-          </div>
-
-          {/* Right: action links */}
-          <div className="flex items-center gap-1 shrink-0">
-            {id.x402Endpoint && (
-              <button
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-primary/70 hover:text-primary hover:bg-primary/5 transition-all"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(id.x402Endpoint!, '_blank', 'noopener'); }}
-              >
-                <Wallet className="h-3 w-3" />
-                x402
-              </button>
-            )}
-            {id.agentUri && (
-              <button
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/10 transition-all"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(id.agentUri!, '_blank', 'noopener'); }}
-              >
-                Metadata
-                <ExternalLink className="h-2.5 w-2.5" />
-              </button>
-            )}
-            {socials.length > 0 && socials.slice(0, 2).map((s) => (
-              <button
-                key={s.label}
-                className="px-1.5 py-1 rounded-md text-xs font-medium text-muted-foreground/30 hover:text-muted-foreground/60 hover:bg-muted/10 transition-all"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(s.url, '_blank', 'noopener'); }}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════
-   Agent List Row — Compact
-   ═══════════════════════════════════════════════════════ */
-
-function AgentListRow({
-  data,
-  index,
-  reputation,
-}: {
-  data: CardData;
-  index: number;
-  reputation: AggregatedReputation | null;
-}) {
-  const { agent, balances, wellKnown, metadata, health } = data;
-  const id = agent.identity;
-  if (!id) return null;
-
-  const staking = (data as CardData & { staking?: AgentStakeSummary | null }).staking ?? null;
-  const hc = HEALTH_META[health.level];
-  const feedbacks = Number(id.totalFeedbacks ?? 0);
-  const tokens = balances?.tokens ?? [];
-  const toolsCount = (data as { onChainToolCount?: number }).onChainToolCount ?? metadata?.tools?.length ?? 0;
-
-  return (
-    <Link href={`/agents/${id.wallet}`} className="group block">
-      <div className={cn(
-        'grid grid-cols-1 gap-4 rounded-xl border px-5 py-4 transition-all duration-200 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
-        'bg-card/45 border-border/30',
-        'hover:border-border/55 hover:bg-card/65 hover:shadow-[0_6px_28px_-16px_hsl(var(--glow)/0.15)]',
-      )}>
-        <div className="min-w-0">
-          <div className="flex items-start gap-3">
-            <span className="mt-1 w-6 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground/35">{index}</span>
-
-            <AgentAvatar
-              name={id.name}
-              endpoint={id.x402Endpoint}
-              logo={data.logos?.wellKnownLogo ?? wellKnown?.logo ?? null}
-              mplImage={data.logos?.mplImage ?? null}
-              size={40}
-            />
-
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">{id.name}</p>
-                <span className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium tracking-wide',
-                  id.isActive ? 'text-emerald-400/90 bg-emerald-400/10' : 'text-muted-foreground/45 bg-muted/20',
-                )}>
-                  <span className={cn('h-1 w-1 rounded-full', id.isActive ? 'bg-emerald-400' : 'bg-muted-foreground/30')} />
-                  {id.isActive ? 'ONLINE' : 'OFFLINE'}
-                </span>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger className="w-fit">
-                      <span className={cn('text-xs font-semibold tabular-nums', hc.text)}>{health.score}%</span>
-                    </TooltipTrigger>
-                    <TooltipContent>{hc.label}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <ReputationChip data={reputation} size="xs" />
-              </div>
-
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                <span className="uppercase tracking-wide text-muted-foreground/45">PDA</span>
-                <span className="font-mono min-w-0 max-w-[11rem] truncate text-muted-foreground/85 sm:max-w-[14rem]">{agent.pda}</span>
-                <CopyBtn value={agent.pda} className="text-muted-foreground/35" />
-                <span className="text-border/30">•</span>
-                <span className="uppercase tracking-wide text-muted-foreground/45">Wallet</span>
-                <span className="font-mono min-w-0 max-w-[11rem] truncate text-muted-foreground/85 sm:max-w-[14rem]">{id.wallet}</span>
-                <CopyBtn value={id.wallet} className="text-muted-foreground/35" />
-              </div>
-
-              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-                {wellKnown && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-muted/20 px-1.5 py-0.5 text-muted-foreground/50">
-                    <Globe className="h-2.5 w-2.5" /> well-known
-                  </span>
-                )}
-                {id.x402Endpoint && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-primary/70">
-                    <Wallet className="h-2.5 w-2.5" /> x402
-                  </span>
-                )}
-                {(data as CardData & { metaplex?: { linked: boolean } | null }).metaplex && (
-                  <span className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 border',
-                    (data as CardData & { metaplex?: { linked: boolean } | null }).metaplex?.linked
-                      ? 'bg-pink-500/10 border-pink-500/20 text-pink-400'
-                      : 'bg-muted/15 border-border/30 text-neutral-500',
-                  )}>
-                    <span className={cn(
-                      'h-1 w-1 rounded-full',
-                      (data as CardData & { metaplex?: { linked: boolean } | null }).metaplex?.linked
-                        ? 'bg-pink-400'
-                        : 'bg-neutral-500',
-                    )} /> MPL
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="hidden shrink-0 rounded-lg border border-border/20 bg-muted/10 px-3 py-2 sm:flex sm:items-center sm:gap-4 text-[12px] tabular-nums">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger className="w-fit">
-                <div className="flex items-center gap-1.5">
-                  <Star className="h-3 w-3 text-muted-foreground/25" />
-                  <span className="w-10 text-right font-medium">{feedbacks === 0 ? '\u2014' : fmtNum(id.reputationScore)}</span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Rep ({feedbacks} reviews)</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <div className="flex items-center gap-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={SOL_LOGO} alt="SOL" className="h-3.5 w-3.5 rounded-full" />
-            <span className="w-12 text-right font-medium">{balances ? fmtAmt(balances.sol) : '\u2014'}</span>
-          </div>
-
-          <div className="hidden md:flex items-center gap-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={USDC_LOGO} alt="USDC" className="h-3.5 w-3.5 rounded-full" />
-            <span className="w-12 text-right font-medium">{balances ? fmtAmt(balances.usdc) : '\u2014'}</span>
-          </div>
-
-          {toolsCount > 0 && (
-            <div className="hidden lg:flex items-center gap-1.5">
-              <Wrench className="h-3 w-3 text-muted-foreground/25" />
-              <span>{toolsCount}</span>
-            </div>
-          )}
-
-          <div className="hidden lg:block">
-            <TokenStack tokens={tokens} max={3} />
-          </div>
-
-          <div className="hidden xl:flex items-center gap-1.5">
-            <Coins className="h-3 w-3 text-primary/50" />
-            <span className={staking ? 'text-primary/80 font-semibold' : 'text-muted-foreground/30'}>
-              {staking ? staking.stakedSol.toFixed(3) : '—'}
-            </span>
-          </div>
-        </div>
-
-        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-primary/60 transition-colors shrink-0" />
-      </div>
-    </Link>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════
    Skeleton
    ═══════════════════════════════════════════════════════ */
 
@@ -912,10 +1001,14 @@ function AgentsSkeleton() {
     <div className="space-y-8">
       <Skeleton className="h-24 w-full rounded-xl" />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full rounded-xl" />
+        ))}
       </div>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 9 }).map((_, i) => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
+        {Array.from({ length: 9 }).map((_, i) => (
+          <Skeleton key={i} className="h-64 w-full rounded-xl" />
+        ))}
       </div>
     </div>
   );

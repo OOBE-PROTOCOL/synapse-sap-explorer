@@ -176,7 +176,7 @@ const CATEGORIES = [
   { id: 'tx', label: 'Transaction', icon: ArrowLeftRight },
 ] as const;
 
-import { short, timeAgo } from '~/lib/format';
+import { asText, entityPath, short, timeAgo } from '~/lib/format';
 
 function resolveEventMeta(event: StreamEvent): EventMeta & { eventName: string } {
   const p = event.payload;
@@ -238,9 +238,10 @@ function extractAddresses(event: StreamEvent): { key: string; value: string; lin
   ];
 
   for (const [field, label, basePath] of fields) {
-    const val = (p[field] as string | undefined) ?? ((p.data as Record<string, unknown> | undefined)?.[field] as string | undefined);
-    if (val && typeof val === 'string' && val.length >= 32) {
-      result.push({ key: label, value: val, link: basePath ? `${basePath}${val}` : undefined });
+    const val = asText(p[field] ?? (p.data as Record<string, unknown> | undefined)?.[field]);
+    if (val && val.length >= 32) {
+      const base = basePath ? basePath.replace(/\/$/, '') : null;
+      result.push({ key: label, value: val, link: base ? entityPath(base, val) : undefined });
     }
   }
 

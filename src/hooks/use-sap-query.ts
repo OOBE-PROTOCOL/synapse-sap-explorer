@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 
 export type SapQueryOptions<T> = {
@@ -38,6 +38,7 @@ export function useSapQuery<T>({ queryKey, url, pollInterval, queryOptions }: Sa
     queryKey,
     queryFn: () => sapFetcher<T>(url!),
     enabled: url !== null,
+    placeholderData: keepPreviousData,
     refetchInterval: pollInterval && pollInterval > 0 ? pollInterval : false,
     ...queryOptions,
   });

@@ -8,6 +8,52 @@ import { selectAllTools, selectToolSchemaCounts, upsertTools } from '~/lib/db/qu
 import { isDbDown, markDbDown } from '~/db';
 import { dbToolToApi, apiToolToDb } from '~/lib/db/mappers';
 import type { SerializedDiscoveredTool } from '~/types';
+import { asText } from '~/lib/format';
+
+type ToolCategorySummary = { category: string; categoryNum: number; toolCount: number };
+type ToolCategorySource = { descriptor?: { category?: unknown } | null };
+
+function readToolCategory(tool: ToolCategorySource): string {
+  const category = tool.descriptor?.category;
+  if (!category) return 'custom';
+  if (typeof category === 'string') return category;
+  const key = Object.keys(category)[0];
+  return key || asText(category) || 'custom';
+}
+
+function buildCategorySummary(
+  tools: ToolCategorySource[],
+  upstream: ToolCategorySummary[] = [],
+): ToolCategorySummary[] {
+  const byCategory = new Map<string, ToolCategorySummary>();
+  for (const row of upstream) {
+    if (!row.category) continue;
+    byCategory.set(row.category, {
+      category: row.category,
+      categoryNum: Number(row.categoryNum ?? byCategory.size),
+      toolCount: Number(row.toolCount ?? 0),
+    });
+  }
+
+  const derived = new Map<string, number>();
+  for (const tool of tools) {
+    const category = readToolCategory(tool);
+    derived.set(category, (derived.get(category) ?? 0) + 1);
+  }
+
+  for (const [category, count] of derived) {
+    const current = byCategory.get(category);
+    byCategory.set(category, {
+      category,
+      categoryNum: current?.categoryNum ?? byCategory.size,
+      toolCount: Math.max(current?.toolCount ?? 0, count),
+    });
+  }
+
+  return Array.from(byCategory.values())
+    .filter((row) => row.toolCount > 0)
+    .sort((a, b) => b.toolCount - a.toolCount || a.category.localeCompare(b.category));
+}
 
 async function rpcFetchTools(category: string | null) {
   const summary = await getToolCategorySummary();
@@ -28,7 +74,7 @@ async function rpcFetchTools(category: string | null) {
   upsertTools(serialized.map(apiToolToDb)).catch((e) =>
     console.warn('[tools] DB write failed:', (e as Error).message),
   );
-  return { tools: serialized, categories: summary, total: serialized.length };
+  return { tools: serialized, categories: buildCategorySummary(serialized, summary), total: serialized.length };
 }
 
 export const GET = withSynapseError(async (req: Request) => {
@@ -74,7 +120,7 @@ export const GET = withSynapseError(async (req: Request) => {
         };
       });
 
-      const result = { tools: mapped, categories: [], total: mapped.length };
+      const result = { tools: mapped, categories: buildCategorySummary(mapped), total: mapped.length };
       swr(cacheKey, () => rpcFetchTools(category), { ttl: 60_000, swr: 300_000 }).catch(() => {});
       return synapseResponse(result);
     }

@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { timeAgo } from "~/lib/format";
+import { asText, entityPath, short as shortText, timeAgo } from "~/lib/format";
 
 type TxProgram = { id: string; name: string | null };
 
@@ -73,7 +73,7 @@ type EscrowMap = Record<string, EscrowInfo>;
 
 const POLL_MS = 12_000;
 const SAP_ADDRESS = "SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ";
-const PREFETCH_PER_PAGE = 5000;
+const POLL_PER_PAGE = 50;
 
 /* ── Helpers ────────────────────────────────── */
 
@@ -348,7 +348,7 @@ function ActionLabel({ tx }: { tx: SapTx }) {
 type Party = {
   address: string;
   label: string;
-  type: "agent-wallet" | "agent-pda" | "escrow-depositor" | "escrow-agent";
+  type: "agent-wallet" | "agent-pda" | "escrow-depositor" | "escrow-agent" | "account";
   link: string;
 };
 
@@ -363,20 +363,30 @@ function resolveCounterparties(
   const seen = new Set<string>();
   // Track which wallets we've resolved — dedup agent-wallet/agent-pda/escrow
   const resolvedWallets = new Set<string>();
+  let rawFallback: Party | null = null;
 
   // Build reverse PDA → wallet map
   const pdaToWallet: Record<string, { wallet: string; name: string }> = {};
   for (const [wallet, info] of Object.entries(agentMap)) {
-    if (info.pda) pdaToWallet[info.pda] = { wallet, name: info.name };
+    const pda = asText(info.pda);
+    if (pda) pdaToWallet[pda] = { wallet: asText(wallet), name: info.name };
   }
 
-  for (const key of tx.accountKeys ?? []) {
+  for (const rawKey of tx.accountKeys ?? []) {
+    const key = asText(rawKey);
+    if (!key) continue;
     if (seen.has(key)) continue;
     seen.add(key);
 
     // Skip signer, known programs
     if (key === tx.signer) continue;
     if (KNOWN_PROGRAMS.has(key)) continue;
+    rawFallback ??= {
+      address: key,
+      label: "Account",
+      type: "account",
+      link: entityPath('/address', key),
+    };
 
     const agentByWallet = agentMap[key];
     if (agentByWallet && !resolvedWallets.has(key)) {
@@ -385,7 +395,7 @@ function resolveCounterparties(
         address: key,
         label: agentByWallet.name,
         type: "agent-wallet",
-        link: `/agents/${key}`,
+        link: entityPath('/agents', key),
       });
       continue;
     }
@@ -399,7 +409,7 @@ function resolveCounterparties(
         address: pdaOwner.wallet,
         label: pdaOwner.name,
         type: "agent-pda",
-        link: `/agents/${pdaOwner.wallet}`,
+        link: entityPath('/agents', pdaOwner.wallet),
       });
       continue;
     }
@@ -410,10 +420,12 @@ function resolveCounterparties(
       // Resolve counterparty: if signer is the depositor → show agent, else show depositor
       const isSignerDepositor = tx.signer === escrow.depositor;
       const counterAddr = isSignerDepositor
-        ? escrow.agentWallet
-        : escrow.depositor;
-      const counterAgent = agentMap[escrow.agentWallet];
-      const depositorAgent = agentMap[escrow.depositor];
+        ? asText(escrow.agentWallet)
+        : asText(escrow.depositor);
+      const agentWallet = asText(escrow.agentWallet);
+      const depositor = asText(escrow.depositor);
+      const counterAgent = agentMap[agentWallet];
+      const depositorAgent = agentMap[depositor];
 
       // Skip if we already resolved this counterparty
       if (resolvedWallets.has(counterAddr || key)) continue;
@@ -421,17 +433,17 @@ function resolveCounterparties(
 
       if (isSignerDepositor && counterAgent) {
         parties.push({
-          address: escrow.agentWallet,
+          address: asText(escrow.agentWallet),
           label: `${counterAgent.name} (Escrow)`,
           type: "escrow-agent",
-          link: `/agents/${escrow.agentWallet}`,
+          link: entityPath('/agents', escrow.agentWallet),
         });
       } else if (!isSignerDepositor && depositorAgent) {
         parties.push({
-          address: escrow.depositor,
+          address: asText(escrow.depositor),
           label: `${depositorAgent.name} (Depositor)`,
           type: "escrow-depositor",
-          link: `/agents/${escrow.depositor}`,
+          link: entityPath('/agents', escrow.depositor),
         });
       } else {
         const resolvedAgent = counterAgent ?? depositorAgent;
@@ -442,11 +454,15 @@ function resolveCounterparties(
           address: counterAddr || key,
           label,
           type: isSignerDepositor ? "escrow-agent" : "escrow-depositor",
-          link: counterAddr ? `/address/${counterAddr}` : `/address/${key}`,
+          link: counterAddr ? entityPath('/address', counterAddr) : entityPath('/address', key),
         });
       }
       continue;
     }
+  }
+
+  if (parties.length === 0 && rawFallback) {
+    parties.push(rawFallback);
   }
 
   return parties;
@@ -463,12 +479,13 @@ function AddrLabel({
   label?: string | null;
   link: string;
 }) {
-  const short = `${address.slice(0, 6)}…${address.slice(-6)}`;
+  const normalizedAddress = asText(address);
+  const short = shortText(normalizedAddress, 6, 6);
   return (
     <Link
       href={link}
       className="flex flex-col gap-px max-w-[160px] group/addr"
-      title={address}
+      title={normalizedAddress}
       onClick={(e) => e.stopPropagation()}
     >
       <span className="text-sm xs:text-xs font-mono text-primary/70 group-hover/addr:text-primary truncate transition-colors">
@@ -501,7 +518,7 @@ function TxRow({
   return (
     <TableRow
       className="cursor-pointer group transition-colors hover:bg-accent/40"
-      onClick={() => router.push(`/tx/${tx.signature}`)}
+      onClick={() => router.push(entityPath('/tx', tx.signature))}
     >
       {/* Status dot */}
       <TableCell className="w-8 pr-0">
@@ -599,7 +616,7 @@ function TxRow({
             address={tx.signer}
             label={signerAgent?.name}
             link={
-              signerAgent ? `/agents/${tx.signer}` : `/address/${tx.signer}`
+              signerAgent ? entityPath('/agents', tx.signer) : entityPath('/address', tx.signer)
             }
           />
         ) : (
@@ -628,7 +645,7 @@ function TxRow({
                 onClick={(e) => e.stopPropagation()}
               >
                 <span className="text-[12px] font-mono text-primary/70 group-hover/addr:text-primary shrink-0 transition-colors">
-                  {p.address.slice(0, 6)}…{p.address.slice(-6)}
+                  {shortText(p.address, 6, 6)}
                 </span>
                 {p.label && (
                   <span className="text-[12px] text-foreground/50 group-hover/addr:text-foreground/70 truncate transition-colors">
@@ -712,7 +729,7 @@ export default function TransactionsPage() {
   const [now, setNow] = useState(0);
   const [serverTotal, setServerTotal] = useState(0);
 
-  // Filters (no pagination — all txs loaded at once)
+  // Filters and server-backed pagination.
   const [search, setSearch] = useState("");
   const [hideSpam, setHideSpam] = useState(false);
   const [hideFailed, setHideFailed] = useState(false);
@@ -729,13 +746,15 @@ export default function TransactionsPage() {
 
   const fetchTxs = useCallback(async (poll: boolean, signal?: AbortSignal) => {
     if (poll) setRefreshing(true);
+    else setLoading(true);
     try {
-      // Prefetch all txs from DB on initial load; poll only deltas after latest slot.
+      // Page loads use server pagination; polling only asks for live deltas.
       const params = new URLSearchParams({
-        page: "1",
-        perPage: String(PREFETCH_PER_PAGE),
+        page: poll ? "1" : String(page),
+        perPage: poll ? String(POLL_PER_PAGE) : String(perPage),
       });
       if (poll) {
+        if (page !== 1) return;
         const cur = txsRef.current;
         if (cur.length > 0)
           params.set("after", String(Math.max(...cur.map((t) => t.slot))));
@@ -748,9 +767,7 @@ export default function TransactionsPage() {
       const data = await res.json();
       const incoming: SapTx[] = data.transactions ?? [];
 
-      if (!poll) {
-        setServerTotal(data.total ?? incoming.length);
-      }
+      if (!poll) setServerTotal(data.total ?? incoming.length);
 
       if (poll) {
         // Poll merge across the prefetched list
@@ -763,7 +780,6 @@ export default function TransactionsPage() {
           });
         }
       } else {
-        // Initial load
         setTxs(incoming);
       }
       setLastUpdated(Date.now());
@@ -775,7 +791,7 @@ export default function TransactionsPage() {
       if (poll) setRefreshing(false);
       else setLoading(false);
     }
-  }, []);
+  }, [page, perPage]);
 
   const fetchAgentMap = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -830,7 +846,7 @@ export default function TransactionsPage() {
     return [...set].sort();
   }, [txs]);
 
-  // Apply filters
+  // Apply filters to the current server page.
   let filtered = [...txs];
   if (search) {
     const q = search.toLowerCase();
@@ -858,14 +874,20 @@ export default function TransactionsPage() {
 
   const total = serverTotal || txs.length;
   const filteredTotal = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(filteredTotal / perPage));
-  const safePage = Math.min(page, totalPages);
-  const start = filteredTotal === 0 ? 0 : (safePage - 1) * perPage + 1;
-  const end = Math.min(safePage * perPage, filteredTotal);
-  const displayed = filtered.slice(
-    (safePage - 1) * perPage,
-    safePage * perPage,
+  const hasClientFilters =
+    Boolean(search) || hideSpam || hideFailed || sapFilter !== "all";
+  const totalPages = Math.max(
+    1,
+    Math.ceil((hasClientFilters ? filteredTotal : total) / perPage),
   );
+  const safePage = Math.min(page, totalPages);
+  const start = total === 0 ? 0 : (safePage - 1) * perPage + 1;
+  const displayed = hasClientFilters
+    ? filtered.slice((safePage - 1) * perPage, safePage * perPage)
+    : filtered;
+  const end = hasClientFilters
+    ? Math.min(safePage * perPage, filteredTotal)
+    : Math.min((safePage - 1) * perPage + displayed.length, total);
 
   const pageWindow = useMemo(() => {
     const pages: number[] = [];

@@ -1,15 +1,21 @@
 ---
 title: CLI Overview
-description: synapse-sap is the official command line for the Solana Agent Protocol. Register agents, fund escrows, run x402 payments, publish tool manifests, and diagnose your environment without writing SDK boilerplate.
+description: synapse-sap is the official command line for the Synapse Agent Protocol v0.20.0. Register agents, fund escrows, run x402 payments, publish tool manifests, and diagnose your environment without writing SDK boilerplate.
 ---
 
 # Synapse SAP CLI
 
-`synapse-sap` is the operator console for the Solana Agent Protocol. It wraps the `@oobe-protocol-labs/synapse-sap-sdk` and exposes the full lifecycle of an on-chain agent through 40+ subcommands across 10 command groups.
+**Current Version:** v0.9.3  
+**SDK Version:** v0.20.0  
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`
+
+`synapse-sap` is the operator console for the Synapse Agent Protocol. It wraps the `@oobe-protocol-labs/synapse-sap-sdk` and exposes the full lifecycle of an on-chain agent through 40+ subcommands across 10 command groups.
 
 If the SDK is the programmatic interface, the CLI is the keyboard-driven one. Both speak the same protocol, both produce the same on-chain state.
 
-## What you can do from the terminal
+---
+
+## What You Can Do From the Terminal
 
 | Task | Command |
 |------|---------|
@@ -18,33 +24,98 @@ If the SDK is the programmatic interface, the CLI is the keyboard-driven one. Bo
 | Run a paid x402 call end to end | `synapse-sap x402 call <wallet> <tool> --args '{...}'` |
 | Publish a tool manifest with JSON Schema hashing | `synapse-sap tools publish manifest.json` |
 | Audit your local setup before going live | `synapse-sap doctor run` |
+| Monitor escrow settlements in real-time | `synapse-sap escrow monitor` |
+| Validate endpoint health | `synapse-sap discovery validate` |
 
-## Design principles
+---
+
+## Command Groups
+
+| Group | Commands | Description |
+|-------|----------|-------------|
+| `agent` | 8 commands | Agent lifecycle: register, update, close, inspect |
+| `escrow` | 7 commands | Escrow management: open, deposit, settle, withdraw |
+| `x402` | 6 commands | Payment protocol: call, settle, verify, replay |
+| `tools` | 5 commands | Tool registry: publish, validate, typify |
+| `discovery` | 4 commands | Network discovery: scan, validate, find |
+| `env` | 4 commands | Environment setup: init, keypair, config |
+| `config` | 3 commands | Configuration management: get, set, list |
+| `doctor` | 2 commands | Diagnostics: run, report |
+| `memory` | 3 commands | Vault operations: init, session, inscribe |
+| `staking` | 4 commands | Merchant staking: init, deposit, unstake |
+
+---
+
+## Design Principles
 
 1. **One command, one effect.** Every subcommand has a single purpose. Composition happens in your shell, not in flags.
-2. **Artifacts everywhere.** Use `--save` and `--out` to persist signed transactions, manifests, x402 payloads, and replay them later with `x402 replay` or `tools manifest validate`.
+2. **Artifacts everywhere.** Use `--save` and `--out` to persist signed transactions, manifests, x402 payloads, and replay them later.
 3. **Dry runs by default for destructive ops.** Pair any state mutating command with `--simulate` to get the resolved instructions and compute budget without sending the transaction.
 4. **JSON for machines, tables for humans.** Add `--json` to any command to pipe output into `jq`, agents, or CI.
 5. **OOBE Protocol RPC first class.** Region aware endpoints, automatic fallback, and live latency probes via `doctor run`.
 
-## When to reach for the CLI
+---
 
-| Scenario | Why CLI fits |
+## When to Reach for the CLI
+
+| Scenario | Why CLI Fits |
 |----------|--------------|
 | First time setup of a new agent | `env init` plus `agent register` is faster than scaffolding a project |
 | Operations and on-call work | `escrow monitor` and `agent health` give live feedback in your shell |
 | CI pipelines and scripts | JSON output and exit codes plug into any orchestrator |
 | Debugging a failing settlement | `x402 replay` reproduces a signed payload deterministically |
 | Onboarding teammates | Diagnostic flows (`doctor run`) cut hours of setup help |
+| Autonomous agent operations | CLI skills enable LLM agents to drive SAP via terminal |
 
-## Read this section in order
+---
 
-1. [Installation](/docs/cli/installation) - install globally, from source, or pin a version per project.
-2. [Quickstart](/docs/cli/quickstart) - register an agent, fund an escrow, and make a paid call in under five minutes.
-3. **Commands** - one page per command group with every flag, exit code, and JSON shape.
-4. [Global flags](/docs/cli/global-flags) - flags that apply to every command.
-5. [Skills](/docs/cli/skills) - the machine readable manifest that lets autonomous agents drive the CLI.
+## Installation Quick Links
+
+```bash
+# Global install (recommended)
+npm install -g @oobe-protocol-labs/synapse-sap-cli
+
+# Verify installation
+synapse-sap --version
+synapse-sap --help
+
+# Initialize environment
+synapse-sap env init --template mainnet
+synapse-sap doctor run
+```
+
+See **[Installation](/docs/cli/installation)** for detailed setup instructions.
+
+---
+
+## Read This Section in Order
+
+1. **[Installation](/docs/cli/installation)** — Install globally, from source, or pin a version per project
+2. **[Quickstart](/docs/cli/quickstart)** — Register an agent, fund an escrow, and make a paid call in under five minutes
+3. **Commands** — One page per command group with every flag, exit code, and JSON shape
+4. **[Global Flags](/docs/cli/global-flags)** — Flags that apply to every command
+5. **[Skills](/docs/cli/skills)** — The machine readable manifest that lets autonomous agents drive the CLI
 
 <Callout type="info">
 The CLI is a thin wrapper over the SDK. Anything you can do in the CLI is also available in code, and vice versa. See the [SDK overview](/docs/sdk/overview) when you need programmatic control.
 </Callout>
+
+---
+
+## Version Compatibility
+
+| CLI Version | SDK Version | Status |
+|-------------|-------------|--------|
+| 0.9.3 | 0.20.0 | ✅ Latest |
+| 0.9.2 | 0.19.x | ✅ Stable |
+| 0.9.1 | 0.18.x | ✅ Stable |
+| 0.9.0 | 0.17.x | ⚠️ Deprecated |
+
+<Callout type="warning">
+**Always use CLI v0.9.3+** for SDK v0.20.0 compatibility. Earlier versions may have IDL mismatches and missing features.
+</Callout>
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3

@@ -1,11 +1,15 @@
 ---
 title: PDA Reference
-description: Complete table of all PDA derivation functions, their seeds, and usage patterns.
+description: Complete table of all PDA derivation functions, their seeds, and usage patterns. SDK v0.20.0 aligned.
 ---
 
 # PDA Reference
 
+**SDK Version:** v0.20.0
+
 All SAP protocol data lives in Program Derived Addresses (PDAs) derived from deterministic seeds. Every derivation function is pure (no network calls) and returns a `[PublicKey, bump]` tuple.
+
+---
 
 ## Import
 
@@ -29,6 +33,8 @@ import {
   deriveToolCategoryIndex,
 } from "@oobe-protocol-labs/synapse-sap-sdk/pda";
 ```
+
+---
 
 ## Derivation Table
 
@@ -78,6 +84,8 @@ import {
 | `deriveProtocolIndex(hash)` | `["sap_proto_idx", hash]` | Protocol index |
 | `deriveToolCategoryIndex(cat)` | `["sap_tool_cat", cat]` | Category index |
 
+---
+
 ## Usage Examples
 
 ```typescript
@@ -100,6 +108,8 @@ const [capIdx] = deriveCapabilityIndex(sha256("jupiter:swap"));
 const [protoIdx] = deriveProtocolIndex(sha256("jupiter"));
 ```
 
+---
+
 ## Design Properties
 
 All PDA derivation functions share these properties:
@@ -110,3 +120,16 @@ All PDA derivation functions share these properties:
 - **Hierarchical**: Child PDAs are derived from parent PDAs, forming a natural tree structure
 
 Given any wallet address, you can compute every related PDA without touching the network.
+
+---
+
+## Next Steps
+
+- **[On-Chain Reference](/docs/core/on-chain-reference)** — Account structures
+- **[Session Manager](/docs/sdk/session-manager)** — Memory operations
+- **[Security](/docs/best-practices/security)** — Key management
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

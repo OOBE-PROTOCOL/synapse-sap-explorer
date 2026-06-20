@@ -13,16 +13,20 @@ import {
 } from '~/components/ui/command';
 import { Badge } from '~/components/ui/badge';
 import { cn } from '~/lib/utils';
-import { short } from '~/lib/format';
+import { entityPath, short } from '~/lib/format';
 import { useGlobalSearch } from '~/hooks/use-sap';
 
 const TYPE_META: Record<string, { icon: React.ElementType; color: string; href: (r: SearchResultItem) => string }> = {
-  agent:  { icon: Bot,        color: 'text-primary',    href: (r) => `/agents/${r.wallet ?? r.pda}` },
-  tool:   { icon: Wrench,     color: 'text-primary',  href: (r) => `/tools/${r.pda}` },
-  escrow: { icon: DollarSign, color: 'text-emerald-400', href: (r) => `/escrows/${r.pda}` },
+  agent:  { icon: Bot,        color: 'text-primary',    href: (r) => entityPath('/agents', r.wallet ?? r.pda) },
+  tool:   { icon: Wrench,     color: 'text-primary',  href: (r) => entityPath('/tools', r.pda) },
+  escrow: { icon: DollarSign, color: 'text-primary', href: (r) => entityPath('/escrows', r.pda) },
 };
 
 type SearchResultItem = { pda: string; name: string | null; wallet: string | null; type: string };
+
+function looksLikeSolanaAddress(value: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,88}$/.test(value.trim());
+}
 
 export function SearchCommand() {
   const [open, setOpen] = useState(false);
@@ -31,6 +35,7 @@ export function SearchCommand() {
   const { data, loading } = useGlobalSearch(query);
 
   const results = data?.results ?? [];
+  const canLookupAddress = looksLikeSolanaAddress(query);
 
   // ⌘K shortcut
   useEffect(() => {
@@ -56,13 +61,15 @@ export function SearchCommand() {
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="relative flex w-full items-center gap-2 rounded-xl bg-muted/30 border border-border/40 px-3 h-9 text-xs text-muted-foreground/60 hover:border-primary/40 hover:shadow-[0_0_12px_-3px_hsl(var(--glow)/0.25)] transition-all duration-300"
+        className="relative flex h-11 w-full items-center gap-2 rounded-lg border bg-background px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        aria-label="Open search"
       >
-        <Search className="h-3.5 w-3.5 shrink-0" />
-        <span className='text-[10px]'>Search agents, PDAs...</span>
-        <kbd className="ml-auto pointer-events-none hidden h-5 select-none items-center gap-1 rounded border border-border/50 bg-muted/50 px-1.5 font-mono text-micro font-medium text-muted-foreground/70 sm:inline-flex">
-          <span className="text-xs">⌘</span>K
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 truncate">Search agents, tools, escrows</span>
+        <kbd className="pointer-events-none ml-auto hidden h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs font-medium text-muted-foreground sm:inline-flex">
+          ⌘K
         </kbd>
       </button>
 
@@ -85,8 +92,33 @@ export function SearchCommand() {
             </div>
           )}
 
-          {query.length >= 2 && !loading && results.length === 0 && (
+          {query.length >= 2 && !loading && results.length === 0 && !canLookupAddress && (
             <CommandEmpty>No results for &ldquo;{query}&rdquo;</CommandEmpty>
+          )}
+
+          {query.length >= 2 && !loading && canLookupAddress && (
+            <CommandGroup heading={results.length > 0 ? 'Direct lookup' : 'Address lookup'}>
+              <CommandItem
+                value={`address ${query}`}
+                onSelect={() => handleSelect(entityPath('/address', query.trim()))}
+                className="cursor-pointer"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/30 text-primary">
+                  <Search className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">Open address lookup</span>
+                    <Badge variant="outline" className="shrink-0 text-xs">
+                      address
+                    </Badge>
+                  </div>
+                  <div className="truncate font-mono text-xs text-muted-foreground">
+                    {query.trim()}
+                  </div>
+                </div>
+              </CommandItem>
+            </CommandGroup>
           )}
 
           {results.length > 0 && (

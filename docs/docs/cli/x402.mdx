@@ -1,29 +1,100 @@
 ---
-title: x402
-description: Run end to end x402 payment flows from the terminal. Generate signed headers, replay artifacts, verify settlements, and run agent side settlement.
+title: x402 Payment Protocol
+description: Run end-to-end x402 payment flows from the terminal. Generate signed headers, replay artifacts, verify settlements, and run agent-side settlement. SDK v0.20.0 aligned.
 ---
 
 # `x402`
 
-The x402 group covers everything related to the per call payment protocol.
+**Protocol:** x402 v1.0  
+**SDK Version:** v0.20.0
+
+The x402 group covers everything related to the per-call payment protocol. x402 enables trustless micropayments for AI services through on-chain escrow settlement.
+
+---
+
+## How x402 Works
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│  Consumer   │────▶│  Agent API   │────▶│  Escrow V2  │
+│  (Caller)   │     │  (Merchant)  │     │  (On-chain) │
+└─────────────┘     └──────────────┘     └─────────────┘
+      │                    │                    │
+      │  1. Build headers  │                    │
+      │───────────────────▶│                    │
+      │                    │  2. POST + headers │
+      │                    │───────────────────▶│
+      │                    │                    │  3. Verify escrow
+      │                    │                    │  4. Deduct balance
+      │                    │◀───────────────────│
+      │  5. Response +     │                    │
+      │     settlement TX  │                    │
+      │◀───────────────────│                    │
+      │                    │  6. Settle on-chain│
+      │                    │───────────────────▶│
+      │                    │  7. Claim payment  │
+      │                    │◀───────────────────│
+```
+
+1. **Consumer** builds x402 payment headers (nonce, amount, signature)
+2. **Agent API** receives request with headers, validates signature
+3. **Escrow** verifies sufficient balance, deducts amount
+4. **Agent** processes request, returns response
+5. **Agent** submits settlement transaction on-chain
+6. **Escrow** transfers funds to agent wallet
+
+---
 
 ## `x402 headers <wallet>`
 
 Generate the HTTP headers required to make a paid call against an agent.
 
 ```bash
-synapse-sap x402 headers <AGENT_WALLET> --network mainnet --output headers.json
+synapse-sap x402 headers <AGENT_WALLET> \
+  --network mainnet \
+  --output headers.json
 ```
 
-The output contains `X-PAYMENT`, `X-PAYMENT-NONCE`, and `X-PAYMENT-SIG`, ready to forward to any HTTP client.
+| Flag | Description |
+|------|-------------|
+| `--network <name>` | `mainnet`, `devnet`, `localnet` |
+| `--amount <lamports>` | Payment amount (default: agent's price per call) |
+| `--nonce <n>` | Override nonce (default: auto-increment) |
+| `--output <path>` | Write headers to file |
+| `--json` | Emit JSON to stdout |
+
+### Output Format
+
+```json
+{
+  "X-PAYMENT-AMOUNT": "100000",
+  "X-PAYMENT-NONCE": "42",
+  "X-PAYMENT-SIG": "5eykt4UuPvNb8...signature...",
+  "X-PAYMENT-EScrow": "EscrowPDA...",
+  "X-PAYMENT-TIMESTAMP": "1718899200"
+}
+```
+
+Use these headers in any HTTP client:
+
+```bash
+curl -X POST https://api.agent.dev/x402/generate-image \
+  -H "X-PAYMENT-AMOUNT: 100000" \
+  -H "X-PAYMENT-NONCE: 42" \
+  -H "X-PAYMENT-SIG: 5eykt4UuPvNb8..." \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"sunset"}'
+```
+
+---
 
 ## `x402 call <wallet> <tool>`
 
-Full end to end paid call: build headers, sign, POST, wait for settlement.
+Full end-to-end paid call: build headers, sign, POST, wait for settlement.
 
 ```bash
 synapse-sap x402 call <AGENT_WALLET> generate-image \
-  --args '{"prompt":"sunset"}' \
+  --args '{"prompt":"sunset over Solana"}' \
   --endpoint https://api.example.com/x402 \
   --retries 3 \
   --save out/call.json
@@ -31,36 +102,139 @@ synapse-sap x402 call <AGENT_WALLET> generate-image \
 
 | Flag | Description |
 |------|-------------|
-| `--args <json>` | Tool input payload |
-| `--endpoint <url>` | Override the agent declared endpoint |
-| `--retries <n>` | Retry on 5xx with exponential backoff |
+| `--args <json>` | Tool input payload (required) |
+| `--endpoint <url>` | Override the agent's declared endpoint |
+| `--retries <n>` | Retry on 5xx with exponential backoff (default: 3) |
+| `--timeout <ms>` | Request timeout (default: 30000) |
 | `--save <path>` | Persist the signed envelope for replay |
+| `--json` | Emit raw JSON for piping |
+| `--simulate` | Build headers only, don't send (dry run) |
+
+### Example Output
+
+```json
+{
+  "ok": true,
+  "command": "x402.call",
+  "data": {
+    "request": {
+      "tool": "generate-image",
+      "args": {"prompt": "sunset over Solana"},
+      "headers": {...}
+    },
+    "response": {
+      "status": 200,
+      "body": {"imageUrl": "https://..."},
+      "latencyMs": 842
+    },
+    "settlement": {
+      "signature": "5eykt4UuPvNb8...",
+      "amount": 100000,
+      "nonce": 42,
+      "confirmed": true
+    }
+  },
+  "elapsedMs": 1523
+}
+```
+
+---
 
 ## `x402 sign`
 
 Generate a payment signature with the current keypair, no network call.
 
 ```bash
-synapse-sap x402 sign --wallet <AGENT_WALLET> --amount 0.001
+synapse-sap x402 sign \
+  --wallet <AGENT_WALLET> \
+  --amount 100000 \
+  --nonce 42
 ```
 
-Useful when integrating with an external HTTP layer.
+| Flag | Description |
+|------|-------------|
+| `--wallet <pubkey>` | Agent wallet (payment recipient) |
+| `--amount <lamports>` | Payment amount |
+| `--nonce <n>` | Payment nonce (must be unique per escrow) |
+| `--escrow <pda>` | Escrow PDA (optional, auto-derived) |
+
+Useful when integrating with an external HTTP layer or custom client.
+
+---
 
 ## `x402 verify <signature>`
 
 Verify a settlement transaction is on-chain and matches the expected payer, agent, amount, and call counter.
 
 ```bash
-synapse-sap x402 verify 5eykt4Uu...
+synapse-sap x402 verify 5eykt4UuPvNb8...
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Machine output |
+| `--verbose` | Print full transaction details |
+
+### Example Output
+
+```json
+{
+  "ok": true,
+  "verified": true,
+  "details": {
+    "signature": "5eykt4UuPvNb8...",
+    "payer": "5xKjRvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+    "agent": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+    "amount": 100000,
+    "nonce": 42,
+    "escrow": "EscrowPDA...",
+    "blockTime": "2026-06-20T17:30:00Z",
+    "confirmations": 32
+  }
+}
+```
+
+---
 
 ## `x402 settle <wallet>`
 
-Agent side settlement. Run this from the merchant agent to claim accumulated calls.
+**Agent-side command:** Settle accumulated calls and claim payment from an escrow.
 
 ```bash
-synapse-sap x402 settle <PAYER_WALLET> --calls 12 --service my-tool
+synapse-sap x402 settle <DEPOSITOR_WALLET> \
+  --calls 12 \
+  --service jupiter-swap \
+  --simulate
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--calls <n>` | Number of calls to settle (required) |
+| `--service <name>` | Tool/service name (for attribution) |
+| `--simulate` | Dry run (recommended first) |
+| `--json` | Machine output |
+| `--batch` | Settle multiple depositors in one TX |
+
+<Callout type="info">
+**Agent-only:** This command must be run by the agent (merchant) wallet that owns the receiving escrow.
+</Callout>
+
+### Batch Settlement
+
+```bash
+synapse-sap x402 settle \
+  --batch \
+  --batch-file settlements.json
+```
+
+```json title="settlements.json"
+[
+  {"depositor": "5xKj...", "calls": 12, "service": "jupiter-swap"},
+  {"depositor": "7mR2...", "calls": 8, "service": "kamino-lend"}
+]
+```
+
+---
 
 ## `x402 replay <artifact>`
 
@@ -70,4 +244,116 @@ Reproduce a saved x402 call deterministically.
 synapse-sap x402 replay out/call.json
 ```
 
+| Flag | Description |
+|------|-------------|
+| `--simulate` | Build and sign, but don't send (default for replay) |
+| `--send` | Actually send the request (will pay again) |
+| `--compare` | Compare original response with replay response |
+
 Replay is the fastest way to reproduce a bug without paying twice. Combine with `--simulate` to skip the actual settlement.
+
+### Compare Mode
+
+```bash
+synapse-sap x402 replay out/call.json --compare
+```
+
+```
+Original Response:
+  Status: 200
+  Latency: 842ms
+  Body: {"imageUrl": "..."}
+
+Replay Response:
+  Status: 200
+  Latency: 798ms
+  Body: {"imageUrl": "..."}
+
+✅ Responses match
+```
+
+---
+
+## `x402 history`
+
+List recent x402 calls from local artifacts.
+
+```bash
+synapse-sap x402 history --dir out/
+synapse-sap x402 history --dir out/ --agent <WALLET>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--dir <path>` | Directory containing saved call artifacts |
+| `--agent <wallet>` | Filter by agent wallet |
+| `--since <date>` | Filter by date (RFC 3339) |
+| `--json` | Machine output |
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Validation failed (missing args, invalid JSON) |
+| `2` | RPC error (timeout, 5xx, unreachable) |
+| `3` | On-chain failure (settlement transaction failed) |
+| `4` | Escrow not found or insufficient balance |
+| `5` | Agent endpoint unreachable |
+| `6` | Invalid payment signature |
+
+---
+
+## Common Errors
+
+### Insufficient Escrow Balance
+
+```
+Error: EscrowInsufficientBalance (6010)
+Escrow balance (0.05 SOL) < required (0.1 SOL)
+```
+
+**Fix:** Deposit more funds with `escrow deposit`.
+
+### Invalid Payment Signature
+
+```
+Error: InvalidPaymentSignature
+Payment signature does not match expected payer/agent/amount.
+```
+
+**Fix:** Regenerate headers with `x402 headers`. Ensure nonce is unique.
+
+### Agent Endpoint Unreachable
+
+```
+Error: AgentEndpointUnreachable
+POST https://api.agent.dev/x402 failed: ECONNREFUSED
+```
+
+**Fix:** Check agent health with `agent health <wallet>`. Verify endpoint URL.
+
+### Nonce Collision
+
+```
+Error: NonceAlreadyUsed (6012)
+Nonce 42 was already used in settlement TX 5eykt4Uu...
+```
+
+**Fix:** Use a new nonce (auto-incremented by default).
+
+---
+
+## Next Steps
+
+- **[Escrow](/docs/cli/escrow)** — Manage escrow accounts
+- **[Payments](/docs/core/payments)** — Escrow V2 architecture
+- **[Agent](/docs/cli/agent)** — Agent-side settlement
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3  
+**x402 Protocol:** v1.0

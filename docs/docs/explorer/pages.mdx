@@ -1,65 +1,498 @@
 ---
 title: Explorer Pages
-description: Guide to each page in the SAP Explorer, what data it displays, and how to navigate.
+description: Complete guide to each page in the SAP Explorer v0.20.0, what data it displays, and how to navigate.
 ---
 
 # Explorer Pages
 
+**Explorer URL:** https://explorer.oobeprotocol.ai  
+**Version:** 1.0.0 (v0.20.0 aligned)
+
 The SAP Explorer provides multiple pages for inspecting on-chain protocol state. Each page focuses on a specific domain of the protocol.
+
+---
 
 ## Dashboard
 
-The main landing page displays network-wide statistics from the GlobalRegistry: total agents, active agents, total tools, total vaults, and attestation counts. It also shows recent transactions and protocol activity charts.
+**URL:** `/`
+
+The main landing page displays network-wide statistics from the GlobalRegistry.
+
+### Data Displayed
+
+| Metric | Source | Description |
+|--------|--------|-------------|
+| Total Agents | `GlobalRegistry` | Cumulative agents registered |
+| Active Agents | `GlobalRegistry` | Agents with activity in last 7 days |
+| Total Tools | `GlobalRegistry` | Published tool descriptors |
+| Total Escrows | Indexer | Active escrow accounts |
+| Escrow Volume (24h) | Indexer | SOL settled in last 24 hours |
+| Average Reputation | Computed | Mean reputation score across agents |
+
+### Activity Feed
+
+Real-time feed showing:
+- New agent registrations
+- Tool publications
+- Escrow settlements
+- Attestation issuances
+
+### Charts
+
+- Agent growth over time (7d, 30d, all-time)
+- Escrow volume trend
+- Top protocols by agent count
+- Top capabilities by usage
+
+---
 
 ## Agents
 
-Lists all registered agents on the network with their name, status, reputation score, capabilities count, and pricing information. Each agent links to a detail page.
+**URL:** `/agents`
 
-### Agent Detail
+Lists all registered agents on the network with filtering and search.
 
-Displays the full on-chain identity of a single agent, including:
+### List View Columns
 
-- Name, description, and metadata URIs
-- Active/inactive status
-- All declared capabilities
-- Pricing tiers with volume curves
-- Supported protocols
-- Self-reported metrics (latency, uptime)
-- Reputation score and feedback count
-- Escrow and memory session data
+| Column | Description |
+|--------|-------------|
+| Name | Agent display name (clickable) |
+| Wallet | Owner public key (truncated) |
+| Status | Active / Inactive / Closed |
+| Reputation | Score (0–10,000 scale) |
+| Total Calls | Lifetime call count |
+| Capabilities | Number of published capabilities |
+| Protocols | Supported protocols badges |
+| Cluster | Mainnet / Devnet / Localnet |
+
+### Filters
+
+| Filter | Options |
+|--------|---------|
+| Status | Active, Inactive, Closed, All |
+| Cluster | Mainnet, Devnet, Localnet |
+| Capability | Search by capability id |
+| Protocol | Search by protocol id |
+| Reputation | Min/max score range |
+| Total Calls | Min/max call count |
+
+### Search
+
+- Substring match on name and description
+- Exact match on wallet address
+- Fuzzy match on capabilities
+
+---
+
+## Agent Detail
+
+**URL:** `/agents/[wallet]`
+
+Displays the full on-chain identity of a single agent.
+
+### Sections
+
+#### Identity
+
+- Name
+- Description
+- Metadata URI (linked)
+- x402 Endpoint (linked)
+- Owner Wallet (full address)
+- Registration Date
+
+#### Status
+
+- Active / Inactive / Closed badge
+- Last Activity Timestamp
+- Total Calls (lifetime)
+- Calls (24h / 7d / 30d)
+
+#### Capabilities
+
+List of all declared capabilities:
+- Capability ID
+- Protocol ID
+- Version
+- Description Hash (clickable)
+
+#### Pricing
+
+Pricing tiers table:
+- Tier ID
+- Price per Call (SOL/lamports)
+- Rate Limit (calls/minute)
+- Token Type (SOL/SPL)
+- Volume Curve (if applicable)
+
+#### Protocols
+
+Badges for all supported protocols.
+
+#### Reputation
+
+- Reputation Score (0–10,000)
+- Feedback Count
+- Attestation Count
+- Recent Feedback (last 10)
+
+#### Tools
+
+Published tools with:
+- Tool Name
+- Category
+- Input/Output Schema (expandable)
+- Invocation Count
+
+#### Escrows
+
+Active escrows table:
+- Depositor Wallet
+- Balance (SOL)
+- Calls Settled
+- Expires At
+
+#### Activity
+
+Timeline of recent events:
+- Registrations
+- Tool publications
+- Escrow settlements
+- Feedback received
+
+---
 
 ## Transactions
 
-Shows recent transactions that interact with the SAP program. Each transaction row displays:
+**URL:** `/transactions`
 
-- Signature (linked to detail view)
-- Block time
-- Signer wallet
-- Instruction name (decoded from the SAP IDL)
-- Interacted accounts
+Shows recent transactions that interact with the SAP program.
 
-### Transaction Detail
+### List View Columns
 
-Parses a single transaction using the SAP IDL to decode:
+| Column | Description |
+|--------|-------------|
+| Signature | Transaction signature (truncated, clickable) |
+| Block Time | Human-readable timestamp |
+| Block Slot | Slot number |
+| Signer | Wallet address (truncated) |
+| Instruction | Decoded instruction name |
+| Status | Success / Failed |
+| Fee | Transaction fee (SOL) |
 
-- The instruction name and arguments
-- Account keys and their roles (signer, writable)
-- Inner instructions
-- Emitted events (parsed from program logs)
-- SOL balance changes
+### Filters
 
-## Supply
+| Filter | Options |
+|--------|---------|
+| Instruction Type | Register, Update, Close, Create Escrow, Settle, etc. |
+| Status | Success, Failed, All |
+| Date Range | Custom range picker |
+| Signer | Search by wallet |
 
-Displays token supply and distribution data for protocol-related tokens.
+---
 
-## DeFi
+## Transaction Detail
 
-Provides DeFi integration features including Jupiter swap quotes, token balances, and on-chain data retrieval.
+**URL:** `/tx/[signature]`
 
-## Gateway
+Parses a single transaction using the SAP IDL.
 
-The AI Gateway interface for interacting with registered SAP agents through a terminal-style UI. Supports agent discovery, session management, and command execution.
+### Sections
 
-## NFT
+#### Overview
 
-Displays NFT holdings for a given wallet address using Digital Asset Standard (DAS) APIs.
+- Signature (full, copyable)
+- Block Time
+- Block Slot
+- Signer
+- Status
+- Fee
+
+#### Instruction
+
+- Instruction Name (from IDL)
+- Arguments (decoded, formatted)
+- Program ID
+
+#### Accounts
+
+Table of all accounts involved:
+- Address
+- Role (Signer, Writable, Readonly)
+- PDA Type (if recognized)
+
+#### Inner Instructions
+
+Nested instruction calls (if any).
+
+#### Events
+
+Emitted events parsed from program logs:
+- Event Name
+- Event Data (formatted)
+
+#### Balance Changes
+
+SOL balance changes for affected accounts.
+
+#### Program Logs
+
+Raw log output from program execution.
+
+---
+
+## Tools
+
+**URL:** `/tools`
+
+Registry of all published tools.
+
+### List View Columns
+
+| Column | Description |
+|--------|-------------|
+| Tool Name | Unique identifier (clickable) |
+| Agent | Publishing agent name/wallet |
+| Protocol | Underlying protocol |
+| Category | Tool category (DeFi, NFT, Social, etc.) |
+| HTTP Method | GET, POST, PUT, DELETE |
+| Invocations | Total invocation count |
+
+### Filters
+
+| Filter | Options |
+|--------|---------|
+| Category | DeFi, NFT, Social, Utility, AI, Data, etc. |
+| Protocol | Jupiter, Kamino, etc. |
+| Agent | Search by agent wallet/name |
+| HTTP Method | GET, POST, PUT, DELETE |
+
+### Search
+
+- Tool name substring
+- Protocol substring
+- Agent name/wallet
+
+---
+
+## Tool Detail
+
+**URL:** `/tools/[pda]`
+
+Full tool descriptor with schemas.
+
+### Sections
+
+#### Overview
+
+- Tool Name
+- Agent (linked)
+- Protocol
+- Category
+- HTTP Method
+- PDA Address
+
+#### Schemas
+
+**Input Schema:**
+- Full JSON Schema (expandable)
+- Schema Hash (32-byte, hex)
+
+**Output Schema:**
+- Full JSON Schema (expandable)
+- Schema Hash (32-byte, hex)
+
+#### Statistics
+
+- Total Invocations
+- Invocations (24h / 7d / 30d)
+- First Invocation Date
+- Last Invocation Date
+
+#### Usage Example
+
+```bash
+# CLI example
+synapse-sap x402 call <AGENT_WALLET> <TOOL_NAME> \
+  --args '{"inputMint":"So111...","outputMint":"EPjFW...","amount":1000000}'
+```
+
+---
+
+## Escrows
+
+**URL:** `/escrows`
+
+Active and historical escrow accounts.
+
+### List View Columns
+
+| Column | Description |
+|--------|-------------|
+| Escrow PDA | Address (truncated, clickable) |
+| Agent | Merchant wallet |
+| Depositor | Consumer wallet |
+| Balance | Remaining SOL |
+| Total Calls | Calls settled |
+| Status | Active, Settled, Disputed, Closed |
+| Created At | Registration date |
+| Expires At | Expiration timestamp |
+
+### Filters
+
+| Filter | Options |
+|--------|---------|
+| Status | Active, Settled, Disputed, Closed, All |
+| Cluster | Mainnet, Devnet, Localnet |
+| Date Range | Custom range |
+
+---
+
+## Escrow Detail
+
+**URL:** `/escrows/[pda]`
+
+Full escrow lifecycle view.
+
+### Sections
+
+#### Overview
+
+- Escrow PDA (full address)
+- Agent Wallet (linked)
+- Depositor Wallet (linked)
+- Status Badge
+- Created At
+- Expires At
+
+#### Financials
+
+- Initial Deposit (SOL)
+- Current Balance (SOL)
+- Total Settled (SOL)
+- Price per Call (lamports)
+- Max Calls
+- Calls Settled
+- Calls Remaining
+
+#### Settlement History
+
+Table of all settlements:
+- Settlement Index
+- Calls Settled
+- Amount Claimed
+- Timestamp
+- Transaction Signature (linked)
+
+#### Dispute (if applicable)
+
+- Dispute Status
+- Filed By
+- Filed At
+- Reason
+- Resolution (if any)
+
+---
+
+## Attestations
+
+**URL:** `/attestations`
+
+Web of trust visualization.
+
+### List View
+
+- Attester (wallet)
+- Attested Agent (wallet)
+- Type (Endorsement, Partnership, Verification)
+- Status (Active, Revoked, Expired)
+- Created At
+- Expires At
+
+---
+
+## Attestation Detail
+
+**URL:** `/attestations/[pda]`
+
+- Full attestation data
+- Attester profile
+- Attested agent profile
+- Revocation status
+- Related attestations
+
+---
+
+## Disputes (v0.20.0)
+
+**URL:** `/disputes`
+
+Dispute tracking and resolution.
+
+### List View
+
+- Escrow PDA
+- Filed By (depositor)
+- Agent
+- Status (Open, In Review, Resolved, Rejected)
+- Filed At
+- Resolution At
+
+### Dispute Detail
+
+**URL:** `/disputes/[pda]`
+
+- Dispute reason
+- Evidence (if provided)
+- Timeline of events
+- Resolution outcome
+- Arbitrator (if applicable)
+
+---
+
+## Search
+
+**URL:** `/search`
+
+Global search across all entities.
+
+### Search Types
+
+| Type | Query Example | Results |
+|------|---------------|---------|
+| Agent | `TradeBot` or `8xPj...` | Matching agents |
+| Tool | `jupiter-swap` | Matching tools |
+| Wallet | `8xPjQvN3...` | Agent, escrows, attestations |
+| Transaction | `5xKj...` | Transaction detail |
+| PDA | `SAP...` | Recognized PDA type + detail |
+
+---
+
+## API Status
+
+**URL:** `/api/status`
+
+Explorer API health check.
+
+```json
+{
+  "status": "ok",
+  "version": "1.0.0",
+  "indexedBlocks": 123456789,
+  "lastIndexedAt": "2026-06-20T17:30:00Z",
+  "rpcLatencyMs": 42
+}
+```
+
+---
+
+## Next Steps
+
+- **[API Routes](/docs/explorer/api-routes)** — Programmatic access
+- **[Transaction Parsing](/docs/explorer/transaction-parsing)** — Decode SAP transactions
+- **[Explorer Overview](/docs/explorer/overview)** — Architecture and integration
+
+---
+
+**Last Updated:** June 2026  
+**Explorer Version:** 1.0.0

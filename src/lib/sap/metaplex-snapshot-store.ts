@@ -19,6 +19,7 @@
 
 import {
   selectAgentMetaplex,
+  selectAgentMetaplexBatch,
   upsertAgentMetaplex,
 } from '~/lib/db/queries';
 import { getMetaplexLinkSnapshot, getMetaplexAssetsForWallet } from '~/lib/sap/metaplex-link';
@@ -47,8 +48,22 @@ const HARD_TTL_MS = 30 * 60_000;    // beyond this, block on refresh
  */
 const EMPTY_SIGNAL_HARD_TTL_MS = 60_000;
 const EMPTY_SIGNAL_STALE_MS = 15_000;
+const BATCH_REFRESH_CONCURRENCY = 6;
 
 const inflight = new Map<string, Promise<void>>();
+
+async function refreshWallets(wallets: string[]): Promise<void> {
+  let cursor = 0;
+  const unique = Array.from(new Set(wallets.filter(Boolean)));
+  const workers = Array.from({ length: Math.min(BATCH_REFRESH_CONCURRENCY, unique.length) }, async () => {
+    for (;;) {
+      const wallet = unique[cursor++];
+      if (!wallet) return;
+      await resolveAndPersist(wallet);
+    }
+  });
+  await Promise.all(workers);
+}
 
 async function resolveAndPersist(wallet: string): Promise<void> {
   if (inflight.has(wallet)) return inflight.get(wallet)!;
@@ -155,18 +170,45 @@ export async function getCachedAgentMetaplex(
 }
 
 /**
- * Batch variant — resolves N wallets concurrently. Stale rows are served
- * fast; cold rows block. Background refreshes are deduped via `inflight`.
+ * Batch variant for listing pages. Never blocks cold wallets: cached/stale rows
+ * are served immediately and missing/stale wallets refresh in the background.
  */
 export async function getCachedAgentMetaplexBatch(
   wallets: string[],
 ): Promise<Map<string, AgentMetaplexBadge | null>> {
   const out = new Map<string, AgentMetaplexBadge | null>();
-  await Promise.all(
-    wallets.map(async (w) => {
-      out.set(w, await getCachedAgentMetaplex(w));
-    }),
-  );
+  const unique = Array.from(new Set(wallets.filter(Boolean)));
+  if (unique.length === 0) return out;
+
+  const rows = await selectAgentMetaplexBatch(unique).catch(() => []);
+  const byWallet = new Map(rows.map((row) => [row.wallet, row]));
+  const now = Date.now();
+  const refresh: string[] = [];
+
+  for (const wallet of unique) {
+    const row = byWallet.get(wallet);
+    if (!row) {
+      out.set(wallet, null);
+      refresh.push(wallet);
+      continue;
+    }
+
+    out.set(wallet, {
+      asset: row.asset,
+      linked: row.linked,
+      pluginCount: row.pluginCount,
+      registryCount: row.registryCount,
+    });
+
+    const age = now - new Date(row.refreshedAt).getTime();
+    const isEmpty = !row.linked && row.pluginCount === 0 && row.registryCount === 0;
+    const staleAt = isEmpty ? EMPTY_SIGNAL_STALE_MS : STALE_MS;
+    if (age > staleAt) refresh.push(wallet);
+  }
+
+  if (refresh.length > 0) {
+    void refreshWallets(refresh).catch(() => undefined);
+  }
   return out;
 }
 

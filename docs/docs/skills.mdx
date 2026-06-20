@@ -1,103 +1,264 @@
 ---
-title: Agent Skills
-description: Top level navigation manifest for autonomous agents working with the Synapse Agent Protocol. Maps tasks to the right reference doc across CLI, SDK, and Core.
+title: Agent Skills — Hermes Agent
+description: Complete reference for autonomous agents using SAP SDK v0.20.0 via Hermes Agent skills. Task-to-skill mapping, installation, and usage patterns.
 ---
 
-# Agent Skills
+# Agent Skills (Hermes Agent)
 
-This page is the **single entry point** for autonomous agents. It tells an LLM where to read, what tool to use, and which reference doc is authoritative for any SAP task.
+This page is the **single entry point** for autonomous agents using Hermes Agent with the Synapse Agent Protocol. It maps tasks to the correct Hermes skill, provides installation instructions, and links to authoritative references.
 
-Humans should start at the [docs home](/docs).
+**Humans:** Start at the [docs home](/docs).  
+**Agents:** Use this page to locate the correct skill for any SAP task.
 
-## How to use this page
+---
 
-1. Identify the **task family** below.
-2. Pick the **interface** (CLI, SDK, or HTTP).
-3. Open the **reference doc** linked in the row before generating code.
+## Installation
 
-Never guess a flag, an import, or a PDA seed. The reference docs contain every supported value, and every value not in the docs is unsupported.
+### Install All SAP Skills
 
-## Task to reference map
+```bash
+# Via npx (recommended)
+npx @oobe-protocol-labs/synapse-sap-sdk@0.20.0 skills install
 
-### Identity and registration
+# Or install individually
+npx skills add sap-client
+npx skills add sap-merchant
+npx skills add sap-memory
+npx skills add sap-metaplex
+npx skills add sap-overview
+npx skills add sap-wizard-commands
+```
 
-| Task | CLI | SDK | Reference |
-|------|-----|-----|-----------|
-| Register an agent | [agent register](/docs/cli/agent) | `client.agent.register({...})` | [Core: agent lifecycle](/docs/core/agent-lifecycle), [SDK: agent builder](/docs/sdk/agent-builder) |
-| Inspect an agent | [agent info](/docs/cli/agent) | `client.agent.fetch(wallet)` | [Core: on-chain reference](/docs/core/on-chain-reference) |
-| Resolve identifier to wallet | not exposed | `client.agent.resolve(id)` | [SDK: agent builder](/docs/sdk/agent-builder) |
+### Manual Installation
 
-### Memory
+Skills are stored in `~/.hermes/profiles/<profile>/skills/software-development/`:
 
-| Task | CLI | SDK | Reference |
-|------|-----|-----|-----------|
-| Start a memory session | not exposed | `client.session.start(id)` | [Core: memory systems](/docs/core/memory-systems), [SDK: session manager](/docs/sdk/session-manager) |
-| Write to ring buffer | not exposed | `client.session.write(s, data)` | [SDK: session manager](/docs/sdk/session-manager) |
-| Encrypted vault | not exposed | `client.vault.put(...)` | [Core: memory systems](/docs/core/memory-systems) |
+```bash
+# Clone skills directly
+git clone https://github.com/OOBE-PROTOCOL/synapse-sap-sdk.git
+cp -r synapse-sap-sdk/hermes-skills/* ~/.hermes/profiles/qwen-cloud/skills/software-development/
+```
 
-### Payments and escrow
+### Verify Installation
 
-| Task | CLI | SDK | Reference |
-|------|-----|-----|-----------|
-| Open an escrow | [escrow open](/docs/cli/escrow) | `client.escrow.open({...})` | [Core: payments](/docs/core/payments), [SDK: escrow API](/docs/sdk/escrow-api) |
-| Make a paid x402 call | [x402 call](/docs/cli/x402) | `client.x402.call({...})` | [SDK: escrow API](/docs/sdk/escrow-api) |
-| Settle on the merchant side | [x402 settle](/docs/cli/x402) | `client.x402.settle({...})` | [SDK: escrow API](/docs/sdk/escrow-api) |
-| Verify a settlement | [x402 verify](/docs/cli/x402) | `client.x402.verify(sig)` | [SDK: escrow API](/docs/sdk/escrow-api) |
+```bash
+# List installed SAP skills
+hermes skills list | grep sap
 
-### Discovery
+# Expected output:
+# sap-client      — Core client operations
+# sap-merchant    — Merchant/agent registration
+# sap-memory      — Vault and memory operations
+# sap-metaplex    — Metaplex Core bridge
+# sap-overview    — Master reference (v0.20.0)
+# sap-wizard-commands — Agent creation wizard
+```
 
-| Task | CLI | SDK | Reference |
-|------|-----|-----|-----------|
-| Scan the network | [discovery scan](/docs/cli/discovery) | `client.discovery.scan({...})` | [Core: discovery](/docs/core/discovery) |
-| Validate endpoints | [discovery validate](/docs/cli/discovery) | `client.discovery.validate({...})` | [SDK: endpoint validation](/docs/sdk/endpoint-validation) |
+---
 
-### Tools and manifests
+## Available Skills (v0.20.0)
 
-| Task | CLI | SDK | Reference |
-|------|-----|-----|-----------|
-| Publish a tool | [tools publish](/docs/cli/tools) | `client.tools.publish({...})` | [Core: tools and schemas](/docs/core/tools-schemas), [SDK: zod schemas](/docs/sdk/zod-schemas) |
-| Generate TS types from manifest | [tools typify](/docs/cli/tools) | `client.tools.typify(manifest)` | [SDK: plugin adapter](/docs/sdk/plugin-adapter) |
+| Skill | Description | Triggers |
+|-------|-------------|----------|
+| **sap-client** | Core SapClient operations, connection management, RPC handling | `sap client`, `sap connection`, `sap rpc` |
+| **sap-merchant** | Agent registration, staking, merchant status, lifecycle | `sap merchant`, `sap agent register`, `sap stake` |
+| **sap-memory** | Vault lifecycle, session management, encrypted memory inscription | `sap memory`, `sap vault`, `sap session` |
+| **sap-metaplex** | Metaplex Core bridge, AgentIdentity plugin, EIP-8004 registration | `sap metaplex`, `sap mpl`, `sap nft` |
+| **sap-overview** | Master reference: 8 modules, 4 registries, 17 PDAs, 38 events | `sap overview`, `sap architecture` |
+| **sap-wizard-commands** | Complete wizard commands for agent creation pipeline | `sap wizard`, `sap create agent` |
 
-### Reputation
+---
 
-| Task | CLI | SDK | Reference |
-|------|-----|-----|-----------|
-| Submit feedback | not exposed | `client.feedback.submit({...})` | [Core: feedback and attestations](/docs/core/feedback-attestations) |
-| Issue an attestation | not exposed | `client.attestation.issue({...})` | [Core: feedback and attestations](/docs/core/feedback-attestations) |
+## Task-to-Skill Mapping
 
-### Diagnostics
+### Identity & Registration
 
-| Task | CLI | SDK | Reference |
-|------|-----|-----|-----------|
-| Health check the environment | [doctor run](/docs/cli/doctor) | manual | [CLI: doctor](/docs/cli/doctor) |
-| Troubleshoot a failure | always | always | [Best practices: troubleshooting](/docs/best-practices/troubleshooting) |
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Register new agent | `sap-merchant` | `client.agent.registerAgent()` | [Core: Agent Lifecycle](/docs/core/agent-lifecycle) |
+| Update agent metadata | `sap-merchant` | `client.agent.updateAgent()` | [SDK: Agent Builder](/docs/sdk/agent-builder) |
+| Close agent account | `sap-merchant` | `client.agent.closeAgent()` | [Core: On-Chain Reference](/docs/core/on-chain-reference) |
+| Resolve agent ID to wallet | `sap-client` | `client.agent.resolve(id)` | [SDK: Agent Builder](/docs/sdk/agent-builder) |
+| Fetch agent account | `sap-client` | `client.agent.fetch(wallet)` | [SDK: Client Setup](/docs/sdk/client-setup) |
 
-## Authoritative references
+### Staking & Merchant Status
 
-When in doubt, these are the canonical sources. Always read the linked doc before generating code.
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Initialize stake | `sap-merchant` | `client.staking.initStake()` | [Core: Payments](/docs/core/payments) |
+| Deposit stake | `sap-merchant` | `client.staking.depositStake()` | [SDK: Escrow API](/docs/sdk/escrow-api) |
+| Request unstake | `sap-merchant` | `client.staking.requestUnstake()` | [Core: Payments](/docs/core/payments) |
+| Complete unstake | `sap-merchant` | `client.staking.completeUnstake()` | [SDK: Escrow API](/docs/sdk/escrow-api) |
+| Check merchant status | `sap-merchant` | `client.accounts.parseAgentStake()` | [Core: On-Chain Reference](/docs/core/on-chain-reference) |
 
-| Reference | Scope |
-|-----------|-------|
-| [Core architecture](/docs/core/architecture) | On-chain program model, PDAs, accounts |
-| [Core: on-chain reference](/docs/core/on-chain-reference) | Full instruction and account list |
-| [SDK overview](/docs/sdk/overview) | TypeScript SDK surface area |
-| [SDK PDA reference](/docs/sdk/pda-reference) | Every PDA derivation, seeds first |
-| [SDK escrow API](/docs/sdk/escrow-api) | Escrow lifecycle, dispute, settlement |
-| [CLI overview](/docs/cli/overview) | Terminal interface |
-| [CLI skills](/docs/cli/skills) | Machine readable command manifest |
-| [Best practices](/docs/best-practices/rpc-network) | Production patterns |
+### Memory & Vault Operations
 
-## Operating constraints
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Initialize vault | `sap-memory` | `client.vault.initVault()` | [Core: Memory Systems](/docs/core/memory-systems) |
+| Create session | `sap-memory` | `client.session.createSession()` | [SDK: Session Manager](/docs/sdk/session-manager) |
+| Inscribe memory | `sap-memory` | `client.vault.inscribeMemory()` | [Core: Memory Systems](/docs/core/memory-systems) |
+| Write to ledger | `sap-memory` | `client.ledger.writeLedger()` | [SDK: Session Manager](/docs/sdk/session-manager) |
+| Add vault delegate | `sap-memory` | `client.vault.addVaultDelegate()` | [Core: Memory Systems](/docs/core/memory-systems) |
+| Rotate vault nonce | `sap-memory` | `client.vault.rotateVaultNonce()` | [SDK: Session Manager](/docs/sdk/session-manager) |
 
-1. **Mainnet first.** All addresses below are mainnet beta unless specified.
-2. **Program ID** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`.
-3. **Global registry** `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5`.
-4. **IDL account** `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f`.
-5. **PDA seeds** are stable and listed in [SDK PDA reference](/docs/sdk/pda-reference). Never derive a PDA from a hard coded value.
+### Tools & Capabilities
 
-## Hard rules
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Publish tool | `sap-wizard-commands` | `client.tools.publishTool()` | [Core: Tools & Schemas](/docs/core/tools-schemas) |
+| Inscribe tool schema | `sap-wizard-commands` | `client.tools.inscribeToolSchema()` | [SDK: Tool Schemas](/docs/sdk/tool-schemas) |
+| Generate TypeScript types | `sap-wizard-commands` | `client.tools.typify()` | [SDK: Plugin Adapter](/docs/sdk/plugin-adapter) |
+| Scan tool manifests | `sap-wizard-commands` | `client.tools.scanManifest()` | [CLI: Tools](/docs/cli/tools) |
 
-1. Never produce code that hard codes a private key, API key, or secret.
-2. Never call a state mutating instruction without first simulating the transaction.
-3. Never claim that a feature exists if it is not in the reference docs above.
-4. Always cite the reference doc in your reply, not just the command or function name.
+### Metaplex & NFT Integration
+
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Attach AgentIdentity | `sap-metaplex` | `client.metaplex.buildAttachAgentIdentityIx()` | [SDK: Metaplex Bridge](/docs/sdk/metaplex-bridge) |
+| Mint + attach (atomic) | `sap-metaplex` | `client.metaplex.buildMintAndAttachIxs()` | [SDK: Metaplex Bridge](/docs/sdk/metaplex-bridge) |
+| Build EIP-8004 JSON | `sap-metaplex` | `client.metaplex.buildEip8004Registration()` | [SDK: Metaplex Bridge](/docs/sdk/metaplex-bridge) |
+| Triple-check link audit | `sap-metaplex` | `client.metaplex.tripleCheckLink()` | [SDK: Metaplex Bridge](/docs/sdk/metaplex-bridge) |
+| Get unified profile | `sap-metaplex` | `client.metaplex.getUnifiedProfile()` | [SDK: Metaplex Bridge](/docs/sdk/metaplex-bridge) |
+
+### Discovery & Indexing
+
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Publish to registry | `sap-wizard-commands` | `client.discovery.publishToRegistry()` | [Core: Discovery](/docs/core/discovery) |
+| Find agents by capability | `sap-overview` | `client.discovery.findAgentsByCapability()` | [SDK: Overview](/docs/sdk/overview) |
+| Find agents by protocol | `sap-overview` | `client.discovery.findAgentsByProtocol()` | [Core: Discovery](/docs/core/discovery) |
+| Get agent profile | `sap-overview` | `client.discovery.getAgentProfile()` | [SDK: Endpoint Validation](/docs/sdk/endpoint-validation) |
+| Validate endpoint | `sap-overview` | `client.discovery.validateEndpoint()` | [SDK: Endpoint Validation](/docs/sdk/endpoint-validation) |
+
+### Escrow & Payments (x402)
+
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Create escrow V2 | `sap-wizard-commands` | `client.escrow.createEscrowV2()` | [Core: Payments](/docs/core/payments) |
+| Settle calls V2 | `sap-wizard-commands` | `client.escrow.settleCallsV2()` | [SDK: Escrow API](/docs/sdk/escrow-api) |
+| Finalize settlement | `sap-wizard-commands` | `client.escrow.finalizeSettlement()` | [SDK: Escrow API](/docs/sdk/escrow-api) |
+| Make x402 call | `sap-client` | `client.x402.call()` | [CLI: x402](/docs/cli/x402) |
+| Verify settlement | `sap-client` | `client.x402.verify()` | [SDK: Escrow API](/docs/sdk/escrow-api) |
+
+### Attestations & Reputation
+
+| Task | Skill | Method/Command | Reference |
+|------|-------|----------------|-----------|
+| Submit feedback | `sap-overview` | `client.feedback.submit()` | [Core: Feedback & Attestations](/docs/core/feedback-attestations) |
+| Issue attestation | `sap-overview` | `client.attestation.issue()` | [Core: Feedback & Attestations](/docs/core/feedback-attestations) |
+| Revoke attestation | `sap-overview` | `client.attestation.revoke()` | [Core: Feedback & Attestations](/docs/core/feedback-attestations) |
+| Get reputation score | `sap-overview` | `client.accounts.parseAgentStats()` | [Core: On-Chain Reference](/docs/core/on-chain-reference) |
+
+---
+
+## Authoritative References
+
+When in doubt, these are the canonical sources. **Always read the linked doc before generating code.**
+
+| Reference | Scope | Link |
+|-----------|-------|------|
+| [Core Architecture](/docs/core/architecture) | On-chain program model, PDAs, accounts | `/docs/core/architecture` |
+| [Core: On-Chain Reference](/docs/core/on-chain-reference) | Full instruction and account list | `/docs/core/on-chain-reference` |
+| [SDK Overview](/docs/sdk/overview) | TypeScript SDK surface area | `/docs/sdk/overview` |
+| [SDK PDA Reference](/docs/sdk/pda-reference) | Every PDA derivation, seeds first | `/docs/sdk/pda-reference` |
+| [SDK Escrow API](/docs/sdk/escrow-api) | Escrow lifecycle, dispute, settlement | `/docs/sdk/escrow-api` |
+| [CLI Overview](/docs/cli/overview) | Terminal interface, 40+ commands | `/docs/cli/overview` |
+| [Best Practices](/docs/best-practices/rpc-network) | Production patterns, RPC setup | `/docs/best-practices/rpc-network` |
+
+---
+
+## Operating Constraints
+
+1. **Mainnet First:** All addresses below are mainnet beta unless specified.
+2. **Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`
+3. **Global Registry:** `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5`
+4. **IDL Account:** `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f`
+5. **PDA Seeds:** Are stable and listed in [SDK PDA Reference](/docs/sdk/pda-reference). Never derive a PDA from a hard-coded value.
+6. **SDK Version:** Always use `^0.20.0`. Earlier versions have critical bugs.
+
+---
+
+## Hard Rules for Agents
+
+1. **Never hardcode secrets** — Never produce code that hardcodes a private key, API key, or secret.
+2. **Always simulate first** — Never call a state-mutating instruction without first simulating the transaction.
+3. **Docs are truth** — Never claim that a feature exists if it is not in the reference docs above.
+4. **Cite references** — Always cite the reference doc in your reply, not just the command or function name.
+5. **Version check** — Always verify SDK version compatibility before generating code.
+
+---
+
+## Example: Agent Bootstrap Flow
+
+```typescript
+// Trigger: User wants to create a new SAP agent
+// Skills required: sap-merchant, sap-memory, sap-metaplex, sap-wizard-commands
+
+import { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
+import { getAgentPDA, getVaultPDA, getAgentStakePDA } from '@oobe-protocol-labs/synapse-sap-sdk/pdas';
+
+const client = SapClient.from(provider);
+const ownerWallet = provider.wallet.publicKey;
+
+// Step 1: Derive PDAs
+const agent = getAgentPDA(ownerWallet)[0];
+const vault = getVaultPDA(agent)[0];
+const stake = getAgentStakePDA(ownerWallet)[0];
+
+// Step 2: Register agent (sap-merchant)
+await client.agent.registerAgent({
+  signer: ownerKeypair,
+  wallet: ownerWallet,
+  agent,
+  name: 'TradeBot',
+  endpointUri: 'https://myagent.dev/x402',
+  capabilities: [{ id: 'jupiter:swap', protocolId: 'jupiter' }],
+});
+
+// Step 3: Initialize stake (sap-merchant)
+await client.staking.initStake({
+  signer: ownerKeypair,
+  wallet: ownerWallet,
+  agent,
+  stake,
+  initialDeposit: new BN(1_000_000_000), // 1 SOL
+});
+
+// Step 4: Initialize vault (sap-memory)
+await client.vault.initVault({
+  signer: ownerKeypair,
+  wallet: ownerWallet,
+  agent,
+  vault,
+  vaultNonce: Array.from(crypto.randomBytes(32)),
+});
+
+// Step 5: Attach Metaplex NFT (sap-metaplex)
+const attachIx = await client.metaplex.buildAttachAgentIdentityIx({
+  asset: new PublicKey(assetId),
+  authority: ownerWallet,
+  sapAgentOwner: ownerWallet,
+  registrationBaseUrl: 'https://explorer.oobeprotocol.ai',
+  rpcUrl: process.env.RPC_URL!,
+});
+
+// Step 6: Publish to discovery (sap-wizard-commands)
+await client.discovery.publishToRegistry({
+  signer: ownerKeypair,
+  wallet: ownerWallet,
+  agent,
+  capabilities: ['jupiter:swap'],
+  protocols: ['jupiter'],
+});
+```
+
+**References:**
+- [Core: Agent Lifecycle](/docs/core/agent-lifecycle)
+- [SDK: Metaplex Bridge](/docs/sdk/metaplex-bridge)
+- [Wizard Commands](/docs/skills#wizard-commands)
+
+---
+
+**Last Updated:** June 2026  
+**Skills Version:** 1.2.0 (SDK v0.20.0 aligned)

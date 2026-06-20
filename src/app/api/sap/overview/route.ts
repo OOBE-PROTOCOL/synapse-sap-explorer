@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { swr, peek } from '~/lib/cache';
+import { isDbDown, markDbDown } from '~/db';
 import type { DiscoveredAgent } from '~/lib/sap/discovery';
 import {
   getNetworkOverview,
@@ -32,7 +33,11 @@ import {
   getAgentSettlementMap,
   selectEscrowEvents,
 } from '~/lib/db/queries';
+import { withTimeout } from '~/lib/async-timeout';
 import type { SerializedDiscoveredAgent } from '~/types';
+
+const OVERVIEW_DB_TIMEOUT_MS = 1_500;
+const OVERVIEW_RPC_TIMEOUT_MS = 5_000;
 
 function serializeEscrow(e: { pda: { toBase58?: () => string }; account: Record<string, unknown> }) {
   return {
@@ -43,6 +48,16 @@ function serializeEscrow(e: { pda: { toBase58?: () => string }; account: Record<
 }
 
 async function fetchOverview() {
+  const dbTimed = <T>(factory: () => Promise<T>, label: string): Promise<T> => {
+    if (isDbDown()) return Promise.reject(new Error('db circuit breaker open'));
+    return withTimeout(factory(), OVERVIEW_DB_TIMEOUT_MS, label).catch((error) => {
+      markDbDown();
+      throw error;
+    });
+  };
+  const rpcTimed = <T>(factory: () => Promise<T>, label: string): Promise<T> =>
+    withTimeout(factory(), OVERVIEW_RPC_TIMEOUT_MS, label);
+
   const [
     overviewRes,
     aggRes,
@@ -56,17 +71,17 @@ async function fetchOverview() {
     eventsRes,
     settlementMapRes,
   ] = await Promise.allSettled([
-    getNetworkOverview(),
-    getEscrowAggregates(),
-    getAgentRevenueRanking(5),
-    findAllAgents(),
-    findAllTools(),
-    findAllEscrows(),
-    findAllAttestations(),
-    findAllFeedbacks(),
-    findAllVaults(),
-    selectEscrowEvents(undefined, 50),
-    getAgentSettlementMap(),
+    rpcTimed(() => getNetworkOverview(), 'overview network read'),
+    dbTimed(() => getEscrowAggregates(), 'overview escrow aggregates db read'),
+    dbTimed(() => getAgentRevenueRanking(5), 'overview agent revenue db read'),
+    rpcTimed(() => findAllAgents(), 'overview agents rpc read'),
+    rpcTimed(() => findAllTools(), 'overview tools rpc read'),
+    rpcTimed(() => findAllEscrows(), 'overview escrows rpc read'),
+    rpcTimed(() => findAllAttestations(), 'overview attestations rpc read'),
+    rpcTimed(() => findAllFeedbacks(), 'overview feedbacks rpc read'),
+    rpcTimed(() => findAllVaults(), 'overview vaults rpc read'),
+    dbTimed(() => selectEscrowEvents(undefined, 50), 'overview escrow events db read'),
+    dbTimed(() => getAgentSettlementMap(), 'overview settlement map db read'),
   ]);
 
   const overview = overviewRes.status === 'fulfilled' ? overviewRes.value : ({} as Parameters<typeof serializeOverview>[0]);

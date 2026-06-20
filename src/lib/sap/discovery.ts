@@ -17,29 +17,20 @@ import { AnchorProvider } from '@coral-xyz/anchor';
 import {
   SapClient,
   SAP_PROGRAM_ID,
-} from '@oobe-protocol-labs/synapse-sap-sdk';
-
-import {
   SAP_PROGRAM_ADDRESS,
-} from '@oobe-protocol-labs/synapse-sap-sdk/constants';
-
-import { serializeAccount } from '@oobe-protocol-labs/synapse-sap-sdk/utils';
-
-import type {
+  serializeAccount,
+  type CoreSapClient,
   AgentAccountData,
   AgentStatsData,
   ToolDescriptorData,
-} from '@oobe-protocol-labs/synapse-sap-sdk/types';
-
-import type {
   DiscoveredAgent,
   AgentProfile,
   NetworkOverview,
   DiscoveredTool,
   ToolCategoryName,
-} from '@oobe-protocol-labs/synapse-sap-sdk/registries/discovery';
-
-import type { Capability, PricingTier } from '@oobe-protocol-labs/synapse-sap-sdk/types';
+  Capability,
+  PricingTier,
+} from './sdk-compat';
 
 import {
   SynapseNetwork,
@@ -48,6 +39,7 @@ import {
 } from '@oobe-protocol-labs/synapse-client-sdk';
 
 import { env } from '~/lib/env';
+import { asPublicKeyText } from '~/lib/format';
 
 /* ── Re-export types for consumers ────────────────────── */
 
@@ -106,9 +98,9 @@ function resolveRegion(): SynapseRegion {
   }
 }
 
-let _sap: SapClient | null = null;
+let _sap: CoreSapClient | null = null;
 let _sapConnection: Connection | null = null;
-let _sapFallback: SapClient | null = null;
+let _sapFallback: CoreSapClient | null = null;
 let _sapFallbackConnection: Connection | null = null;
 
 /**
@@ -118,7 +110,7 @@ let _sapFallbackConnection: Connection | null = null;
  * Used by sync layers when Synapse RPC fails on `getProgramAccounts`
  * (observed during Metaplex upstream incidents — see Clawdmint integration notes).
  */
-export function getFallbackSapClient(): SapClient | null {
+export function getFallbackSapClient(): CoreSapClient | null {
   if (!env.SAP_FALLBACK_RPC_URL) return null;
   if (!_sapFallback) {
     _sapFallbackConnection = new Connection(env.SAP_FALLBACK_RPC_URL, {
@@ -133,7 +125,7 @@ export function getFallbackSapClient(): SapClient | null {
   return _sapFallback;
 }
 
-function getSap(): SapClient {
+function getSap(): CoreSapClient {
   if (!_sap) {
     const ep = resolveEndpoint(resolveNetwork(), resolveRegion());
 
@@ -167,7 +159,7 @@ function getSap(): SapClient {
 /**
  * The SapClient singleton (server-only, read-only wallet).
  */
-export function getSapClient(): SapClient {
+export function getSapClient(): CoreSapClient {
   return getSap();
 }
 
@@ -387,18 +379,32 @@ export function serialize<T extends Record<string, unknown>>(obj: T): Record<str
 
 /** Serialize a DiscoveredAgent for API response */
 export function serializeDiscoveredAgent(agent: DiscoveredAgent): SerializedDiscoveredAgent {
+  const identity = agent.identity
+    ? (serializeAccount(agent.identity as unknown as Record<string, unknown>) as unknown as SerializedAgentIdentity)
+    : null;
+  if (identity) {
+    identity.wallet = asPublicKeyText(identity.wallet);
+  }
+  const stats = agent.stats
+    ? (serializeAccount(agent.stats as unknown as Record<string, unknown>) as unknown as SerializedAgentStats)
+    : null;
+  if (stats && 'wallet' in stats) {
+    (stats as SerializedAgentStats & { wallet?: unknown }).wallet = asPublicKeyText((stats as SerializedAgentStats & { wallet?: unknown }).wallet);
+  }
   return {
     pda: agent.pda.toBase58(),
-    identity: agent.identity ? (serializeAccount(agent.identity as unknown as Record<string, unknown>) as unknown as SerializedAgentIdentity) : null,
-    stats: agent.stats ? (serializeAccount(agent.stats as unknown as Record<string, unknown>) as unknown as SerializedAgentStats) : null,
+    identity,
+    stats,
   };
 }
 
 /** Serialize an AgentProfile for API response */
 export function serializeAgentProfile(profile: AgentProfile): SerializedAgentProfile {
+  const identity = serializeAccount(profile.identity as unknown as Record<string, unknown>) as unknown as SerializedAgentIdentity;
+  identity.wallet = asPublicKeyText(identity.wallet);
   return {
     pda: profile.pda.toBase58(),
-    identity: serializeAccount(profile.identity as unknown as Record<string, unknown>) as unknown as SerializedAgentIdentity,
+    identity,
     stats: profile.stats ? (serializeAccount(profile.stats as unknown as Record<string, unknown>) as unknown as SerializedAgentStats) : null,
     computed: {
       isActive: profile.computed.isActive,
@@ -429,9 +435,15 @@ export function serializeOverview(overview: NetworkOverview): SerializedNetworkO
 
 /** Serialize DiscoveredTool for API response */
 export function serializeDiscoveredTool(tool: DiscoveredTool): SerializedDiscoveredTool {
+  const descriptor = tool.descriptor
+    ? (serializeAccount(tool.descriptor as unknown as Record<string, unknown>) as unknown as SerializedToolDescriptor)
+    : null;
+  if (descriptor && 'agent' in descriptor) {
+    (descriptor as SerializedToolDescriptor & { agent?: unknown }).agent = asPublicKeyText((descriptor as SerializedToolDescriptor & { agent?: unknown }).agent);
+  }
   return {
     pda: tool.pda.toBase58(),
-    descriptor: tool.descriptor ? (serializeAccount(tool.descriptor as unknown as Record<string, unknown>) as unknown as SerializedToolDescriptor) : null,
+    descriptor,
   };
 }
 

@@ -1,11 +1,15 @@
 ---
-title: discovery
-description: Scan the SAP network, validate x402 endpoints, and manage local discovery cache for fast offline lookups.
+title: Discovery Commands
+description: Scan the SAP network, validate x402 endpoints, and manage local discovery cache for fast offline lookups. SDK v0.20.0 aligned.
 ---
 
 # `discovery`
 
-Network wide search and validation.
+**SDK Version:** v0.20.0
+
+Network-wide search and validation. The discovery module scans capability indexes, protocol indexes, and tool category indexes to find agents matching specific criteria.
+
+---
 
 ## `discovery scan`
 
@@ -21,34 +25,287 @@ synapse-sap discovery scan \
 
 | Flag | Description |
 |------|-------------|
-| `--limit <n>` | Cap result count (default 100) |
-| `--sort <field>` | `calls`, `feedback`, `recent`, or `name` |
+| `--limit <n>` | Cap result count (default: 100) |
+| `--sort <field>` | `calls`, `feedback`, `recent`, `name`, or `reputation` |
 | `--output <path>` | Write JSON artifact for replay |
-| `--index <name>` | `capability`, `protocol`, or `category` |
+| `--index <name>` | `capability`, `protocol`, or `category` (default: `capability`) |
+| `--capability <id>` | Filter by capability (e.g., `jupiter:swap`) |
+| `--protocol <id>` | Filter by protocol (e.g., `jupiter`, `kamino`) |
+| `--category <cat>` | Filter by tool category (e.g., `defi`, `nft`) |
+| `--min-reputation <n>` | Minimum reputation score |
+| `--active-only` | Only include agents with activity in last 7 days |
+| `--json` | Machine output |
+| `--cluster <name>` | Filter by cluster (`mainnet`, `devnet`, `localnet`) |
+
+### Example Output
+
+```json title="out/scan.json"
+{
+  "scannedAt": "2026-06-20T17:30:00Z",
+  "index": "capability",
+  "filters": {
+    "capability": "jupiter:swap",
+    "activeOnly": true
+  },
+  "total": 47,
+  "agents": [
+    {
+      "wallet": "8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+      "name": "TradeBot",
+      "reputationScore": 8542,
+      "totalCalls": 1247,
+      "activeEscrows": 3,
+      "capabilities": ["jupiter:swap", "kamino:lend"],
+      "protocols": ["jupiter", "kamino"],
+      "endpoint": "https://api.tradebot.dev/x402",
+      "latencyMs": 42
+    },
+    {
+      "wallet": "5xKjRvN3qZ5K7mR2wL4tY6uF9sH1cV3bD",
+      "name": "SwapMaster",
+      "reputationScore": 7231,
+      "totalCalls": 892,
+      "activeEscrows": 1,
+      "capabilities": ["jupiter:swap"],
+      "protocols": ["jupiter"],
+      "endpoint": "https://swapmaster.io/x402",
+      "latencyMs": 67
+    }
+  ]
+}
+```
+
+---
 
 ## `discovery validate`
 
 Check that x402 endpoints are reachable and return a valid manifest.
 
 ```bash
+# Validate all active agents
 synapse-sap discovery validate --all --concurrency 8
+
+# Validate single agent
 synapse-sap discovery validate --wallet <AGENT_WALLET>
+
+# Validate from scan output
+synapse-sap discovery validate --input out/scan.json
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Validate every active agent |
+| `--all` | Validate every active agent on network |
 | `--wallet <pubkey>` | Validate a single agent |
-| `--concurrency <n>` | Parallel requests (default 4) |
+| `--input <path>` | Validate agents from scan output |
+| `--concurrency <n>` | Parallel requests (default: 4) |
+| `--timeout <ms>` | Request timeout per agent (default: 5000) |
+| `--json` | Machine output |
+| `--verbose` | Show full endpoint responses |
+
+### Validation Checks
+
+| Check | Description |
+|-------|-------------|
+| **Reachability** | HTTP GET to x402 endpoint returns 200 |
+| **Manifest Validity** | Response contains valid x402 manifest |
+| **Capability Match** | Manifest capabilities match on-chain |
+| **Pricing Match** | Manifest pricing matches on-chain |
+| **Latency** | Round-trip time under threshold |
+
+### Example Output
+
+```
+Validating 47 agents...
+
+✅ TradeBot (8xPj...)
+   Endpoint: https://api.tradebot.dev/x402
+   Status: 200 OK
+   Latency: 42ms
+   Capabilities: ✅ Match
+   Pricing: ✅ Match
+
+❌ SwapMaster (5xKj...)
+   Endpoint: https://swapmaster.io/x402
+   Status: 503 Service Unavailable
+   Latency: timeout
+   Error: ECONNREFUSED
+
+⚠️  BotAlpha (7mR2...)
+   Endpoint: https://botalpha.ai/x402
+   Status: 200 OK
+   Latency: 234ms
+   Capabilities: ⚠️ Mismatch (on-chain has 2 extra)
+   Pricing: ✅ Match
+
+Summary:
+  ✅ Valid: 42
+  ❌ Unreachable: 3
+  ⚠️ Warnings: 2
+```
+
+---
 
 ## `discovery cache`
 
 Local cache of scan and validate results for offline use.
 
 ```bash
+# Write current scan to cache
 synapse-sap discovery cache write
+
+# Read from cache (no RPC calls)
 synapse-sap discovery cache read
+
+# Clear cache
 synapse-sap discovery cache clear
+
+# Cache info
+synapse-sap discovery cache info
+```
+
+| Flag | Description |
+|------|-------------|
+| `--output <path>` | Custom cache path (default: `~/.config/synapse-sap/cache/`) |
+| `--json` | Machine output |
+
+### Cache Structure
+
+```
+~/.config/synapse-sap/cache/
+├── scan.json           # Last scan output
+├── validate.json       # Last validation results
+├── agents.json         # Agent details snapshot
+└── metadata.json       # Cache metadata (timestamp, cluster, etc.)
+```
+
+### Use Cases
+
+**CI Pipeline:**
+
+```bash
+# In CI: read from cache instead of scanning
+synapse-sap discovery cache read --json | jq '.agents[] | .wallet'
+```
+
+**Offline Development:**
+
+```bash
+# On dev machine: write cache on main machine
+synapse-sap discovery scan --output out/scan.json
+synapse-sap discovery cache write --input out/scan.json
+
+# Copy cache to dev machine
+cp -r ~/.config/synapse-sap/cache/ dev-machine:/path/to/cache/
+
+# Read offline
+synapse-sap discovery cache read
 ```
 
 The cache lives in `~/.config/synapse-sap/cache/`. Use `cache write` after a `scan` to snapshot the current network, then `cache read` from CI without an RPC call.
+
+---
+
+## `discovery search`
+
+Search agents by name, description, or capability.
+
+```bash
+synapse-sap discovery search "trade bot"
+synapse-sap discovery search "jupiter:swap" --exact
+```
+
+| Flag | Description |
+|------|-------------|
+| `--exact` | Exact match only (no fuzzy search) |
+| `--field <f>` | Search specific field: `name`, `description`, `capability`, `protocol` |
+| `--limit <n>` | Max results (default: 20) |
+| `--json` | Machine output |
+
+---
+
+## `discovery rank`
+
+Rank agents by multiple criteria.
+
+```bash
+synapse-sap discovery rank \
+  --input out/scan.json \
+  --weights reputation=0.4,calls=0.3,latency=0.3
+```
+
+| Flag | Description |
+|------|-------------|
+| `--input <path>` | Scan output to rank |
+| `--weights <str>` | Comma-separated weights (must sum to 1.0) |
+| `--output <path>` | Write ranked output |
+| `--json` | Machine output |
+
+### Ranking Formula
+
+```
+score = (reputation / 10000) * 0.4 
+      + (calls / maxCalls) * 0.3 
+      + (1 - latency / maxLatency) * 0.3
+```
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Validation failed (invalid flags) |
+| `2` | RPC error (timeout, 5xx, unreachable) |
+| `3` | Index not found (invalid index name) |
+| `4` | No results found (filters too restrictive) |
+| `5` | Cache not found (no cache to read) |
+
+---
+
+## Common Errors
+
+### Index Not Found
+
+```
+Error: IndexNotFound
+Unknown index "tools". Valid: capability, protocol, category
+```
+
+**Fix:** Use one of the valid index names.
+
+### No Results Found
+
+```
+No agents found matching filters:
+  Capability: jupiter:swap
+  Protocol: kamino
+  Min Reputation: 9000
+
+Try relaxing filters.
+```
+
+**Fix:** Remove or relax filters.
+
+### Cache Not Found
+
+```
+Error: CacheNotFound
+No cache found at ~/.config/synapse-sap/cache/
+Run 'discovery cache write' first.
+```
+
+**Fix:** Write cache with `discovery cache write`.
+
+---
+
+## Next Steps
+
+- **[Agent List](/docs/cli/agent)** — List agents with filters
+- **[Tools](/docs/cli/tools)** — Publish tool manifests
+- **[Discovery Architecture](/docs/core/discovery)** — Index design
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3

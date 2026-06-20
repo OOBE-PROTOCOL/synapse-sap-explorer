@@ -13,6 +13,10 @@ import { selectAllAgents, upsertAgents, getAgentSettlementMap } from '~/lib/db/q
 import { isDbDown, markDbDown } from '~/db';
 import { dbAgentToApi, apiAgentToDb } from '~/lib/db/mappers';
 import type { ApiAgent } from '~/types';
+import { withTimeout } from '~/lib/async-timeout';
+
+const AGENTS_DB_TIMEOUT_MS = 1_500;
+const AGENTS_SETTLEMENT_TIMEOUT_MS = 1_000;
 
 /** Fetch agents from RPC (source of truth), write to DB, return serialized */
 async function rpcFetchAgents(
@@ -42,7 +46,11 @@ async function rpcFetchAgents(
 
   // Merge settlement stats from escrows (data unification)
   try {
-    const settlementMap = await getAgentSettlementMap();
+    const settlementMap = await withTimeout(
+      getAgentSettlementMap(),
+      AGENTS_SETTLEMENT_TIMEOUT_MS,
+      'agents settlement enrichment',
+    );
     for (const agent of serialized) {
       const stats = settlementMap[agent.pda];
       if (stats) {
@@ -57,10 +65,11 @@ async function rpcFetchAgents(
     }
   } catch (e) { console.warn('[agents] settlement enrichment failed:', (e as Error).message); }
 
-  // Write to DB (non-blocking)
-  upsertAgents(serialized.map(apiAgentToDb)).catch((e) =>
-    console.warn('[agents] DB write failed:', (e as Error).message),
-  );
+  if (serialized.length > 0) {
+    upsertAgents(serialized.map(apiAgentToDb)).catch((e) =>
+      console.warn('[agents] DB write failed:', (e as Error).message),
+    );
+  }
 
   // Kick off Metaplex snapshot refresh for any new wallet (non-blocking).
   // The snapshot store dedups inflight refreshes per wallet.
@@ -96,7 +105,11 @@ export const GET = withSynapseError(async (req: Request) => {
 
   // ── Step 2: DB read (~10ms) — fast initial response ──
   if (!isDbDown()) try {
-    const dbRows = await selectAllAgents();
+    const dbRows = await withTimeout(
+      selectAllAgents(),
+      AGENTS_DB_TIMEOUT_MS,
+      'agents db read',
+    );
     if (dbRows.length > 0) {
       const mapped = dbRows.map(dbAgentToApi);
       let filtered = mapped;

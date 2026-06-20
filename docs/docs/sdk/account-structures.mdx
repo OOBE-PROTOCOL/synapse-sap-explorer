@@ -1,11 +1,15 @@
 ---
 title: Account Data Structures
-description: Field-by-field reference for all 22 on-chain account types returned by fetch() and fetchNullable().
+description: Field-by-field reference for all 22 on-chain account types returned by fetch() and fetchNullable(). SDK v0.20.0 aligned.
 ---
 
 # Account Data Structures
 
-All 22 on-chain account types with field-by-field reference. These interfaces are what `fetch()` and `fetchNullable()` return. Every field is `readonly` in the SDK types.
+**SDK Version:** v0.20.0
+
+All 22 on-chain account types with field-by-field reference. These interfaces are what `fetch()` and `fetchNullable()` return.
+
+---
 
 ## Core Accounts
 
@@ -39,7 +43,7 @@ Core agent identity PDA. Stores profile, reputation, pricing, and capabilities.
 
 ### AgentStatsData
 
-Lightweight hot-path metrics PDA. Separated from `AgentAccountData` to minimize compute cost of frequent counter updates.
+Lightweight hot-path metrics PDA. Separated from `AgentAccountData` to minimize compute cost.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -134,7 +138,7 @@ On-chain tool schema registry PDA.
 | `totalInvocations` | `BN` | Lifetime invocation counter |
 | `createdAt` | `BN` | Creation timestamp |
 | `updatedAt` | `BN` | Last update timestamp |
-| `previousVersion` | `PublicKey` | PDA of previous version (zero key if first) |
+| `previousVersion` | `PublicKey` | PDA of previous version |
 
 ---
 
@@ -205,21 +209,6 @@ Compact session index PDA within a MemoryVault.
 | `totalCheckpoints` | `number` | Checkpoint count |
 | `tipHash` | `number[]` | Latest inscription hash |
 
-### EpochPageData
-
-Per-epoch scan target within a session.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `bump` | `number` | PDA bump seed |
-| `session` | `PublicKey` | Parent session PDA |
-| `epochIndex` | `number` | Zero-based epoch index |
-| `startSequence` | `number` | First inscription sequence |
-| `inscriptionCount` | `number` | Inscriptions in epoch |
-| `totalBytes` | `number` | Bytes in epoch |
-| `firstTs` | `BN` | First inscription timestamp |
-| `lastTs` | `BN` | Last inscription timestamp |
-
 ### VaultDelegateData
 
 Hot-wallet authorization PDA for vault operations.
@@ -229,25 +218,9 @@ Hot-wallet authorization PDA for vault operations.
 | `bump` | `number` | PDA bump seed |
 | `vault` | `PublicKey` | Parent vault PDA |
 | `delegate` | `PublicKey` | Delegate wallet |
-| `permissions` | `number` | Permission bitmask (see Security docs) |
+| `permissions` | `number` | Permission bitmask |
 | `expiresAt` | `BN` | Delegation expiry |
 | `createdAt` | `BN` | Creation timestamp |
-
-### SessionCheckpointData
-
-Fast-sync snapshot PDA for session integrity verification.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `bump` | `number` | PDA bump seed |
-| `session` | `PublicKey` | Parent session PDA |
-| `checkpointIndex` | `number` | Zero-based index |
-| `merkleRoot` | `number[]` | Merkle root at checkpoint |
-| `sequenceAt` | `number` | Sequence at checkpoint |
-| `epochAt` | `number` | Epoch at checkpoint |
-| `totalBytesAt` | `BN` | Cumulative bytes |
-| `inscriptionsAt` | `BN` | Cumulative inscriptions |
-| `createdAt` | `BN` | Checkpoint timestamp |
 
 ---
 
@@ -324,9 +297,7 @@ Sealed archive page. Write-once, immutable after sealing.
 
 ---
 
-## Shared Structs
-
-These structs appear as fields inside the account data types above.
+## Shared Structures
 
 ### Capability
 
@@ -372,3 +343,16 @@ interface PluginRef {
   readonly pda: PublicKey;
 }
 ```
+
+---
+
+## Next Steps
+
+- **[On-Chain Reference](/docs/core/on-chain-reference)** — PDA seeds and layouts
+- **[PDA Reference](/docs/sdk/pda-reference)** — Derivation functions
+- **[PostgreSQL Mirror](/docs/sdk/postgres-mirror)** — Off-chain storage
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

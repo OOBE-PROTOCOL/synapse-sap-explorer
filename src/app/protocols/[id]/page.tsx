@@ -11,9 +11,10 @@ import { Button } from '~/components/ui/button';
 import { useGraph, useAgents } from '~/hooks/use-sap';
 import type { GraphNode } from '~/lib/sap/discovery';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
+import { asText, entityPath } from '~/lib/format';
 
-function normalizeProtocolId(value: string | null | undefined): string {
-  return String(value ?? '').trim().toLowerCase();
+function normalizeProtocolId(value: unknown): string {
+  return asText(value).trim().toLowerCase();
 }
 
 export default function ProtocolDetailPage() {
@@ -28,7 +29,7 @@ export default function ProtocolDetailPage() {
   const protocol = useMemo(() => {
     if (!graphData) return null;
     return graphData.nodes.find(
-      (n) => n.type === 'protocol' && normalizeProtocolId(String(n.meta?.protocolId ?? n.name)) === normalizedId,
+      (n) => n.type === 'protocol' && normalizeProtocolId(n.meta?.protocolId ?? n.name) === normalizedId,
     ) ?? null;
   }, [graphData, normalizedId]);
 
@@ -42,9 +43,9 @@ export default function ProtocolDetailPage() {
         return inProtocols || inCapabilities;
       })
       .map((agent: SerializedDiscoveredAgent) => ({
-        pda: agent.pda,
+        pda: asText(agent.pda),
         name: agent.identity?.name ?? null,
-        wallet: agent.identity?.wallet ?? null,
+        wallet: asText(agent.identity?.wallet) || null,
         reputationScore: agent.identity?.reputationScore ?? 0,
         isActive: agent.identity?.isActive ?? false,
         totalCallsServed: agent.identity?.totalCallsServed ?? '0',
@@ -55,9 +56,9 @@ export default function ProtocolDetailPage() {
   const capabilities = useMemo(() => {
     if (!graphData) return [];
     return graphData.nodes
-      .filter((n): n is GraphNode => n.type === 'capability' && normalizeProtocolId(String(n.meta?.protocolId ?? '')) === normalizedId)
+      .filter((n): n is GraphNode => n.type === 'capability' && normalizeProtocolId(n.meta?.protocolId) === normalizedId)
       .map((c) => ({
-        id: String(c.meta?.capabilityId ?? c.name),
+        id: asText(c.meta?.capabilityId ?? c.name),
         description: c.meta?.description ? String(c.meta.description) : null,
         version: c.meta?.version ? String(c.meta.version) : null,
         ownerCount: Number(c.meta?.ownerCount ?? 0),
@@ -121,8 +122,8 @@ export default function ProtocolDetailPage() {
             <p className="text-sm text-neutral-500">No agents found</p>
           ) : (
             <div className="space-y-1.5">
-              {agents.map((a) => (
-                <Link key={a.pda} href={`/agents/${a.wallet ?? a.pda}`}
+              {agents.map((a, i) => (
+                <Link key={a.pda || a.wallet || i} href={entityPath('/agents', a.wallet ?? a.pda)}
                   className="flex items-center gap-4 rounded-lg border border-neutral-800 bg-neutral-800/30 px-3 py-3 transition-colors hover:border-primary/35 hover:bg-neutral-800/70"
                 >
                   <ScoreRing score={a.reputationScore} size={40} />

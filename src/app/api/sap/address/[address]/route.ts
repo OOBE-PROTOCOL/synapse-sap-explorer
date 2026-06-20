@@ -10,25 +10,11 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { PublicKey } from '@solana/web3.js';
 import {
-  findAllAgents,
-  findAllTools,
-  findAllEscrows,
-  findAllAttestations,
-  findAllFeedbacks,
-  findAllVaults,
-  serializeDiscoveredAgent,
-  serializeDiscoveredTool,
-  serialize,
   getSynapseConnection,
 } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
 import {
-  selectAllAgents,
-  selectAllTools,
-  selectAllEscrows,
-  selectAllAttestations,
-  selectAllFeedbacks,
-  selectAllVaults,
+  selectAddressEntities,
 } from '~/lib/db/queries';
 import {
   dbAgentToApi,
@@ -38,8 +24,7 @@ import {
   dbFeedbackToApi,
   dbVaultToApi,
 } from '~/lib/db/mappers';
-// import { RawAccountInfo } from '@oobe-protocol-labs/synapse-client-sdk';
-// import { SapAccountType } from '@oobe-protocol-labs/synapse-sap-sdk';
+import { isDbDown, markDbDown } from '~/db';
 import type { RpcSignatureInfo, TransactionError } from '~/types/indexer';
 
 /** Minimal shape shared by DB-mapped API types and RPC-serialized entities. */
@@ -62,51 +47,31 @@ export async function GET(
         synConn.getBalance(pubkey).catch(() => 0),
       ]);
 
-      // 2) Try DB first for entity lookups (instant)
+      // 2) Targeted DB entity lookup. This route is used by every unknown
+      // address link, so it must never read all explorer tables per request.
       let agentsData: EntityRecord[] = [];
       let toolsData: EntityRecord[] = [];
       let escrowsData: EntityRecord[] = [];
       let attestationsData: EntityRecord[] = [];
       let feedbacksData: EntityRecord[] = [];
       let vaultsData: EntityRecord[] = [];
-      let fromDb = false;
+      let lookupSource = 'db-skipped';
 
-      try {
-        const [dbAgents, dbTools, dbEscrows, dbAtts, dbFbs, dbVaults] = await Promise.all([
-          selectAllAgents(),
-          selectAllTools(),
-          selectAllEscrows(),
-          selectAllAttestations(),
-          selectAllFeedbacks(),
-          selectAllVaults(),
-        ]);
-        if (dbAgents.length > 0) {
-          fromDb = true;
-          agentsData = dbAgents.map(dbAgentToApi);
-          toolsData = dbTools.map(dbToolToApi);
-          escrowsData = dbEscrows.map(dbEscrowToApi);
-          attestationsData = dbAtts.map(dbAttestationToApi);
-          feedbacksData = dbFbs.map(dbFeedbackToApi);
-          vaultsData = dbVaults.map(dbVaultToApi);
+      if (!isDbDown()) {
+        try {
+          const dbEntities = await selectAddressEntities(address);
+          agentsData = dbEntities.agents.map(dbAgentToApi);
+          toolsData = dbEntities.tools.map(dbToolToApi);
+          escrowsData = dbEntities.escrows.map(dbEscrowToApi);
+          attestationsData = dbEntities.attestations.map(dbAttestationToApi);
+          feedbacksData = dbEntities.feedbacks.map(dbFeedbackToApi);
+          vaultsData = dbEntities.vaults.map(dbVaultToApi);
+          lookupSource = 'db-targeted';
+        } catch (e) {
+          console.warn(`[address/${address}] DB lookup failed:`, (e as Error).message);
+          markDbDown();
+          lookupSource = 'db-error';
         }
-      } catch (e) { console.warn(`[address/${address}] DB lookup failed:`, (e as Error).message); }
-
-      // 3) RPC fallback if DB empty
-      if (!fromDb) {
-        const [rpcAgents, rpcTools, rpcEscrows, rpcAtts, rpcFbs, rpcVaults] = await Promise.all([
-          findAllAgents().catch(() => []),
-          findAllTools().catch(() => []),
-          findAllEscrows().catch(() => []),
-          findAllAttestations().catch(() => []),
-          findAllFeedbacks().catch(() => []),
-          findAllVaults().catch(() => []),
-        ]);
-        agentsData = rpcAgents.map(serializeDiscoveredAgent);
-        toolsData = rpcTools.map(serializeDiscoveredTool);
-        escrowsData = rpcEscrows.map((e) => ({ pda: e.pda.toBase58(), account: serialize(e.account) }));
-        attestationsData = rpcAtts.map((a) => ({ pda: a.pda.toBase58(), account: serialize(a.account) }));
-        feedbacksData = rpcFbs.map((f) => ({ pda: f.pda.toBase58(), account: serialize(f.account) }));
-        vaultsData = rpcVaults.map((v) => ({ pda: v.pda.toBase58(), account: serialize(v.account) }));
       }
 
       // Match address against known entities
@@ -187,6 +152,7 @@ export async function GET(
         relatedAttestations,
         relatedFeedbacks,
         recentTransactions: recentTxs,
+        source: lookupSource,
       };
     }, { ttl: 30_000, swr: 300_000 });
 

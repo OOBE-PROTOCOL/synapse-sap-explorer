@@ -1,11 +1,15 @@
 ---
 title: Memory Systems
-description: Two on-chain memory architectures for agent conversation data. Ledger ring buffers and encrypted Vault storage.
+description: Two on-chain memory architectures for agent conversation data. Ledger ring buffers and encrypted Vault storage. SDK v0.20.0 aligned.
 ---
 
 # Memory Systems
 
+**SDK Version:** v0.20.0
+
 SAP provides two memory systems for persisting agent conversation data on-chain. They solve the same fundamental problem (durable, verifiable session memory) but with different tradeoffs.
+
+---
 
 ## Why On-Chain Memory?
 
@@ -17,6 +21,8 @@ Traditional AI agents store conversation history in databases owned by the servi
 - **Cost-efficient**, with writes as cheap as $0.001 per 200 operations
 
 The key challenge is that blockchain storage is expensive. Storing 1 KB on Solana costs approximately 0.007 SOL in rent. For an agent processing thousands of conversations, naively storing everything would be prohibitively expensive. SAP's two memory systems solve this through clever engineering.
+
+---
 
 ## Comparison
 
@@ -32,7 +38,9 @@ The key challenge is that blockchain storage is expensive. Storing 1 KB on Solan
 | Delegation | No | Yes (hot wallet delegates) |
 | High-level API | SessionManager | Manual (module methods) |
 
-Use the Ledger via SessionManager for most workloads. Use Vault only when you need client-side encryption or hot-wallet delegation.
+**Use the Ledger via SessionManager for most workloads. Use Vault only when you need client-side encryption or hot-wallet delegation.**
+
+---
 
 ## Ledger
 
@@ -41,10 +49,6 @@ The Ledger is a fixed-cost ring buffer optimized for high-frequency writes. Afte
 **The key insight:** Solana charges rent for account storage, but transaction logs are free to store permanently. The Ledger exploits this by keeping only a small rotating buffer in the account (for fast reads) while writing the permanent record into the transaction log (for archival). You get the best of both worlds: fast reads from the ring buffer, permanent storage from the TX logs, and near-zero cost per write.
 
 ### How It Works
-
-Imagine a whiteboard with space for 10 messages. When you fill it up, you erase the oldest message and write the new one in its place. That is a ring buffer. The whiteboard itself costs money to rent (the PDA), but writing on it is essentially free (just the transaction fee).
-
-Meanwhile, a camera takes a photo of every message before it can be erased (the transaction log). So even though the whiteboard only shows the latest 10 messages, the complete history is preserved in the photos.
 
 ```
 MemoryLedger PDA
@@ -137,11 +141,13 @@ await client.ledger.close(sessionPda);
 // Reclaims ~0.032 SOL
 ```
 
+---
+
 ## Vault
 
 The Vault provides encrypted, session-scoped memory with epoch-based pagination. Data is encrypted client-side with AES-256-GCM before being inscribed on-chain. The vault also supports hot-wallet delegation, allowing authorized delegates to inscribe data without the owner's signature.
 
-**When you need a Vault instead of a Ledger:** If your agent handles sensitive data (personal information, financial details, medical records), the data should not be readable by anyone scanning the blockchain. The Vault encrypts everything client-side before writing, so on-chain observers see only encrypted bytes. Only the holder of the encryption key can read the actual content.
+**When you need a Vault instead of a Ledger:** If your agent handles sensitive data (personal information, financial details, medical records), the data should not be readable by anyone scanning the blockchain. The Vault encrypts everything client-side before writing, so on-chain observers see only encrypted bytes.
 
 ### Initialize Vault
 
@@ -186,8 +192,6 @@ await client.vault.compactInscribe(sessionPda, vaultPda, {
 
 Vaults support delegated access for scenarios where a hot wallet needs to write on behalf of the vault owner. This is essential for production services where you do not want your main keypair sitting on a server.
 
-**Real-world analogy:** A delegate is like giving a trusted employee access to a specific safe in your office. They can deposit items (write data) but only during business hours (expiry time), and you can revoke their access at any moment.
-
 ```typescript
 await client.vault.addDelegate(
   hotWallet,                                   // PublicKey of the delegate wallet
@@ -198,6 +202,8 @@ await client.vault.addDelegate(
 // Revoke access immediately when no longer needed
 await client.vault.revokeDelegate(hotWallet);
 ```
+
+---
 
 ## Cost Summary
 
@@ -212,10 +218,32 @@ await client.vault.revokeDelegate(hotWallet);
 
 For high-frequency writes, the ledger is orders of magnitude cheaper than the vault.
 
+---
+
 ## Choosing Between Ledger and Vault
 
-**Use Ledger when** you need high-frequency writes, cost per write matters, data does not need to be encrypted on-chain, or you want the simplest API via SessionManager. This covers the vast majority of use cases: conversation logs, activity tracking, context storage for AI interactions.
-
-**Use Vault when** data must be encrypted on-chain (AES-256-GCM), you need hot-wallet delegation for backend services, you need epoch-based pagination with custom sequencing, or you are working with an existing Vault-based codebase.
+| Use Case | Recommendation |
+|----------|---------------|
+| Conversation logs | ✅ Ledger |
+| Activity tracking | ✅ Ledger |
+| Context storage | ✅ Ledger |
+| High-frequency writes | ✅ Ledger |
+| Cost-sensitive workloads | ✅ Ledger |
+| Sensitive/encrypted data | ✅ Vault |
+| Hot-wallet delegation | ✅ Vault |
+| Epoch-based pagination | ✅ Vault |
 
 **If you are unsure, use the Ledger.** It is simpler, cheaper, and sufficient for most agent workloads. You can always add a Vault later for sensitive data without affecting your existing Ledger setup.
+
+---
+
+## Next Steps
+
+- **[SessionManager](/docs/sdk/session-manager)** — High-level API for Ledger
+- **[Agent Lifecycle](/docs/core/agent-lifecycle)** — Agent registration
+- **[Payments](/docs/core/payments)** — Escrow and x402
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

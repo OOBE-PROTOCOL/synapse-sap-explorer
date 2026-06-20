@@ -58,6 +58,9 @@ function releaseLock() {
 
 
 let running = true;
+let entityCycleRunning = false;
+let txCycleRunning = false;
+let snapshotCycleRunning = false;
 
 process.on('SIGINT', () => {
   log('worker', 'SIGINT received, shutting down...');
@@ -78,6 +81,11 @@ process.on('uncaughtException', (err: Error) => {
 
 
 async function syncAllEntities() {
+  if (entityCycleRunning) {
+    log('worker', 'Entity sync still running; skipping overlapping tick.');
+    return;
+  }
+  entityCycleRunning = true;
   log('worker', '── Entity sync cycle starting ──');
   const t0 = Date.now();
 
@@ -102,24 +110,39 @@ async function syncAllEntities() {
     await syncVaults();
   } catch (e: unknown) {
     logErr('worker', `Entity cycle failed: ${(e as Error).message}`);
+  } finally {
+    log('worker', `── Entity sync cycle done in ${((Date.now() - t0) / 1000).toFixed(1)}s ──`);
+    entityCycleRunning = false;
   }
-
-  log('worker', `── Entity sync cycle done in ${((Date.now() - t0) / 1000).toFixed(1)}s ──`);
 }
 
 async function syncTx() {
+  if (txCycleRunning) {
+    log('worker', 'Transaction sync still running; skipping overlapping tick.');
+    return;
+  }
+  txCycleRunning = true;
   try {
     await syncTransactions();
   } catch (e: unknown) {
     logErr('worker', `Transaction cycle failed: ${(e as Error).message}`);
+  } finally {
+    txCycleRunning = false;
   }
 }
 
 async function syncSnap() {
+  if (snapshotCycleRunning) {
+    log('worker', 'Snapshot sync still running; skipping overlapping tick.');
+    return;
+  }
+  snapshotCycleRunning = true;
   try {
     await syncSnapshots();
   } catch (e: unknown) {
     logErr('worker', `Snapshot cycle failed: ${(e as Error).message}`);
+  } finally {
+    snapshotCycleRunning = false;
   }
 }
 
@@ -217,4 +240,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
-

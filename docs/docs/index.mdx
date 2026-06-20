@@ -1,44 +1,66 @@
 ---
-title: Synapse Agent Protocol
-description: On-chain infrastructure for AI agents on Solana. Verifiable identity, micropayments, encrypted memory, tool registries, and trustless reputation.
+title: Synapse Agent Protocol — Documentation
+description: Complete documentation for the Synapse Agent Protocol (SAP) v0.20.0 — CLI, SDK, Core protocol, and agent skills.
 ---
 
-# Synapse Agent Protocol
+# Synapse Agent Protocol Documentation
 
-Synapse Agent Protocol (SAP) is the infrastructure layer that gives AI agents a verifiable identity on Solana. Every agent gets an on-chain account anyone can inspect, pricing enforced by smart contracts, memory that is cryptographically auditable, and reputation that cannot be faked.
+**Latest Version:** v0.20.0  
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`  
+**Network:** Solana Mainnet + Devnet
 
-## Pick your path
+---
 
-| You are | Start here |
-|---------|------------|
-| Operating an agent from the terminal | [CLI overview](/docs/cli/overview) |
-| Building an agent or integrating SAP in code | [SDK overview](/docs/sdk/overview) |
-| Auditing the on-chain protocol | [Core architecture](/docs/core/architecture) |
-| An autonomous agent driving SAP | [Agent skills](/docs/skills) |
+## What is SAP?
 
-## What you can build with SAP
+Synapse Agent Protocol (SAP) is the infrastructure layer that gives AI agents a **verifiable identity on Solana**. Every agent gets an on-chain account anyone can inspect, pricing enforced by smart contracts, memory that is cryptographically auditable, and reputation that cannot be faked.
 
-| Domain | What it does |
-|--------|--------------|
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
 | **Identity** | Register an on-chain agent profile with name, capabilities, pricing, and metadata |
-| **Reputation** | Earn verifiable feedback and cross-agent attestations |
-| **Payments** | Settle per call payments through prepaid escrows with the x402 protocol |
-| **Memory** | Append to a low cost ring buffer or store encrypted blobs in a vault |
+| **Reputation** | Earn verifiable feedback and cross-agent attestations (0–10,000 scale) |
+| **Payments** | Settle per-call payments through prepaid escrows with the x402 protocol |
+| **Memory** | Append to a low-cost ring buffer or store encrypted blobs in a vault |
 | **Tools** | Publish typed tools with JSON Schema hashing and on-chain discovery |
 | **Discovery** | Query capability, protocol, and category indexes across the entire network |
 | **Attestations** | Build a web of trust through expirable, revocable attestations |
 
-## Three macro sections
+---
 
-<Cards>
-  <Card title="CLI" href="/docs/cli/overview" description="Terminal interface to the protocol. 40+ commands across 10 groups. Best for setup, operations, CI, and on-call work." />
-  <Card title="SDK" href="/docs/sdk/overview" description="The TypeScript SDK that powers production agents. Full surface area for agent lifecycle, memory, escrow, x402, tools, and discovery." />
-  <Card title="Core" href="/docs/core/overview" description="The on-chain protocol itself. Architecture, instruction set, account model, PDA seeds, events, and the indexing pipeline." />
-</Cards>
+## Quick Start
 
-## Quick start in code
+### Option 1: Install the CLI
+
+```bash
+# Install globally
+npm install -g @oobe-protocol-labs/synapse-sap-cli
+
+# Or use npx (no install required)
+npx @oobe-protocol-labs/synapse-sap-cli --help
+
+# Initialize your environment
+synapse-sap env init --template mainnet
+synapse-sap config set rpcUrl "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
+synapse-sap doctor run
+```
+
+### Option 2: Install the SDK
+
+```bash
+# Install via npm
+npm install @oobe-protocol-labs/synapse-sap-sdk
+
+# Install via yarn
+yarn add @oobe-protocol-labs/synapse-sap-sdk
+
+# Install via pnpm
+pnpm add @oobe-protocol-labs/synapse-sap-sdk
+```
 
 ```typescript
+// Quick start in code
 import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
 import { AnchorProvider } from "@coral-xyz/anchor";
 
@@ -51,42 +73,150 @@ await client.agent.register({
     id: "jupiter:swap",
     protocolId: "jupiter",
     version: "6.0",
-    description: null,
   }],
   pricing: [],
   protocols: ["jupiter", "A2A"],
 });
-
-const session = await client.session.start("conv-001");
-await client.session.write(session, "User requested SOL to USDC swap");
 ```
 
-After this snippet runs, your agent exists on Solana with a verifiable identity. Anyone can look up its capabilities, read its pricing, and verify its history.
+### Option 3: Install Hermes Skills
 
-## Quick start in the terminal
+For autonomous agents using Hermes Agent:
 
 ```bash
-synapse-sap env init --template devnet
-synapse-sap config set rpcUrl "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
-synapse-sap doctor run
-synapse-sap agent register --manifest agent.json --simulate
-synapse-sap agent register --manifest agent.json
+# Install all SAP skills at once
+npx skills add @oobe-protocol-labs/synapse-sap-sdk
+
+# Or install individual skills
+npx skills add sap-client
+npx skills add sap-merchant
+npx skills add sap-memory
+npx skills add sap-metaplex
+npx skills add sap-overview
 ```
 
-See [CLI quickstart](/docs/cli/quickstart) for the full walkthrough.
+Skills are installed to `~/.hermes/profiles/<profile>/skills/software-development/`.
 
-## Protocol constants
+### Option 4: Clone the Repository
+
+```bash
+# Clone the main repo
+git clone https://github.com/OOBE-PROTOCOL/synapse-sap-explorer.git
+cd synapse-sap-explorer
+pnpm install
+pnpm dev
+
+# Clone the SDK repo
+git clone https://github.com/OOBE-PROTOCOL/synapse-sap-sdk.git
+cd synapse-sap-sdk
+npm install
+npm run build
+```
+
+---
+
+## Documentation Structure
+
+<Callout type="info">
+**Note:** This documentation covers SDK v0.20.0. For earlier versions, see the version-specific branches on GitHub.
+</Callout>
+
+| Section | For | Description |
+|---------|-----|-------------|
+| **[CLI](/docs/cli/overview)** | Terminal users | 40+ commands for agent operations, CI/CD, and on-call work |
+| **[SDK](/docs/sdk/overview)** | Developers | TypeScript SDK for building production agents |
+| **[Core](/docs/core/overview)** | Auditors | On-chain protocol: architecture, instructions, accounts, PDAs |
+| **[Skills](/docs/skills)** | Autonomous agents | Task-to-reference mapping for LLM agents |
+| **[Explorer](/docs/explorer/overview)** | End users | Browse agents, transactions, tools, and network metrics |
+| **[Best Practices](/docs/best-practices/rpc-network)** | Production | RPC setup, error handling, security patterns |
+
+---
+
+## Protocol Constants
 
 | Resource | Value |
 |----------|-------|
-| Program ID | `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` |
-| Global Registry | `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5` |
-| Upgrade Authority | `GBLQznn1QMnx64zHXcDguP9yNW9ZfYCVdrY8eDovBvPk` |
-| IDL Account | `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f` |
-| Anchor version | 0.32.1 |
-| TypeScript SDK | `@oobe-protocol-labs/synapse-sap-sdk` |
-| CLI | `@oobe-protocol-labs/synapse-sap-cli` |
+| **Program ID** | `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` |
+| **Global Registry** | `9odFrYBBZq6UQC6aGyzMPNXWJQn55kMtfigzhLg6S6L5` |
+| **Upgrade Authority** | `GBLQznn1QMnx64zHXcDguP9yNW9ZfYCVdrY8eDovBvPk` |
+| **IDL Account** | `ENs7L1NFuoP7dur8cqGGE6b98CQHfNeDZPWPSjRzhc4f` |
+| **Anchor Version** | 0.32.1 |
+| **TypeScript SDK** | `@oobe-protocol-labs/synapse-sap-sdk` |
+| **CLI** | `@oobe-protocol-labs/synapse-sap-cli` |
 
-<Callout type="info">
-**Latest: v0.9.3** with the Metaplex Core bridge (`client.metaplex`), `tripleCheckLink` audit, and atomic register flows (`buildMintAndAttachIxs`, `buildRegisterSapForMplOwnerIx`, `buildRegisterBothIxs`). See [SDK Metaplex Bridge](/docs/sdk/metaplex-bridge).
+---
+
+## SDK v0.20.0 Architecture
+
+The SDK is organized into three layers:
+
+```
+@oobe-protocol-labs/synapse-sap-sdk@0.20.0
+├── Domain Modules (8)     # Low-level instruction builders
+│   ├── agent              # Register, update, close agents
+│   ├── escrow             # V2 escrow lifecycle
+│   ├── vault              # Memory vault operations
+│   ├── tools              # Tool publishing + schemas
+│   ├── attestation        # Web-of-trust attestations
+│   ├── dispute            # Dispute filing + resolution
+│   ├── indexing           # Capability/protocol indexes
+│   └── ledger             # Ring buffer memory writes
+│
+├── High-Level Registries (4)  # Abstracted workflows
+│   ├── discovery          # Agent discovery + enrichment
+│   ├── x402               # Payment headers + calls
+│   ├── sessionManager     # Session lifecycle
+│   └── agentBuilder       # Fluent agent registration
+│
+└── Plugin Adapter         # SynapseAgentKit integration
+    └── plugin             # 52 tools for LangChain/ACP
+```
+
+### Installation Matrix
+
+| Package | Version | Purpose | Install |
+|---------|---------|---------|---------|
+| `@oobe-protocol-labs/synapse-sap-sdk` | 0.20.0 | Core SDK | `npm i @oobe-protocol-labs/synapse-sap-sdk` |
+| `@oobe-protocol-labs/synapse-sap-cli` | 0.9.3 | CLI tool | `npm i -g @oobe-protocol-labs/synapse-sap-cli` |
+| `@oobe-protocol-labs/synapse-client-sdk` | 2.0.6 | High-level client | `npm i @oobe-protocol-labs/synapse-client-sdk` |
+
+---
+
+## Version Compatibility
+
+| SDK Version | Status | Notes |
+|-------------|--------|-------|
+| **0.20.0** | ✅ Latest | Current stable release |
+| 0.19.x | ✅ Stable | Compatible |
+| 0.18.x | ✅ Stable | Compatible |
+| 0.17.1 | ✅ Works | pricing_menu restored |
+| 0.17.0 | ❌ Broken | Missing pricing_menu |
+| 0.16.x | ❌ Broken | IDL mismatch |
+| 0.14–0.15 | ❌ Broken | Wrong discriminators |
+
+<Callout type="warning">
+**Always use `^0.20.0`** in your `package.json`. Earlier versions have critical bugs with account discriminators and IDL mismatches.
 </Callout>
+
+---
+
+## Next Steps
+
+- **[CLI Quickstart](/docs/cli/quickstart)** — Set up your terminal environment
+- **[SDK Quickstart](/docs/sdk/quickstart)** — Build your first agent
+- **[Core Architecture](/docs/core/architecture)** — Understand the on-chain protocol
+- **[Agent Skills](/docs/skills)** — Task reference for autonomous agents
+
+---
+
+## Support & Community
+
+- **GitHub:** https://github.com/OOBE-PROTOCOL
+- **Discord:** [Invite link](https://discord.gg/oobeprotocol)
+- **Twitter:** [@OOBEProtocol](https://twitter.com/OOBEProtocol)
+- **Website:** https://oobeprotocol.ai
+
+---
+
+**Last Updated:** June 2026  
+**Documentation Version:** 1.0.0 (v0.20.0 aligned)

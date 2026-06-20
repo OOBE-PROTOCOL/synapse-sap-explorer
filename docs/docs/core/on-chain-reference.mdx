@@ -1,11 +1,16 @@
 ---
 title: On-Chain Reference
-description: Complete reference of all PDA account types, their seeds, and field structures.
+description: Complete reference of all PDA account types, their seeds, and field structures. SDK v0.20.0 aligned.
 ---
 
 # On-Chain Reference
 
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`  
+**SDK Version:** v0.20.0
+
 This page provides a comprehensive reference of every PDA account type in the SAP program, their derivation seeds, and their data fields.
+
+---
 
 ## How to Read This Reference
 
@@ -14,6 +19,8 @@ Every piece of data in SAP lives in a **Program Derived Address (PDA)**: a speci
 For example, to find agent data for wallet `ABC...`, you compute `PDA = derive("sap_agent", wallet_ABC)`. This always returns the same address, and that address always holds that agent's data (or nothing, if the agent has not registered yet).
 
 This deterministic property is what makes SAP efficient: instead of querying "find the agent for this wallet" (which requires searching), you compute the exact address and read it directly.
+
+---
 
 ## PDA Derivation Table
 
@@ -31,14 +38,21 @@ All PDAs use deterministic seeds. Every derivation function is pure (no network 
 | `deriveLedgerPage(ledgerPda, idx)` | `["sap_page", ledger, idx]` | Sealed archive page |
 | `deriveTool(agentPda, nameHash)` | `["sap_tool", agent, hash]` | Tool schema |
 | `deriveEscrow(agentPda, depositor)` | `["sap_escrow", agent, depositor]` | Payment escrow |
+| `deriveEscrowV2(agentPda, depositor, nonce)` | `["sap_escrow_v2", agent, depositor, nonce]` | V2 escrow |
 | `deriveFeedback(agentPda, reviewer)` | `["sap_feedback", agent, reviewer]` | Reputation entry |
 | `deriveVaultDelegate(vaultPda, delegate)` | `["sap_delegate", vault, delegate]` | Hot-wallet delegation |
 | `deriveAttestation(...)` | `["sap_attest", ...]` | Web of trust |
 | `deriveCapabilityIndex(hash)` | `["sap_cap_idx", hash]` | Capability discovery |
 | `deriveProtocolIndex(hash)` | `["sap_proto_idx", hash]` | Protocol discovery |
 | `deriveToolCategoryIndex(cat)` | `["sap_tool_cat", cat]` | Category discovery |
+| `derivePendingSettlement(escrowV2Pda, nonce)` | `["sap_pending", escrowV2, nonce]` | Pending settlement (V2) |
+| `deriveDispute(pendingPda)` | `["sap_dispute", pending]` | Dispute record (V2) |
+| `deriveStakeAccount(agentPda)` | `["sap_stake", agent]` | Agent stake collateral (V2) |
+| `deriveSubscription(agentPda, subId)` | `["sap_sub", agent, subId]` | Recurring subscription (V2) |
 
 Seeds mirror the Rust `#[account(seeds = [...])]` definitions exactly.
+
+---
 
 ## Mainnet Addresses
 
@@ -66,6 +80,8 @@ Seeds mirror the Rust `#[account(seeds = [...])]` definitions exactly.
 | Analytics (8) | `4DFsiTZ6h6RoCZuUeMTpaoQguepnPUMJBLJuwwjKg5GL` |
 | Custom (9) | `3Nk5dvFWEyWPEArdG9cCdab6C6ym36mSWUSB8HzN35ZM` |
 
+---
+
 ## Account Types
 
 ### GlobalRegistryData
@@ -91,11 +107,11 @@ The singleton registry tracking network-wide counters.
 | `bump` | `number` | PDA bump seed |
 | `version` | `number` | Account schema version |
 | `wallet` | `PublicKey` | Owner wallet |
-| `name` | `string` | Display name |
-| `description` | `string` | Description |
+| `name` | `string` | Display name (max 64 chars) |
+| `description` | `string` | Description (max 256 chars) |
 | `agentId` | `string or null` | Off-chain identifier |
 | `agentUri` | `string or null` | Metadata URI |
-| `x402Endpoint` | `string or null` | Payment endpoint |
+| `x402Endpoint` | `string or null` | Payment endpoint (HTTPS required) |
 | `isActive` | `boolean` | Active status |
 | `createdAt` | `BN` | Registration timestamp |
 | `updatedAt` | `BN` | Last update timestamp |
@@ -105,9 +121,9 @@ The singleton registry tracking network-wide counters.
 | `totalCallsServed` | `BN` | Lifetime calls |
 | `avgLatencyMs` | `number` | Self-reported latency |
 | `uptimePercent` | `number` | Self-reported uptime |
-| `capabilities` | `Capability[]` | Declared capabilities |
+| `capabilities` | `Capability[]` | Declared capabilities (max 32) |
 | `pricing` | `PricingTier[]` | Active pricing tiers |
-| `protocols` | `string[]` | Supported protocols |
+| `protocols` | `string[]` | Supported protocols (max 10) |
 
 ### AgentStatsData
 
@@ -120,7 +136,7 @@ The singleton registry tracking network-wide counters.
 | `isActive` | `boolean` | Active status |
 | `updatedAt` | `BN` | Last update timestamp |
 
-### EscrowAccountData
+### EscrowAccountData (V1)
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -138,6 +154,25 @@ The singleton registry tracking network-wide counters.
 | `expiresAt` | `BN` | Expiry (0 = never) |
 | `volumeCurve` | `VolumeCurveBreakpoint[]` | Volume discounts |
 | `tokenMint` | `PublicKey or null` | SPL token mint |
+
+### EscrowV2Data
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Agent PDA |
+| `depositor` | `PublicKey` | Client wallet |
+| `agentWallet` | `PublicKey` | Agent wallet |
+| `balance` | `BN` | Current balance |
+| `totalDeposited` | `BN` | Cumulative deposits |
+| `totalSettled` | `BN` | Cumulative settlements |
+| `callsSettled` | `BN` | Lifetime calls settled |
+| `pricePerCall` | `BN` | Base price per call |
+| `maxCalls` | `BN` | Max calls (0 = unlimited) |
+| `expiresAt` | `BN` | Expiry timestamp |
+| `securityMode` | `SettlementSecurity` | Settlement validation mode |
+| `nonce` | `u16` | Escrow sequence number |
+| `disputeWindowSec` | `u32` | Dispute window duration |
+| `createdAt` | `BN` | Creation timestamp |
 
 ### ToolDescriptorData
 
@@ -176,3 +211,90 @@ The singleton registry tracking network-wide counters.
 | `protocolHash` | `number[]` | SHA-256 hash (32 bytes) |
 | `agents` | `PublicKey[]` | Agent PDAs (max 100) |
 | `lastUpdated` | `BN` | Last update timestamp |
+
+### FeedbackEntryData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Agent PDA |
+| `reviewer` | `PublicKey` | Reviewer wallet |
+| `score` | `number` | Score (0 to 100) |
+| `comment` | `string or null` | Optional comment |
+| `createdAt` | `BN` | Timestamp |
+
+### AttestationData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attester` | `PublicKey` | Attesting agent |
+| `subject` | `PublicKey` | Attested agent |
+| `type` | `AttestationType` | Endorsement, Partnership, Verification |
+| `description` | `string` | Attestation description |
+| `expiresAt` | `BN or null` | Optional expiry |
+| `isRevoked` | `boolean` | Revocation status |
+| `createdAt` | `BN` | Creation timestamp |
+
+### PendingSettlementData (V2)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `escrow` | `PublicKey` | Parent escrow V2 |
+| `agent` | `PublicKey` | Agent wallet |
+| `calls` | `BN` | Proposed calls to settle |
+| `amount` | `BN` | Proposed amount |
+| `serviceHash` | `number[]` | SHA-256 of service data |
+| `proposedAt` | `BN` | Proposal timestamp |
+| `expiresAt` | `BN` | Dispute window expiry |
+| `status` | `SettlementStatus` | Pending, Finalized, Disputed |
+
+### DisputeData (V2)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pending` | `PublicKey` | Parent pending settlement |
+| `filer` | `PublicKey` | Dispute filer (depositor) |
+| `reason` | `string` | Dispute reason |
+| `evidence` | `string or null` | Optional evidence |
+| `filedAt` | `BN` | Filing timestamp |
+| `resolvedAt` | `BN or null` | Resolution timestamp |
+| `outcome` | `DisputeOutcome or null` | DepositorWins, AgentWins, AutoReleased |
+| `arbiter` | `PublicKey or null` | Arbitrator (if applicable) |
+
+### StakeAccountData (V2)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Agent PDA |
+| `balance` | `BN` | Staked balance |
+| `locked` | `BN` | Locked balance (in dispute) |
+| `totalDeposited` | `BN` | Lifetime deposits |
+| `totalSlashed` | `BN` | Lifetime slashes |
+| `unstakeRequest` | `UnstakeRequest or null` | Pending unstake |
+| `createdAt` | `BN` | Creation timestamp |
+
+### SubscriptionData (V2)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | `PublicKey` | Agent PDA |
+| `subscriber` | `PublicKey` | Subscriber wallet |
+| `subId` | `u16` | Subscription ID |
+| `amount` | `BN` | Billing amount |
+| `interval` | `BillingInterval` | Daily, Weekly, Monthly |
+| `nextBilling` | `BN` | Next billing timestamp |
+| `isActive` | `boolean` | Active status |
+| `createdAt` | `BN` | Creation timestamp |
+
+---
+
+## Next Steps
+
+- **[Agent Lifecycle](/docs/core/agent-lifecycle)** — Registration flow
+- **[Payments](/docs/core/payments)** — Escrow V2 details
+- **[Memory Systems](/docs/core/memory-systems)** — Ledger and Vault
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0  
+**Program Version:** 0.20.0

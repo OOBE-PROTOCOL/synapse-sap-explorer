@@ -1,13 +1,15 @@
 ---
 title: Plugin Adapter
-description: Bridge 52 SAP tools into LangChain, Vercel AI, or any LLM framework through the SynapseAgentKit plugin.
+description: Bridge 52 SAP tools into LangChain, Vercel AI, or any LLM framework through the SynapseAgentKit plugin. SDK v0.20.0 aligned.
 ---
 
 # Plugin Adapter
 
+**SDK Version:** v0.20.0
+
 The plugin adapter bridges the full SAP protocol surface into the SynapseAgentKit ecosystem. Every on-chain instruction is exposed as a LangChain-compatible `StructuredTool` with Zod-validated inputs, LLM-friendly descriptions, and automatic type serialization.
 
-An LLM can call any SAP instruction without ever touching Solana primitives directly.
+---
 
 ## Prerequisites
 
@@ -19,11 +21,10 @@ The plugin adapter requires **two** npm packages:
 | `@oobe-protocol-labs/synapse-client-sdk` | Synapse AI toolkit (provides `SynapseAgentKit`) |
 
 ```bash
-# Install both packages
 pnpm add @oobe-protocol-labs/synapse-sap-sdk @oobe-protocol-labs/synapse-client-sdk
 ```
 
-`synapse-sap-sdk` is the SAP on-chain SDK you have been using throughout these docs. `synapse-client-sdk` is a separate package that provides the AI agent framework (LangChain integration, multi-plugin system, tool orchestration). The plugin adapter bridges the two.
+---
 
 ## Quick Start
 
@@ -32,7 +33,6 @@ import { SynapseAgentKit } from "@oobe-protocol-labs/synapse-client-sdk/ai/plugi
 import { createSAPPlugin } from "@oobe-protocol-labs/synapse-sap-sdk/plugin";
 import { AnchorProvider } from "@coral-xyz/anchor";
 
-// provider: an AnchorProvider with a connected wallet (signer)
 const provider = AnchorProvider.env();
 
 // createSAPPlugin returns a SynapsePlugin exposing 52 on-chain tools
@@ -43,14 +43,14 @@ const sapPlugin = createSAPPlugin({
 
 // SynapseAgentKit orchestrates plugins and converts tools to LangChain format
 const kit = new SynapseAgentKit({
-  rpcUrl: "https://api.mainnet-beta.solana.com", // Solana RPC endpoint
+  rpcUrl: "https://api.mainnet-beta.solana.com",
 })
   .use(sapPlugin);     // register the SAP plugin
 
-const tools = kit.getTools(); // 52 StructuredTool instances (LangChain-compatible)
+const tools = kit.getTools(); // 52 StructuredTool instances
 ```
 
-> **Standalone usage:** If you do not need `SynapseAgentKit`, you can use `createSAPPlugin` directly. The plugin's `install()` method returns an executor function you can call manually.
+---
 
 ## How It Works
 
@@ -60,6 +60,8 @@ The plugin follows a four-layer pipeline:
 2. **Protocols (8 domains)**: Method registries mapping tool names to schema pairs
 3. **Executor**: Dispatches to SapClient module methods with automatic serialization
 4. **Solana RPC**: Transaction submitted, confirmed, signature returned
+
+---
 
 ## The 8 Protocol Domains
 
@@ -75,6 +77,8 @@ The plugin follows a four-layer pipeline:
 | Memory Ledger | `sap-ledger` | 6 | Ring buffer, sealed pages |
 | **Total** | | **52** | |
 
+---
+
 ## Serialization Bridge
 
 The executor handles all type conversions automatically:
@@ -88,7 +92,7 @@ The executor handles all type conversions automatically:
 | Chain to LLM | PublicKey to Base58 string |
 | Chain to LLM | BN to numeric string |
 
-An LLM produces JSON like `{"agent": "7xKXtg...", "amount": "1000000000"}` and the executor converts types appropriately before calling the Anchor instruction.
+---
 
 ## Zod Schema Conventions
 
@@ -100,6 +104,8 @@ An LLM produces JSON like `{"agent": "7xKXtg...", "amount": "1000000000"}` and t
 | Anchor enum | `z.enum(["sol", "usdc", "spl"])` |
 
 All write operations return `{ txSignature: string }` in the output schema.
+
+---
 
 ## Configuration
 
@@ -116,6 +122,8 @@ const plugin = createSAPPlugin({
 });
 ```
 
+---
+
 ## Full LangChain Integration
 
 ```typescript
@@ -130,3 +138,16 @@ const result = await executor.invoke({
   input: "Register a new agent called SwapBot with Jupiter swap capability",
 });
 ```
+
+---
+
+## Next Steps
+
+- **[Quickstart](/docs/sdk/quickstart)** — First agent registration
+- **[Tools and Schemas](/docs/core/tools-schemas)** — Tool publication
+- **[Zod Schemas](/docs/sdk/zod-schemas)** — Runtime validation
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

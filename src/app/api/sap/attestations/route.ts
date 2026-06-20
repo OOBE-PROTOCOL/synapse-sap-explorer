@@ -13,13 +13,20 @@ import { selectAllAttestations, upsertAttestations } from '~/lib/db/queries';
 import { isDbDown, markDbDown } from '~/db';
 import { dbAttestationToApi, apiAttestationToDb } from '~/lib/db/mappers';
 import type { ApiAttestation } from '~/types';
+import { asText } from '~/lib/format';
 
 async function rpcFetchAttestations() {
   const attestations = await findAllAttestations();
-  const serialized = attestations.map((a) => ({
-    pda: a.pda.toBase58(),
-    ...serialize(a.account),
-  })) as ApiAttestation[];
+  const serialized = attestations.map((a) => {
+    const account = serialize(a.account);
+    return {
+      ...account,
+      pda: asText(a.pda),
+      agent: asText(account.agent),
+      attester: asText(account.attester),
+      attestationType: asText(account.attestationType),
+    };
+  }) as ApiAttestation[];
   upsertAttestations(serialized.map(apiAttestationToDb)).catch((e) =>
     console.warn('[attestations] DB write failed:', (e as Error).message),
   );

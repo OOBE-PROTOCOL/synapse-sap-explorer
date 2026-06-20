@@ -2,6 +2,7 @@
 
 
 import { useSapQuery } from '~/hooks/use-sap-query';
+import { pathSegment } from '~/lib/format';
 
 const POLL_VAULTS = 30_000;
 const POLL_VAULT_DETAIL = 30_000;
@@ -238,8 +239,16 @@ export type InscriptionResult = {
   totalTxFromRpc: number;
 };
 
-export function useInscriptions(vaultPda: string | undefined, sessionPda?: string) {
-  const qs = sessionPda ? `?session=${encodeURIComponent(sessionPda)}` : '';
+export function useInscriptions(
+  vaultPda: string | undefined,
+  sessionPda?: string,
+  opts?: { limit?: number; rpc?: boolean },
+) {
+  const params = new URLSearchParams();
+  if (sessionPda) params.set('session', sessionPda);
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.rpc === false) params.set('rpc', 'false');
+  const qs = params.toString() ? `?${params.toString()}` : '';
   return useFetch<InscriptionResult>(
     vaultPda ? `/api/sap/vaults/${vaultPda}/inscriptions${qs}` : null,
     { pollInterval: POLL_VAULT_DETAIL },
@@ -285,5 +294,6 @@ export type AgentMemoryResponse = {
 };
 
 export function useAgentMemory(agentPda: string | undefined) {
-  return useFetch<AgentMemoryResponse>(agentPda ? `/api/sap/agents/${agentPda}/memory` : null);
+  const segment = agentPda ? pathSegment(agentPda) : '';
+  return useFetch<AgentMemoryResponse>(segment ? `/api/sap/agents/${segment}/memory` : null);
 }

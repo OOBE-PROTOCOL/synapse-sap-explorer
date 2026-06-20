@@ -14,6 +14,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '~
 import { useAttestations, useAgents } from '~/hooks/use-sap';
 import { useAgentMapCtx } from '~/providers/sap-data-provider';
 import { AgentTag } from '~/components/ui/agent-tag';
+import { asText } from '~/lib/format';
 
 export default function AttestationsPage() {
   const { data, loading, error } = useAttestations();
@@ -26,8 +27,11 @@ export default function AttestationsPage() {
   const enriched = useMemo(() => {
     if (!data?.attestations) return [];
     return data.attestations.map((a) => {
-      const agent = agentsData?.agents.find((ag) => ag.pda === a.agent);
-      return { ...a, agentName: agent?.identity?.name ?? null };
+      const agentPda = asText(a.agent);
+      const attester = asText(a.attester);
+      const pda = asText(a.pda);
+      const agent = agentsData?.agents.find((ag) => asText(ag.pda) === agentPda);
+      return { ...a, pda, agent: agentPda, attester, agentName: agent?.identity?.name ?? null };
     });
   }, [data, agentsData]);
 
@@ -57,7 +61,7 @@ export default function AttestationsPage() {
     const total = enriched.length;
     const active = enriched.filter(a => a.isActive).length;
     const expired = enriched.filter(a => a.expiresAt !== '0' && Number(a.expiresAt) * 1000 < Date.now()).length;
-    const uniqueAttesters = new Set(enriched.map(a => a.attester)).size;
+    const uniqueAttesters = new Set(enriched.map(a => asText(a.attester)).filter(Boolean)).size;
     return { total, active, expired, uniqueAttesters };
   }, [enriched]);
 
@@ -143,10 +147,10 @@ export default function AttestationsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginated.map((a) => {
+              {paginated.map((a, i) => {
                 const isExpired = a.expiresAt !== '0' && Number(a.expiresAt) * 1000 < Date.now();
                 return (
-                  <TableRow key={a.pda} className="hover:bg-muted/50">
+                  <TableRow key={asText(a.pda) || `${asText(a.agent)}-${i}`} className="hover:bg-muted/50">
                     <TableCell>
                       <p className="text-sm font-medium text-foreground truncate">{a.agentName ?? 'Unknown'}</p>
                       <Address value={a.agent} copy className="text-xs" />

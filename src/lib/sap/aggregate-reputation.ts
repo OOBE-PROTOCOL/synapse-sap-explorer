@@ -15,7 +15,7 @@ import { PublicKey } from '@solana/web3.js';
 import type {
   AggregatedReputation,
   AggregateOptions,
-} from '@oobe-protocol-labs/synapse-sap-sdk/registries/fairscale';
+} from './sdk-compat';
 
 import { getSapClient } from './discovery';
 import { swr } from '~/lib/cache';

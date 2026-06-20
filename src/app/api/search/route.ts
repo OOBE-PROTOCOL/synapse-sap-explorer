@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '~/db';
 import { agents, tools, escrows, transactions } from '~/db/schema';
 import { like, or } from 'drizzle-orm';
+import { entityPath } from '~/lib/format';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
         type: 'agent',
         label: row.name ?? row.wallet ?? row.pda,
         sub: row.pda,
-        href: `/agents/${row.wallet ?? row.pda}`,
+        href: entityPath('/agents', row.wallet ?? row.pda),
       });
     }
   }
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
         type: 'tool',
         label: row.toolName ?? row.pda,
         sub: row.agentPda ?? '',
-        href: `/tools/${row.pda}`,
+        href: entityPath('/tools', row.pda),
       });
     }
   }
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
         type: 'escrow',
         label: row.pda,
         sub: row.depositor ?? '',
-        href: `/escrows/${row.pda}`,
+        href: entityPath('/escrows', row.pda),
       });
     }
   }
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
         type: 'tx',
         label: row.signature,
         sub: row.signer ?? '',
-        href: `/tx/${row.signature}`,
+        href: entityPath('/tx', row.signature),
       });
     }
   }

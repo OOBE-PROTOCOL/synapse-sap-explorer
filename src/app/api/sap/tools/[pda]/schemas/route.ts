@@ -3,11 +3,12 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { PublicKey } from '@solana/web3.js';
 import { createHash } from 'crypto';
-import { getSapClient, getSynapseConnection, getRpcConfig } from '~/lib/sap/discovery';
+import { getSapClient, getRpcConfig } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
-import { selectToolSchemas, upsertToolSchemas } from '~/lib/db/queries';
+import { selectToolByPda, selectToolSchemas, upsertToolSchemas } from '~/lib/db/queries';
 import { isDbDown } from '~/db';
-import { rawGetTransaction } from '~/lib/rpc';
+import { rawGetSignaturesForAddress, rawGetTransaction } from '~/lib/rpc';
+import { hashIsEmpty, hashToFullHex } from '~/lib/format';
 import type { InscribedSchema } from '~/types';
 
 const SCHEMA_TYPE_LABELS: Record<number, string> = {
@@ -29,6 +30,57 @@ type ScanResult = {
   reachedCap: boolean;
 };
 
+function timeoutAfter<T>(ms: number, value: T): Promise<T> {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(value), ms);
+  });
+}
+
+function mergeSchemas(primary: InscribedSchema[], scanned: InscribedSchema[]) {
+  const byKey = new Map<string, InscribedSchema>();
+  for (const schema of [...primary, ...scanned]) {
+    const key = `${schema.schemaTypeRaw}:${schema.version}:${schema.txSignature}`;
+    byKey.set(key, schema);
+  }
+  return [...byKey.values()].sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
+}
+
+function mapDbSchema(s: Awaited<ReturnType<typeof selectToolSchemas>>[number]): InscribedSchema {
+  const normalizeHash = (value: unknown) => {
+    const hex = hashToFullHex(value as Parameters<typeof hashToFullHex>[0]);
+    return hex === '—' ? '' : hex;
+  };
+  return {
+    schemaType: s.schemaTypeLabel,
+    schemaTypeRaw: s.schemaType,
+    schemaData: s.schemaData,
+    schemaJson: s.schemaJson as Record<string, unknown> | null,
+    schemaHash: normalizeHash(s.schemaHash),
+    computedHash: normalizeHash(s.computedHash),
+    verified: s.verified,
+    compression: s.compression,
+    version: s.version,
+    toolName: s.toolName ?? '',
+    agent: s.agentPda,
+    txSignature: s.txSignature,
+    blockTime: s.blockTime ? Math.floor(s.blockTime.getTime() / 1000) : null,
+  };
+}
+
+function schemaTypeLabel(raw: number): string {
+  return SCHEMA_TYPE_LABELS[raw] ?? `unknown(${raw})`;
+}
+
+async function expectedTypesFromDb(toolPda: string): Promise<number[]> {
+  const tool = await selectToolByPda(toolPda);
+  if (!tool) return [];
+  const expected: number[] = [];
+  if (!hashIsEmpty(tool.inputSchemaHash)) expected.push(0);
+  if (!hashIsEmpty(tool.outputSchemaHash)) expected.push(1);
+  if (!hashIsEmpty(tool.descriptionHash)) expected.push(2);
+  return expected;
+}
+
 /**
  * Hard cap on signature pagination per request. Inscriptions are emitted
  * once at publish (and again on each `inscribeSchema` update) — they live
@@ -38,6 +90,52 @@ type ScanResult = {
  */
 const SIG_PAGE_SIZE = 100;
 const MAX_SIG_PAGES = 10; // up to 1000 most-recent sigs
+const DEEP_MAX_SIG_PAGES = 50; // background repair for partial DB caches
+const PUBLIC_MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
+
+type RpcCandidate = {
+  label: string;
+  url: string;
+  headers: Record<string, string>;
+};
+
+function isUntrustedHistoryError(error: unknown): boolean {
+  const msg = (error as Error)?.message?.toLowerCase?.() ?? String(error).toLowerCase();
+  return (
+    msg.includes('gsfa local index incomplete') ||
+    msg.includes('transaction history is not available') ||
+    msg.includes('refusing to return an untrusted empty result')
+  );
+}
+
+function getRpcCandidates(): RpcCandidate[] {
+  const primary = getRpcConfig();
+  const candidates: RpcCandidate[] = [
+    { label: 'synapse', url: primary.url, headers: primary.headers },
+  ];
+
+  const fallbackUrl = process.env.SAP_FALLBACK_RPC_URL || process.env.NEXT_PUBLIC_RPC_URL;
+  if (fallbackUrl) {
+    candidates.push({
+      label: 'fallback',
+      url: fallbackUrl,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  candidates.push({
+    label: 'public-mainnet',
+    url: PUBLIC_MAINNET_RPC,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (!candidate.url || seen.has(candidate.url)) return false;
+    seen.add(candidate.url);
+    return true;
+  });
+}
 
 /** Fetch the on-chain ToolDescriptor for a tool PDA. */
 async function fetchToolDescriptor(toolPda: string): Promise<{
@@ -73,9 +171,11 @@ async function fetchToolDescriptor(toolPda: string): Promise<{
   }
 }
 
-async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
-  const conn = getSynapseConnection();
-  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+async function fetchToolSchemas(toolPda: string, maxPages = MAX_SIG_PAGES): Promise<ScanResult> {
+  const rpcCandidates = getRpcCandidates();
+  let rpcIndex = 0;
+  let rpcUrl = rpcCandidates[rpcIndex]?.url;
+  let rpcHeaders = rpcCandidates[rpcIndex]?.headers ?? { 'Content-Type': 'application/json' };
 
   const sap = getSapClient();
   const eventParser = sap.events;
@@ -110,21 +210,39 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
   let scanned = 0;
   let pages = 0;
 
-  outer: while (pages < MAX_SIG_PAGES) {
+  outer: while (pages < maxPages) {
     pages++;
     let signatures: Array<{ signature: string }> = [];
-    try {
-      signatures = await conn.getSignaturesForAddress(
-        new PublicKey(toolPda),
-        { limit: SIG_PAGE_SIZE, before },
-      );
-    } catch (e: unknown) {
-      const msg = (e as Error)?.message ?? '';
-      if (msg.includes('StructError') || msg.includes('Expected the value to satisfy a union')) {
-        console.warn('[tool-schemas] getSignaturesForAddress struct validation failed');
-        break;
+    while (true) {
+      const candidate = rpcCandidates[rpcIndex];
+      if (!candidate) {
+        throw new Error('All schema RPC history providers failed');
       }
-      throw e;
+      rpcUrl = candidate.url;
+      rpcHeaders = candidate.headers;
+      try {
+        signatures = await rawGetSignaturesForAddress(
+          toolPda,
+          { limit: SIG_PAGE_SIZE, before },
+          rpcUrl,
+          rpcHeaders,
+        );
+        break;
+      } catch (e: unknown) {
+        const msg = (e as Error)?.message ?? '';
+        if (msg.includes('StructError') || msg.includes('Expected the value to satisfy a union')) {
+          console.warn('[tool-schemas] getSignaturesForAddress struct validation failed');
+          break outer;
+        }
+        if (isUntrustedHistoryError(e) && rpcIndex < rpcCandidates.length - 1) {
+          console.warn(
+            `[tool-schemas] ${candidate.label} has incomplete history for ${toolPda}; trying ${rpcCandidates[rpcIndex + 1].label}`,
+          );
+          rpcIndex++;
+          continue;
+        }
+        throw e;
+      }
     }
     if (signatures.length === 0) break;
     scanned += signatures.length;
@@ -289,7 +407,7 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
   }
 
   const reachedCap =
-    pages >= MAX_SIG_PAGES &&
+    pages >= maxPages &&
     expectedSet.size > 0 &&
     ![...expectedSet].every((t) => foundTypes.has(t));
 
@@ -326,7 +444,7 @@ async function fetchToolSchemas(toolPda: string): Promise<ScanResult> {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ pda: string }> },
 ) {
   try {
@@ -338,32 +456,64 @@ export async function GET(
     } catch {
       return NextResponse.json({ error: 'Invalid PDA' }, { status: 400 });
     }
+    const url = new URL(req.url);
+    const deep = url.searchParams.get('deep') === '1' || url.searchParams.get('repair') === '1';
+    const coldMaxPages = deep ? DEEP_MAX_SIG_PAGES : MAX_SIG_PAGES;
 
-    // DB cache (fast path) — but skip when any row is unverified, so we
-    // re-decode with the latest decoder logic and overwrite the cache.
+    // DB cache (fast path). Cached inscriptions are the UI source of truth;
+    // RPC refresh is opportunistic and must never hide already indexed data.
     if (!isDbDown()) {
       try {
         const dbSchemas = await selectToolSchemas(pda);
-        const allVerified = dbSchemas.length > 0 && dbSchemas.every((s) => s.verified);
-        if (allVerified) {
-          const mapped = dbSchemas.map((s) => ({
-            schemaType: s.schemaTypeLabel,
-            schemaTypeRaw: s.schemaType,
-            schemaData: s.schemaData,
-            schemaJson: s.schemaJson,
-            schemaHash: s.schemaHash,
-            computedHash: s.computedHash,
-            verified: s.verified,
-            compression: s.compression,
-            version: s.version,
-            toolName: s.toolName ?? '',
-            agent: s.agentPda,
-            txSignature: s.txSignature,
-            blockTime: s.blockTime ? Math.floor(s.blockTime.getTime() / 1000) : null,
-          }));
-          // Background refresh from RPC
-          swr(`tool-schemas:${pda}`, () => fetchToolSchemas(pda), { ttl: 60_000, swr: 300_000 }).catch(() => {});
-          return NextResponse.json({ schemas: mapped, total: mapped.length, source: 'db' });
+        if (dbSchemas.length > 0) {
+          const mapped = dbSchemas.map(mapDbSchema);
+          let expectedTypes: number[] = [];
+          try {
+            expectedTypes = await expectedTypesFromDb(pda);
+          } catch {
+            expectedTypes = [];
+          }
+          const foundTypes = new Set(mapped.map((s) => s.schemaTypeRaw));
+          let responseSchemas = mapped;
+          let missingTypes = expectedTypes.filter((type) => !foundTypes.has(type));
+
+          // If DB has only part of the descriptor-declared schemas, try one
+          // bounded deep repair before responding. The promise keeps running
+          // and persists to DB even if the UI timeout wins, so the next expand
+          // is instant and complete.
+          if (missingTypes.length > 0) {
+            const deepScan = swr(
+              `tool-schemas:${pda}:deep`,
+              () => fetchToolSchemas(pda, DEEP_MAX_SIG_PAGES),
+              { ttl: 15_000, swr: 300_000 },
+            );
+            const repaired = await Promise.race([
+              deepScan.catch(() => null),
+              timeoutAfter<ScanResult | null>(6_000, null),
+            ]);
+            if (repaired?.schemas?.length) {
+              responseSchemas = mergeSchemas(mapped, repaired.schemas);
+              const repairedTypes = new Set(responseSchemas.map((s) => s.schemaTypeRaw));
+              missingTypes = expectedTypes.filter((type) => !repairedTypes.has(type));
+            } else {
+              deepScan.catch(() => {});
+            }
+          } else {
+            swr(
+              `tool-schemas:${pda}`,
+              () => fetchToolSchemas(pda, MAX_SIG_PAGES),
+              { ttl: 60_000, swr: 300_000 },
+            ).catch(() => {});
+          }
+
+          return NextResponse.json({
+            schemas: responseSchemas,
+            total: responseSchemas.length,
+            expectedTypes,
+            missingTypes,
+            missingSchemaLabels: missingTypes.map(schemaTypeLabel),
+            source: responseSchemas.every((s) => s.verified) ? 'db' : 'db-unverified-refreshing',
+          });
         }
       } catch { /* DB down — fall through to RPC */ }
     }
@@ -372,14 +522,22 @@ export async function GET(
     let result: ScanResult = { schemas: [], expectedTypes: [], scannedSignatures: 0, reachedCap: false };
     try {
       result = await swr(
-        `tool-schemas:${pda}`,
-        () => fetchToolSchemas(pda),
+        `tool-schemas:${pda}:${coldMaxPages}`,
+        () => fetchToolSchemas(pda, coldMaxPages),
         { ttl: 60_000, swr: 300_000 }, // 1min fresh, 5min stale
       );
     } catch (e: unknown) {
       const msg = (e as Error)?.message ?? '';
       if (msg.includes('StructError') || msg.includes('Expected the value to satisfy a union')) {
         return NextResponse.json({ schemas: [], total: 0, warning: 'RPC schema parser temporary issue' });
+      }
+      if (isUntrustedHistoryError(e)) {
+        return NextResponse.json({
+          schemas: [],
+          total: 0,
+          warning: 'RPC history unavailable from configured providers; schema repair will retry on the next request',
+          source: 'rpc-history-unavailable',
+        });
       }
       throw e;
     }

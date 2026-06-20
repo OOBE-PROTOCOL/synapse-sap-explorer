@@ -1,19 +1,24 @@
 ---
 title: RPC and Network Configuration
-description: Optimal RPC setup, Synapse Gateway, connection factories, and rate limiting strategies.
+description: Optimal RPC setup, Synapse Gateway, connection factories, rate limiting, and production strategies for SAP SDK v0.20.0.
 ---
 
 # RPC and Network Configuration
 
+**SDK Version:** v0.20.0  
+**Recommended RPC:** Synapse Gateway (OOBE Protocol)
+
 Reliable RPC connectivity is the foundation of any SAP integration. Every operation the SDK performs, whether reading an agent's identity or sending a transaction, goes through an RPC node. Choosing the right node, configuring retry logic, and understanding commitment levels directly affect the reliability and speed of your application.
 
-This guide covers connection setup, cluster selection, rate limiting strategies, and production-grade configuration.
+---
 
 ## What is an RPC Node?
 
 For readers new to Solana: an RPC node is a server that provides access to the blockchain. When you call `client.agent.fetch()`, the SDK sends an HTTP request to an RPC node, which reads the blockchain and returns the data. When you call `client.agent.register()`, the SDK sends a signed transaction to the RPC node, which forwards it to the Solana network for processing.
 
 Public RPC nodes (like `api.devnet.solana.com`) are free but rate-limited. For production applications, dedicated RPC providers like **Synapse Gateway**, **Triton**, or **QuickNode** offer higher throughput, lower latency, and better reliability. Synapse Gateway is the recommended endpoint for SAP workloads because it ships pre-tuned for the program's account-heavy read patterns.
+
+---
 
 ## Connection Factories
 
@@ -26,7 +31,7 @@ import { SapConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
 import { Keypair } from "@solana/web3.js";
 
 const { client, anchorProvider } = SapConnection.fromKeypair(
-  "https://api.devnet.solana.com",
+  "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY",
   keypair,
   { commitment: "confirmed" }
 );
@@ -41,15 +46,30 @@ import { AnchorProvider } from "@coral-xyz/anchor";
 const client = SapClient.from(AnchorProvider.env());
 ```
 
+---
+
 ## Cluster Selection
 
 | Cluster | RPC URL | Use Case |
 |---------|---------|----------|
-| Devnet | `https://api.devnet.solana.com` | Development, testing |
-| Mainnet | `https://api.mainnet-beta.solana.com` | Production (rate limited) |
-| Custom | Provider URL | Dedicated RPC nodes |
+| **Devnet** | `https://api.devnet.solana.com` | Development, testing |
+| **Mainnet** | `https://api.mainnet-beta.solana.com` | Production (rate limited) |
+| **Custom** | Provider URL | Dedicated RPC nodes (recommended) |
 
-The public Solana RPC endpoints enforce strict rate limits. For production use, configure a dedicated RPC provider (Synapse Gateway, Triton, QuickNode).
+### Recommended RPC Providers
+
+| Provider | Mainnet URL | Features |
+|----------|-------------|----------|
+| **Synapse Gateway** | `https://us-1-mainnet.oobeprotocol.ai/rpc` | SAP-optimized, region-aware |
+| **Triton** | `https://mainnet.rpc.titan.to/` | High throughput, low latency |
+| **QuickNode** | `https://YOUR-ENDPOINT.quiknode.pro/` | Global coverage, good docs |
+| **Helius** | `https://mainnet.helius-rpc.com/?api-key=YOUR_KEY` | Developer-friendly, good free tier |
+
+<Callout type="warning">
+**Avoid public Solana RPC** for production. The public endpoints (`api.mainnet-beta.solana.com`) enforce strict rate limits and may reject SAP-specific queries.
+</Callout>
+
+---
 
 ## Environment-Based Configuration
 
@@ -66,7 +86,16 @@ const config = {
     : "https://api.devnet.solana.com",
   commitment: "confirmed" as const,
 };
+
+// Use in client initialization
+const client = SapClient.from(new AnchorProvider(
+  new Connection(config.rpcUrl, config.commitment),
+  wallet,
+  { commitment: config.commitment }
+));
 ```
+
+---
 
 ## Rate Limiting Strategies
 
@@ -81,6 +110,9 @@ async function throttledFetch<T>(
   await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
   return fetcher();
 }
+
+// Usage
+const agent = await throttledFetch(() => client.agent.fetch());
 ```
 
 ### Batch Requests
@@ -95,7 +127,7 @@ const [agent, stats, tools] = await Promise.all([
 ]);
 ```
 
-### Retry with Backoff
+### Retry with Exponential Backoff
 
 ```typescript
 async function retryWithBackoff<T>(
@@ -108,33 +140,45 @@ async function retryWithBackoff<T>(
       return await fn();
     } catch (error: unknown) {
       if (attempt === maxRetries) throw error;
-      const isRateLimit =
+      
+      const isRateLimit = 
         error instanceof Error && error.message.includes("429");
-      const delay = isRateLimit
-        ? baseDelay * Math.pow(2, attempt)
+      const delay = isRateLimit 
+        ? baseDelay * Math.pow(2, attempt) 
         : baseDelay;
+      
       await new Promise((r) => setTimeout(r, delay));
     }
   }
   throw new Error("Unreachable");
 }
+
+// Usage
+const agent = await retryWithBackoff(() => client.agent.fetch());
 ```
+
+---
 
 ## Commitment Levels
 
 Commitment levels determine how "confirmed" a transaction needs to be before the RPC node considers it done. This is a concept unique to blockchains that does not exist in traditional databases.
 
 | Level | Finality | Latency | Recommended For |
-|-------|----------|---------|----------------|
-| `processed` | Optimistic | ~400ms | Read-only queries |
-| `confirmed` | Supermajority | ~1s | Default for writes |
-| `finalized` | Max finality | ~12s | Payment settlement |
+|-------|----------|---------|-----------------|
+| `processed` | Optimistic | ~400ms | Read-only queries, UI updates |
+| `confirmed` | Supermajority | ~1s | **Default for writes**, agent registration |
+| `finalized` | Max finality | ~12s | Payment settlement, escrow closing |
 
-**What these mean in practice:** `processed` is like checking your bank balance on the app: it shows the latest state, but a recent transaction might still be reversed. `confirmed` is like receiving a receipt: the transaction has been validated by 2/3 of validators. `finalized` is like seeing the transaction on your monthly statement: it is permanent and irreversible.
+**What these mean in practice:**
+- `processed` is like checking your bank balance on the app: it shows the latest state, but a recent transaction might still be reversed.
+- `confirmed` is like receiving a receipt: the transaction has been validated by 2/3 of validators.
+- `finalized` is like seeing the transaction on your monthly statement: it is permanent and irreversible.
 
 Use `confirmed` as the default. Only escalate to `finalized` when verifying payment settlement or closing escrows where absolute certainty is required.
 
-## Dual-Connection Strategy (v0.6.0)
+---
+
+## Dual-Connection Strategy (v0.20.0)
 
 Some authenticated RPC providers reject WebSocket connections (returning HTTP 400). This breaks SPL token operations and real-time subscriptions. The SDK's `createDualConnection()` solves this by using your primary authenticated RPC for transactions and a public fallback for WebSocket subscriptions.
 
@@ -165,13 +209,68 @@ const ata = await findATA(walletPublicKey, tokenMint);
 // Returns the ATA address, using fallback connection if primary fails
 ```
 
+---
+
 ## Production Checklist
 
-1. Use a dedicated RPC endpoint (not the public Solana endpoint)
-2. Set `commitment: "confirmed"` as the default
-3. Implement retry logic with exponential backoff
-4. Add 429 (rate limit) detection with longer delays
-5. Monitor RPC latency and switch providers if degraded
-6. Cache `getAccountInfo` responses where appropriate (static PDAs)
-7. Use `getProgramAccounts` with `memcmp` filters to reduce response size
-8. Keep WebSocket connections alive for real-time subscription use cases
+1. ✅ **Use a dedicated RPC endpoint** (not the public Solana endpoint)
+2. ✅ **Set `commitment: "confirmed"`** as the default
+3. ✅ **Implement retry logic** with exponential backoff
+4. ✅ **Add 429 (rate limit) detection** with longer delays
+5. ✅ **Monitor RPC latency** and switch providers if degraded
+6. ✅ **Cache `getAccountInfo` responses** where appropriate (static PDAs)
+7. ✅ **Use `getProgramAccounts` with `memcmp` filters** to reduce response size
+8. ✅ **Keep WebSocket connections alive** for real-time subscription use cases
+9. ✅ **Configure fallback RPC** for redundancy
+10. ✅ **Test on devnet first** before mainnet deployment
+
+---
+
+## Troubleshooting
+
+### 429 Too Many Requests
+
+```typescript
+// Solution: Implement client-side throttling
+const DELAY_MS = 200; // 5 requests per second
+
+async function fetchWithThrottle<T>(fn: () => Promise<T>): Promise<T> {
+  await new Promise(r => setTimeout(r, DELAY_MS));
+  return fn();
+}
+```
+
+### WebSocket 400 Error
+
+```typescript
+// Solution: Use dual-connection strategy
+const { primary, fallback } = createDualConnection({
+  primaryUrl: "https://YOUR_AUTHENTICATED_RPC",
+  fallbackUrl: "https://api.mainnet-beta.solana.com",
+});
+```
+
+### High Latency
+
+```bash
+# Test RPC latency
+curl -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
+  "https://YOUR_RPC_URL"
+
+# Expected: < 100ms for regional endpoints
+```
+
+---
+
+## Next Steps
+
+- **[Error Handling](/docs/best-practices/error-handling)** — Graceful error recovery
+- **[Security](/docs/best-practices/security)** — Key management, signing best practices
+- **[Cost Optimization](/docs/best-practices/cost-optimization)** — Reduce RPC costs
+- **[Troubleshooting](/docs/best-practices/troubleshooting)** — Common issues and solutions
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

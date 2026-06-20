@@ -2,8 +2,8 @@
 import { db } from '~/db';
 import { agents, agentStats } from '~/db/schema';
 import { AgentAccountData, AgentStatsData, findAllAgents, findAllAgentStats } from '~/lib/sap/discovery';
-import { serializeAccount } from '@oobe-protocol-labs/synapse-sap-sdk/utils';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, sleep } from './utils';
+import { serializeAccount } from '~/lib/sap/sdk-compat';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere, sleep } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncAgents(): Promise<number> {
@@ -83,6 +83,7 @@ export async function syncAgents(): Promise<number> {
         .onConflictDoUpdate({
           target: agents.pda,
           set: conflictUpdateSet(agents, ['pda']),
+          setWhere: conflictUpdateWhere(agents, ['pda', 'indexedAt']),
         });
       upserted += rows.length;
     } catch (e: unknown) {
@@ -93,6 +94,7 @@ export async function syncAgents(): Promise<number> {
           await db.insert(agents).values(row).onConflictDoUpdate({
             target: agents.pda,
             set: conflictUpdateSet(agents, ['pda']),
+            setWhere: conflictUpdateWhere(agents, ['pda', 'indexedAt']),
           });
           upserted++;
         } catch (e2: unknown) {
@@ -120,6 +122,7 @@ export async function syncAgents(): Promise<number> {
         .onConflictDoUpdate({
           target: agentStats.agentPda,
           set: conflictUpdateSet(agentStats, ['agentPda']),
+          setWhere: conflictUpdateWhere(agentStats, ['agentPda']),
         });
       statsUpserted++;
     } catch {
@@ -131,4 +134,3 @@ export async function syncAgents(): Promise<number> {
   log('agents', `Done: ${upserted} agents, ${statsUpserted} stats upserted`);
   return upserted;
 }
-

@@ -29,7 +29,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { useDisputes, useReceiptBatches, useEscrow } from '~/hooks/use-sap';
 import { AgentTag } from '~/components/ui/agent-tag';
-import { formatLamports } from '~/lib/format';
+import { entityPath, formatLamports } from '~/lib/format';
 
 /* ── Config ─────────────────────────────────── */
 
@@ -320,7 +320,7 @@ export default function DisputeDetailPage() {
             <CardTitle className="text-sm">Linked Escrow</CardTitle>
           </CardHeader>
           <CardContent>
-            <Link href={`/escrows/${dispute.escrowPda}`} className="text-primary hover:underline text-sm">
+            <Link href={entityPath('/escrows', dispute.escrowPda)} className="text-primary hover:underline text-sm">
               <Address value={dispute.escrowPda} className="text-xs" copy />
             </Link>
             {escrow && (

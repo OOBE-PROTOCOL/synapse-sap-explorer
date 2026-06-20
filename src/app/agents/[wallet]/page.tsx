@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink, Copy, Zap, Activity, Loader2, DollarSign, Coins, Rocket, Globe, ChevronRight, ChevronsDown, Sparkles, HelpCircle, LineChart } from 'lucide-react';
@@ -15,7 +15,7 @@ import { ToolRow } from '~/components/agents/tool-row';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking, useAgentMetaplex, useAgentNfts, useMetaplexRegistry, useCanonicalEip8004, useAgentLaunchTokens, type CanonicalEip8004Card, type AgentLaunchTokenEntry } from '~/hooks/use-sap';
+import { useAgent, useTools, useEscrows, useFeedbacks, useAttestations, useVaults, useAddressEvents, useAgentRevenue, useAgentMemory, useX402Payments, useAgentBalances, useAgentStaking, useAgentMetaplex, useAgentNfts, useMetaplexRegistry, useCanonicalEip8004, useAgentLaunchTokens, useSapActivity, type CanonicalEip8004Card, type AgentLaunchTokenEntry } from '~/hooks/use-sap';
 import { useQueryState, QueryParam } from '~/hooks/use-query-state';
 import type { SapEvent, X402PaymentRow, X402Stats } from '~/hooks/use-sap';
 import type {
@@ -32,8 +32,12 @@ import { cn } from '~/lib/utils';
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { asPublicKeyText, asText, entityPath, short as shortText } from '~/lib/format';
+import { safeExternalUrl } from '~/lib/safe-url';
 
 const SOLSCAN = 'https://solscan.io';
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 /* ── CAIP-10 chain decoder ─────────────────────────────────
  * Decodes Metaplex / EIP-8004 cross-chain agent registry
@@ -48,7 +52,8 @@ const EVM_REGISTRIES: Record<string, { name: string; explorer: string }> = {
   '42161': { name: 'Arbitrum', explorer: 'https://arbiscan.io' },
   '1187947933': { name: 'EVM Testnet', explorer: '' },
 };
-function decodeAgentRegistry(s: string): { chain: string; registryLabel: string; explorer: string | null } {
+function decodeAgentRegistry(value: unknown): { chain: string; registryLabel: string; explorer: string | null } {
+  const s = asText(value);
   const parts = s.split(':');
   if (parts[0] === 'solana') {
     return { chain: 'Solana mainnet', registryLabel: parts[2] ?? 'registry', explorer: SOLSCAN };
@@ -58,7 +63,7 @@ function decodeAgentRegistry(s: string): { chain: string; registryLabel: string;
     const addr = parts[2] ?? '';
     return {
       chain: meta?.name ?? `EVM ${parts[1]}`,
-      registryLabel: addr ? `${addr.slice(0, 8)}…${addr.slice(-4)}` : 'registry',
+      registryLabel: addr ? shortText(addr, 8, 4) : 'registry',
       explorer: meta?.explorer && addr ? `${meta.explorer}/address/${addr}` : null,
     };
   }
@@ -73,6 +78,54 @@ function safeDateStr(raw: string | number | null | undefined): string {
   const d = new Date(ms);
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatSnapshotTime(raw: string | null | undefined): string {
+  if (!raw) return 'No SAP snapshot yet';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return 'No SAP snapshot yet';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatSettlementToken(raw: unknown, mint: unknown, declaredDecimals: unknown): string {
+  const tokenMint = asPublicKeyText(mint);
+  const decimals = tokenMint === USDC_MINT
+    ? 6
+    : !tokenMint || tokenMint === SOL_MINT
+      ? 9
+      : Number.isInteger(Number(declaredDecimals))
+        ? Number(declaredDecimals)
+        : 9;
+  const symbol = tokenMint === USDC_MINT || decimals === 6 ? 'USDC' : 'SOL';
+  const value = Number(raw ?? 0) / 10 ** decimals;
+  if (!Number.isFinite(value) || value <= 0) return `0 ${symbol}`;
+  const maxFractionDigits = value >= 100 ? 2 : value >= 1 ? 4 : 6;
+  return `${value.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxFractionDigits,
+  })} ${symbol}`;
+}
+
+function formatEscrowSettlementTotals(escrows: SerializedEscrow[]): string {
+  const totals = new Map<string, { raw: number; mint: string | null; decimals: number }>();
+  for (const escrow of escrows) {
+    const tokenMint = asPublicKeyText(escrow.tokenMint) || null;
+    const decimals = tokenMint === USDC_MINT ? 6 : Number(escrow.tokenDecimals ?? 9);
+    const symbol = tokenMint === USDC_MINT || decimals === 6 ? 'USDC' : 'SOL';
+    const current = totals.get(symbol) ?? { raw: 0, mint: tokenMint, decimals };
+    current.raw += Number(escrow.totalSettled ?? 0);
+    totals.set(symbol, current);
+  }
+  const parts = Array.from(totals.entries())
+    .filter(([, item]) => item.raw > 0)
+    .sort(([a], [b]) => (a === 'SOL' ? -1 : b === 'SOL' ? 1 : a.localeCompare(b)))
+    .map(([, item]) => formatSettlementToken(item.raw, item.mint, item.decimals));
+  return parts.length > 0 ? parts.join(' + ') : '0 SOL';
 }
 
 export default function AgentDetailPage() {
@@ -90,26 +143,30 @@ function AgentDetailInner() {
   const { wallet } = useParams<{ wallet: string }>();
   const router = useRouter();
   const { data, loading, error } = useAgent(wallet);
-  const canonicalWallet = data?.profile?.identity?.wallet ?? null;
+  const canonicalWallet = data?.profile?.identity?.wallet ? asPublicKeyText(data.profile.identity.wallet) : null;
+  const canonicalPda = data?.profile?.pda ? asPublicKeyText(data.profile.pda) : null;
+  const { data: agentActivityData } = useSapActivity('agent', canonicalPda ? [canonicalPda] : null, 200);
   const { data: toolsData } = useTools();
   const { data: escrowsData } = useEscrows();
   const { data: feedbacksData } = useFeedbacks();
   const { data: attestationsData } = useAttestations();
   const { data: vaultsData } = useVaults();
-  const { data: eventsData, loading: evLoading } = useAddressEvents(data?.profile?.pda ?? null, { limit: 50 });
+  const { data: eventsData, loading: evLoading } = useAddressEvents(canonicalPda, { limit: 50 });
+  const { data: walletEventsData, loading: walletEvLoading } = useAddressEvents(canonicalWallet, { limit: 50 });
   const { data: revenueData, loading: revLoading } = useAgentRevenue(canonicalWallet, 30);
-  const { data: memoryData, loading: memLoading } = useAgentMemory(data?.profile?.pda ?? undefined);
+  const { data: memoryData, loading: memLoading } = useAgentMemory(canonicalPda ?? undefined);
   const { data: x402Data, loading: x402Loading } = useX402Payments(canonicalWallet);
   const { data: balancesData, loading: balLoading } = useAgentBalances(canonicalWallet);
-  const { data: stakingData } = useAgentStaking(data?.profile?.pda ?? null);
+  const { data: stakingData } = useAgentStaking(canonicalPda);
   const { data: metaplexData, loading: metaplexLoading } = useAgentMetaplex(canonicalWallet);
   const { data: nftsData } = useAgentNfts(canonicalWallet);
   const { data: registryData, loading: registryLoading } = useMetaplexRegistry(canonicalWallet);
-  const { data: canonicalCard, loading: canonicalLoading } = useCanonicalEip8004(data?.profile?.pda ?? null);
+  const { data: canonicalCard, loading: canonicalLoading } = useCanonicalEip8004(canonicalPda);
   const [activeTab, setActiveTab] = useQueryState('tab', 'overview' as AgentTab, QueryParam.enum('overview', AGENT_TABS));
   const [copied, setCopied] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState(false);
   const [resolveAttempted, setResolveAttempted] = useState(false);
+  const schemaPrefetchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,7 +181,7 @@ function AgentDetailInner() {
         const json = await res.json();
         const nextWallet = json?.wallet as string | null;
         if (!cancelled && nextWallet && nextWallet !== wallet) {
-          router.replace(`/agents/${nextWallet}`);
+          router.replace(entityPath('/agents', nextWallet));
           return;
         }
       } catch {
@@ -165,19 +222,71 @@ function AgentDetailInner() {
   };
 
   // Must be declared before any early-return to satisfy Rules of Hooks.
-  const profilePda = data?.profile?.pda ?? null;
+  const profilePda = canonicalPda;
   // Real Genesis launches only — server validates each candidate against
   // api.metaplex.com/v1/tokens/{mint} so MPL Core identity NFTs (which
   // pass the SPL/Token-2022 program filter) are never surfaced here.
   const { data: launchTokensData } = useAgentLaunchTokens(canonicalWallet);
   const agentLaunchTokens: AgentLaunchToken[] = useMemo(() => {
     if (!profilePda) return [];
-    return (launchTokensData?.tokens ?? []).map((t) => ({
-      mint: t.mint,
-      name: t.name,
-      registryAgentMint: t.registryAgentMint || profilePda,
-    }));
-  }, [launchTokensData?.tokens, profilePda]);
+    const byMint = new Map<string, AgentLaunchToken>();
+    for (const token of launchTokensData?.tokens ?? []) {
+      byMint.set(token.mint, {
+        ...token,
+        registryAgentMint: token.registryAgentMint || profilePda,
+      });
+    }
+    for (const agent of registryData?.agents ?? []) {
+      if (!agent.agentToken || byMint.has(agent.agentToken)) continue;
+      byMint.set(agent.agentToken, {
+        mint: agent.agentToken,
+        name: agent.name?.trim() || 'Agent token',
+        symbol: null,
+        image: agent.image ?? null,
+        registryAgentMint: agent.mintAddress || profilePda,
+        tokenProgram: 'spl-token',
+        launchCount: 0,
+        primaryLaunchStatus: null,
+      });
+    }
+    return Array.from(byMint.values());
+  }, [launchTokensData?.tokens, profilePda, registryData?.agents]);
+
+  const toolPdasForSchemaPrefetch = useMemo(() => {
+    const agentPda = data?.profile?.pda ? asPublicKeyText(data.profile.pda) : null;
+    if (!agentPda) return [];
+    const seen = new Set<string>();
+    const toolPdas: string[] = [];
+    for (const tool of toolsData?.tools ?? []) {
+      if (asPublicKeyText(tool.descriptor?.agent) !== agentPda) continue;
+      const pda = asPublicKeyText(tool.pda);
+      if (!pda || seen.has(pda)) continue;
+      seen.add(pda);
+      toolPdas.push(pda);
+    }
+    return toolPdas;
+  }, [data?.profile?.pda, toolsData?.tools]);
+
+  useEffect(() => {
+    if (activeTab !== 'tools' || toolPdasForSchemaPrefetch.length === 0) return;
+    const key = toolPdasForSchemaPrefetch.join(',');
+    if (schemaPrefetchKeyRef.current === key) return;
+    schemaPrefetchKeyRef.current = key;
+
+    const controller = new AbortController();
+    fetch('/api/sap/tools/schemas/prefetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toolPdas: toolPdasForSchemaPrefetch }),
+      signal: controller.signal,
+    }).catch((error) => {
+      if ((error as Error).name !== 'AbortError') {
+        console.warn('[agent-tools] schema prefetch failed', (error as Error).message);
+      }
+    });
+
+    return () => controller.abort();
+  }, [activeTab, toolPdasForSchemaPrefetch]);
 
   if (loading) {
     return (
@@ -214,6 +323,7 @@ function AgentDetailInner() {
 
   const { profile } = data;
   const id = profile.identity;
+  const profilePdaText = asPublicKeyText(profile.pda);
   const computed = profile.computed ?? {
     isActive: id?.isActive ?? false,
     totalCalls: String(id?.totalCallsServed ?? '0'),
@@ -224,12 +334,42 @@ function AgentDetailInner() {
     protocols: id?.protocols ?? [],
   };
 
-  const agentTools = toolsData?.tools.filter((t) => t.descriptor?.agent === profile.pda) ?? [];
-  const agentEscrows = escrowsData?.escrows.filter((e) => e.agent === profile.pda) ?? [];
-  const agentFeedbacks = feedbacksData?.feedbacks.filter((f) => f.agent === profile.pda) ?? [];
-  const agentAttestations = attestationsData?.attestations.filter((a) => a.agent === profile.pda) ?? [];
-  const agentVaults = vaultsData?.vaults.filter((v) => v.agent === profile.pda) ?? [];
-  const agentEvents = eventsData?.events ?? [];
+  const samePda = (value: unknown) => asPublicKeyText(value) === profilePdaText;
+  const agentTools = toolsData?.tools.filter((t) => samePda(t.descriptor?.agent)) ?? [];
+  const agentEscrows = escrowsData?.escrows.filter((e) => samePda(e.agent)) ?? [];
+  const agentFeedbacks = feedbacksData?.feedbacks.filter((f) => samePda(f.agent)) ?? [];
+  const agentAttestations = attestationsData?.attestations.filter((a) => samePda(a.agent)) ?? [];
+  const agentVaults = vaultsData?.vaults.filter((v) => samePda(v.agent)) ?? [];
+  const agentEvents = Array.from(
+    new Map(
+      [...(eventsData?.events ?? []), ...(walletEventsData?.events ?? [])]
+        .map((event) => [`${event.txSignature}:${event.name}:${event.slot}`, event]),
+    ).values(),
+  ).sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
+  const eventsScanned = (eventsData?.scanned ?? 0) + (walletEventsData?.scanned ?? 0);
+  // ── Registry coordination ────────────────────────────────────────────────
+  // SAP registration is proven by the AgentAccount PDA. Metaplex registration
+  // can arrive through three separate signals: URI binding, on-chain plugin,
+  // or the public api.metaplex.com registry. Counts and badges must use all
+  // three, otherwise the tab can show "0" while real Metaplex data is visible.
+  const uriBound = !!metaplexData?.linked;
+  const hasOnChainPlugin =
+    (metaplexData?.pluginCount ?? 0) > 0 ||
+    (!!nftsData && nftsData.items.some((n) => n.hasAgentIdentity));
+  const registryAgentCount = registryData?.agents.length ?? 0;
+  const onMetaplexRegistry = registryAgentCount > 0;
+  const onMetaplex = uriBound || hasOnChainPlugin || onMetaplexRegistry;
+  const metaplexFootprintCount = onMetaplex
+    ? Math.max(
+        1,
+        Number(uriBound),
+        metaplexData?.pluginCount ?? 0,
+        nftsData?.withAgentIdentity ?? 0,
+        registryAgentCount,
+      )
+    : 0;
+  // Two-state primary: dual-registered or SAP-only.
+  const linkState: 'both' | 'sap-only' = onMetaplex ? 'both' : 'sap-only';
   const protocolSet = new Set<string>(computed.protocols);
   for (const cap of id.capabilities) {
     if (cap.protocolId) protocolSet.add(cap.protocolId);
@@ -237,7 +377,15 @@ function AgentDetailInner() {
   const protocols = Array.from(protocolSet);
 
   const totalCallsSettled = agentEscrows.reduce((s, e) => s + Number(e.totalCallsSettled), 0);
-  const totalSolSettled = agentEscrows.reduce((s, e) => s + Number(e.totalSettled), 0);
+  const totalSettledDisplay = formatEscrowSettlementTotals(agentEscrows);
+  const latestSnapshotCalls = Math.max(
+    ...((agentActivityData?.points ?? []).map((point) => Number(point.totalCallsServed ?? 0))),
+    Number(id.totalCallsServed ?? 0),
+  );
+  const latestActivityPoint = (agentActivityData?.points ?? []).at(-1) ?? null;
+  const latestLatencyMs = latestActivityPoint?.avgLatencyMs ?? Number(id.avgLatencyMs ?? 0);
+  const latestUptimePercent = latestActivityPoint?.uptimePercent ?? Number(id.uptimePercent ?? 0);
+  const latestActivityAt = formatSnapshotTime(latestActivityPoint?.capturedAt);
 
   const sidebarSections: Array<{ value: AgentTab; label: string; count?: number }> = [
     { value: 'overview', label: 'Overview' },
@@ -250,7 +398,7 @@ function AgentDetailInner() {
     { value: 'attestations', label: 'Attestations', count: agentAttestations.length },
     { value: 'vault', label: 'Memory Vaults', count: memoryData?.stats?.vaultCount ?? agentVaults.length },
     { value: 'x402', label: 'x402 Txns', count: x402Data?.total ?? 0 },
-    { value: 'metaplex', label: 'Metaplex', count: metaplexData?.linked ? 1 : 0 },
+    { value: 'metaplex', label: 'Metaplex', count: metaplexFootprintCount },
     { value: 'tokens', label: 'Token Launch', count: agentLaunchTokens.length },
   ];
 
@@ -297,24 +445,6 @@ function AgentDetailInner() {
     if (target) openSection(target);
   };
 
-  // ── Registry coordination ────────────────────────────────────────────────
-  // Reaching this render means SAP registration is a given (we read the
-  // AgentAccount PDA above). The only question is whether Metaplex
-  // *also* knows about this agent — via any of three independent signals:
-  //   1. SAP-canonical URI binding   (metaplexData.linked)
-  //   2. On-chain AgentIdentity plugin on any owned MPL Core asset
-  //   3. Public Metaplex Agents Registry entry (api.metaplex.com)
-  // ANY signal proves dual registration. The URI-binding flag is a
-  // sub-fact ("coordinated" vs "parallel"), not the headline state.
-  const uriBound = !!metaplexData?.linked;
-  const hasOnChainPlugin =
-    !!nftsData && nftsData.items.some((n) => n.hasAgentIdentity);
-  const registryAgentCount = registryData?.agents.length ?? 0;
-  const onMetaplexRegistry = registryAgentCount > 0;
-  const onMetaplex = uriBound || hasOnChainPlugin || onMetaplexRegistry;
-  // Two-state primary: dual-registered or SAP-only.
-  const linkState: 'both' | 'sap-only' = onMetaplex ? 'both' : 'sap-only';
-
   return (
     <div className="space-y-4 motion-safe:animate-fade-in">
       {/* ═══════════ HERO RIBBON (Solscan-style identity strip) ═══════════ */}
@@ -325,19 +455,19 @@ function AgentDetailInner() {
         const verifiedBoth = (nftsData?.items ?? []).filter((n) => n.hasAgentIdentity && registrySet.has(n.asset)).length;
         return (
           <div className="rounded-lg border border-border/30 bg-card/60 px-4 py-3 sm:px-5">
-            <div className="flex items-center gap-2 text-xs text-neutral-500">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <button
                 type="button"
                 onClick={() => router.push('/agents')}
                 aria-label="Back to all agents"
-                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-neutral-500 transition-colors hover:bg-neutral-800/60 hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-3 w-3" />
                 <span>Agents</span>
               </button>
-              <span aria-hidden className="text-neutral-700">/</span>
-              <span className="font-mono text-neutral-400 truncate" title={id.wallet}>
-                {id.wallet.slice(0, 6)}…{id.wallet.slice(-4)}
+              <span aria-hidden className="text-border">/</span>
+              <span className="font-mono text-muted-foreground truncate" title={id.wallet}>
+                {shortText(id.wallet, 6, 4)}
               </span>
             </div>
 
@@ -348,35 +478,36 @@ function AgentDetailInner() {
                     name={id.name}
                     endpoint={id.x402Endpoint}
                     mplImage={launchTokensData?.tokens?.[0]?.image ?? null}
-                    className="rounded-full p-0 ring-2 ring-neutral-800"
+                    className="rounded-full p-0 ring-2 ring-border"
                     size={44}
+                    showMetaplexBadge={onMetaplex}
                   />
                   {computed.isActive && (
                     <span
                       aria-label="Agent is active"
                       title="Active in the last 7 days"
-                      className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-neutral-950"
+                      className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-primary ring-2 ring-background"
                     />
                   )}
                 </div>
                 <div className="min-w-0">
-                  <h1 className="text-lg font-semibold tracking-tight text-neutral-50 truncate text-balance">{id.name}</h1>
+                  <h1 className="text-lg font-semibold tracking-tight text-foreground truncate text-balance">{id.name}</h1>
                   <div className="mt-0.5 flex items-center gap-2 flex-wrap">
                     <button
                       type="button"
                       onClick={() => copyAddr(id.wallet)}
                       aria-label={`Copy wallet address ${id.wallet}`}
-                      className="group inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-neutral-500 transition-colors hover:bg-neutral-800/60 hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                      className="group inline-flex min-h-7 items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span>{id.wallet.slice(0, 8)}…{id.wallet.slice(-6)}</span>
-                      <Copy className={cn('h-3 w-3', copied === id.wallet ? 'text-emerald-400' : 'opacity-60 group-hover:opacity-100')} />
+                      <span>{shortText(id.wallet, 8, 6)}</span>
+                      <Copy className={cn('h-3 w-3', copied === id.wallet ? 'text-primary' : 'opacity-60 group-hover:opacity-100')} />
                     </button>
                     <a
                       href={`${SOLSCAN}/account/${id.wallet}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="Open wallet on Solscan"
-                      className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-neutral-500 transition-colors hover:bg-neutral-800/60 hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                      className="inline-flex min-h-7 items-center gap-1 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <ExternalLink className="h-3 w-3" />
                       <span>Solscan</span>
@@ -432,7 +563,7 @@ function AgentDetailInner() {
                   aria-label="Jump to Metaplex section"
                   className={cn(
                     'h-7 px-2.5 text-xs shrink-0',
-                    metaplexData?.linked && 'bg-amber-500/80 text-neutral-950 hover:bg-amber-400',
+                    metaplexData?.linked && 'bg-primary text-primary-foreground hover:bg-primary/90',
                   )}
                 >
                   Metaplex <ChevronRight className="ml-0.5 h-3 w-3" />
@@ -444,6 +575,110 @@ function AgentDetailInner() {
           </div>
         );
       })()}
+
+      <section
+        aria-label="Agent explorer summary"
+        className="grid gap-3 rounded-lg border border-border/30 bg-card/60 p-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        <div className="rounded-md border border-border/40 bg-background/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">SAP calls served</p>
+            <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
+          </div>
+          <p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-foreground">
+            {Math.max(totalCallsSettled, latestSnapshotCalls).toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {latestSnapshotCalls.toLocaleString()} from snapshots · {totalCallsSettled.toLocaleString()} settled
+          </p>
+        </div>
+        <div className="rounded-md border border-border/40 bg-background/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">Live quality</p>
+            <LineChart className="h-4 w-4 text-primary" aria-hidden="true" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+              {Number.isFinite(latestLatencyMs) && latestLatencyMs > 0 ? latestLatencyMs.toLocaleString() : '—'}
+            </span>
+            <span className="text-xs text-muted-foreground">ms avg</span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {Number.isFinite(latestUptimePercent) && latestUptimePercent > 0 ? `${latestUptimePercent.toFixed(2)}% uptime` : 'Uptime unavailable'} · {latestActivityAt}
+          </p>
+        </div>
+        <div className="rounded-md border border-border/40 bg-background/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">Inventory</p>
+            <Zap className="h-4 w-4 text-primary" aria-hidden="true" />
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="font-mono text-lg font-semibold tabular-nums text-foreground">{agentTools.length}</p>
+              <p className="text-[11px] text-muted-foreground">Tools</p>
+            </div>
+            <div>
+              <p className="font-mono text-lg font-semibold tabular-nums text-foreground">{agentEscrows.length}</p>
+              <p className="text-[11px] text-muted-foreground">Escrows</p>
+            </div>
+            <div>
+              <p className="font-mono text-lg font-semibold tabular-nums text-foreground">{agentEvents.length}</p>
+              <p className="text-[11px] text-muted-foreground">Events</p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-md border border-border/40 bg-background/60 p-3">
+          <p className="text-xs font-medium text-muted-foreground">Canonical addresses</p>
+          <div className="mt-2 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Wallet</span>
+              <span className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => copyAddr(id.wallet)}
+                  className="inline-flex min-h-7 items-center gap-1 rounded px-1.5 font-mono text-[11px] text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Copy wallet address ${id.wallet}`}
+                >
+                  {shortText(id.wallet, 5, 5)}
+                  <Copy className={cn('h-3 w-3', copied === id.wallet ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+                </button>
+                <a
+                  href={`${SOLSCAN}/account/${id.wallet}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open wallet on Solscan"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                </a>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">PDA</span>
+              <span className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => copyAddr(profile.pda)}
+                  className="inline-flex min-h-7 items-center gap-1 rounded px-1.5 font-mono text-[11px] text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Copy PDA ${profile.pda}`}
+                >
+                  {shortText(profile.pda, 5, 5)}
+                  <Copy className={cn('h-3 w-3', copied === profile.pda ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+                </button>
+                <a
+                  href={`${SOLSCAN}/account/${profile.pda}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open PDA on Solscan"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ═══════════ DASHBOARD LAYOUT ═══════════
        * Top row  → identity (left, col-5) + stats (right, col-7).
@@ -460,16 +695,16 @@ function AgentDetailInner() {
           <div className="rounded-lg border border-border/30 bg-card/60 overflow-hidden h-full flex flex-col">
             {/* Description */}
             {id.description && (
-              <div className="px-5 py-4 border-b border-neutral-800/60">
+              <div className="px-5 py-4 border-b border-border/40">
                 <SectionLabel>Bio</SectionLabel>
-                <p className="mt-1.5 text-xs text-neutral-300 leading-relaxed text-pretty">{id.description}</p>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed text-pretty">{id.description}</p>
               </div>
             )}
 
             {/* Identifiers */}
-            <div className="px-5 py-4 border-b border-neutral-800/60">
+            <div className="px-5 py-4 border-b border-border/40">
               <SectionLabel>Identifiers</SectionLabel>
-              <div className="mt-1.5 divide-y divide-neutral-800/60">
+              <div className="mt-1.5 divide-y divide-border/40">
                 <DetailRow
                   label="PDA"
                   hint="Canonical SAP AgentAccount derived from the wallet pubkey"
@@ -479,10 +714,10 @@ function AgentDetailInner() {
                       type="button"
                       onClick={() => copyAddr(profile.pda)}
                       aria-label={`Copy PDA ${profile.pda}`}
-                      className="group inline-flex items-center gap-1 rounded px-1 hover:bg-neutral-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                      className="group inline-flex min-h-7 items-center gap-1 rounded px-1 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span>{profile.pda.slice(0, 6)}…{profile.pda.slice(-6)}</span>
-                      <Copy className={cn('h-3 w-3', copied === profile.pda ? 'text-emerald-400' : 'opacity-60 group-hover:opacity-100')} />
+                      <span>{shortText(profile.pda, 6, 6)}</span>
+                      <Copy className={cn('h-3 w-3', copied === profile.pda ? 'text-primary' : 'opacity-60 group-hover:opacity-100')} />
                     </button>
                   }
                 />
@@ -494,27 +729,27 @@ function AgentDetailInner() {
                       type="button"
                       onClick={() => copyAddr(id.wallet)}
                       aria-label={`Copy wallet ${id.wallet}`}
-                      className="group inline-flex items-center gap-1 rounded px-1 hover:bg-neutral-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                      className="group inline-flex min-h-7 items-center gap-1 rounded px-1 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span>{id.wallet.slice(0, 6)}…{id.wallet.slice(-6)}</span>
-                      <Copy className={cn('h-3 w-3', copied === id.wallet ? 'text-emerald-400' : 'opacity-60 group-hover:opacity-100')} />
+                      <span>{shortText(id.wallet, 6, 6)}</span>
+                      <Copy className={cn('h-3 w-3', copied === id.wallet ? 'text-primary' : 'opacity-60 group-hover:opacity-100')} />
                     </button>
                   }
                 />
-                {id.x402Endpoint && (
+                {safeExternalUrl(id.x402Endpoint) && (
                   <DetailRow
                     label="x402"
                     hint="HTTP 402 micropayment endpoint advertised by the agent"
                     value={
                       <a
-                        href={id.x402Endpoint}
+                        href={safeExternalUrl(id.x402Endpoint)!}
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="Open x402 endpoint"
-                        className="inline-flex items-center gap-1 text-cyan-300 hover:text-cyan-200"
+                        className="inline-flex items-center gap-1 text-primary hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <Globe className="h-3 w-3" />
-                        <span className="truncate max-w-[180px]">{id.x402Endpoint.replace(/^https?:\/\//, '')}</span>
+                        <span className="truncate max-w-[180px]">{asText(id.x402Endpoint).replace(/^https?:\/\//, '')}</span>
                       </a>
                     }
                   />
@@ -527,14 +762,14 @@ function AgentDetailInner() {
              * IDENTITY (Core Asset NFT) and USAGE (Genesis token). Hidden
              * when the wallet has no MPL footprint to keep the strip compact. */}
             {((nftsData?.total ?? 0) > 0 || registryAgentCount > 0) && (
-              <div className="px-5 py-4 border-t border-neutral-800/60">
+              <div className="px-5 py-4 border-t border-border/40">
                 <SectionLabel>Agent identity · 014 Registry</SectionLabel>
-                <div className="mt-2 divide-y divide-neutral-800/60">
+                <div className="mt-2 divide-y divide-border/40">
                   <DetailRow
                     label="MPL Core owned"
                     hint="All MPL Core NFTs owned by this wallet"
                     value={
-                      <span className={cn('tabular-nums', (nftsData?.total ?? 0) > 0 ? 'text-neutral-200' : 'text-neutral-600')}>
+                      <span className={cn('tabular-nums', (nftsData?.total ?? 0) > 0 ? 'text-foreground' : 'text-muted-foreground')}>
                         {nftsData?.total ?? 0}
                       </span>
                     }
@@ -543,7 +778,7 @@ function AgentDetailInner() {
                     label="With 8004 plugin"
                     hint="MPL Core assets carrying an AgentIdentity external plugin"
                     value={
-                      <span className={cn('tabular-nums', (nftsData?.withAgentIdentity ?? 0) > 0 ? 'text-cyan-300' : 'text-neutral-600')}>
+                      <span className={cn('tabular-nums', (nftsData?.withAgentIdentity ?? 0) > 0 ? 'text-primary' : 'text-muted-foreground')}>
                         {nftsData?.withAgentIdentity ?? 0}
                       </span>
                     }
@@ -552,7 +787,7 @@ function AgentDetailInner() {
                     label="In MPL registry"
                     hint="Entries on api.metaplex.com indexed for this wallet"
                     value={
-                      <span className={cn('tabular-nums', registryAgentCount > 0 ? 'text-amber-300' : 'text-neutral-600')}>
+                      <span className={cn('tabular-nums', registryAgentCount > 0 ? 'text-primary' : 'text-muted-foreground')}>
                         {registryAgentCount}
                       </span>
                     }
@@ -578,7 +813,7 @@ function AgentDetailInner() {
              * When the wallet has NOT launched a token yet, render a CTA
              * pointing to the synapse-sap agent skills so users know how
              * to mint one with their agent. */}
-            <div className="px-5 py-4 border-b border-neutral-800/60">
+            <div className="px-5 py-4 border-b border-border/40">
               <SectionLabel>
                 {/* Label tracks the actual classification: "Genesis" only
                  * when the canonical Metaplex Genesis on-chain GPA (or the
@@ -587,16 +822,16 @@ function AgentDetailInner() {
                  * token (pump.fun graduated, raw SPL, etc.). */}
                 Agent token{' '}
                 {(() => {
-                  const t = launchTokensData?.tokens?.[0];
+                  const t = agentLaunchTokens[0];
                   if (!t) return '';
                   if (t.launchCount > 0) return '· Genesis';
                   return t.tokenProgram === 'token-2022' ? '· Token-2022' : '· SPL';
                 })()}
               </SectionLabel>
-              {agentLaunchTokens.length > 0 && launchTokensData?.tokens?.[0] ? (
+              {agentLaunchTokens.length > 0 && agentLaunchTokens[0] ? (
                 <AgentTokenCard
-                  token={launchTokensData.tokens[0]}
-                  extraCount={Math.max(0, launchTokensData.tokens.length - 1)}
+                  token={agentLaunchTokens[0]}
+                  extraCount={Math.max(0, agentLaunchTokens.length - 1)}
                   onOpenDetails={() => openSection('tokens')}
                   onCopy={copyAddr}
                   copied={copied}
@@ -607,13 +842,13 @@ function AgentDetailInner() {
             </div>
 
             {/* Performance metrics */}
-            <div className="px-5 py-4 border-b border-neutral-800/60">
+            <div className="px-5 py-4 border-b border-border/40">
               <SectionLabel>Performance</SectionLabel>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 <MetricTile
                   label="Calls"
-                  value={totalCallsSettled.toLocaleString()}
-                  hint={`Total settled calls across ${agentEscrows.length} escrow(s)`}
+                  value={Math.max(totalCallsSettled, latestSnapshotCalls).toLocaleString()}
+                  hint={`${totalCallsSettled.toLocaleString()} settled · ${latestSnapshotCalls.toLocaleString()} served from SAP snapshots`}
                   tone="emerald"
                 />
                 <MetricTile
@@ -638,12 +873,12 @@ function AgentDetailInner() {
             </div>
 
             {/* Portfolio summary */}
-            <div className="px-5 py-4 border-b border-neutral-800/60">
+            <div className="px-5 py-4 border-b border-border/40">
               <div className="flex items-center justify-between">
                 <SectionLabel>Portfolio</SectionLabel>
                 {balancesData?.totalUsd != null && balancesData.totalUsd > 0 && (
                   <span
-                    className="font-mono text-sm tabular-nums text-neutral-100"
+                    className="font-mono text-sm tabular-nums text-foreground"
                     title="SOL + USDC + all priced SPL / Token-2022 holdings (Jupiter prices)"
                   >
                     ${balancesData.totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -672,7 +907,7 @@ function AgentDetailInner() {
                       }`,
                   }));
                   return (
-                    <div className="mt-2 divide-y divide-neutral-800/60">
+                    <div className="mt-2 divide-y divide-border/40">
                       <PortfolioRow
                         icon={<TokenAvatar src={SOL_LOGO} symbol="SOL" size={22} />}
                         label="Solana"
@@ -695,7 +930,7 @@ function AgentDetailInner() {
                           label={
                             <span className="inline-flex items-center gap-1.5">
                               <span>Tokens</span>
-                              <span className="rounded bg-neutral-800 px-1 text-[10px] font-mono tabular-nums text-neutral-400">
+                              <span className="rounded bg-muted px-1 text-[10px] font-mono tabular-nums text-muted-foreground">
                                 {tokens.length}
                               </span>
                             </span>
@@ -716,7 +951,7 @@ function AgentDetailInner() {
                           label="Deployed"
                           hint="Tokens this wallet was the deployer/authority of"
                           value={
-                            <span className="inline-flex items-center gap-1 text-emerald-300 tabular-nums">
+                            <span className="inline-flex items-center gap-1 text-primary tabular-nums">
                               <Rocket className="h-3 w-3" />
                               {balancesData.deployedTokens.length}
                             </span>
@@ -727,28 +962,28 @@ function AgentDetailInner() {
                   );
                 })()
               ) : (
-                <p className="mt-2 text-xs text-neutral-600">No balance data available</p>
+                <p className="mt-2 text-xs text-muted-foreground">No balance data available</p>
               )}
             </div>
 
             {/* Staking summary */}
             {stakingData && stakingData.stakedSol > 0 && (
-              <div className="px-5 py-4 w-full border-b border-neutral-800/60">
+              <div className="px-5 py-4 w-full border-b border-border/40">
                 <SectionLabel>Stake</SectionLabel>
-                <div className="mt-2 divide-y divide-neutral-800/60">
+                <div className="mt-2 divide-y divide-border/60">
                   <DetailRow
                     label="Staked"
                     mono
-                    value={<span className="text-emerald-300">{stakingData.stakedSol.toFixed(4)} SOL</span>}
+                    value={<span className="text-primary">{stakingData.stakedSol.toFixed(4)} SOL</span>}
                   />
                   <DetailRow
                     label="Disputes W/L"
                     mono
                     value={
-                      <span className="text-neutral-200">
-                        <span className="text-emerald-400">{stakingData.totalDisputesWon}</span>
-                        <span className="text-neutral-600">/</span>
-                        <span className="text-rose-400">{stakingData.totalDisputesLost}</span>
+                      <span className="text-foreground">
+                        <span className="text-primary">{stakingData.totalDisputesWon}</span>
+                        <span className="text-muted-foreground">/</span>
+                        <span className="text-destructive">{stakingData.totalDisputesLost}</span>
                       </span>
                     }
                   />
@@ -774,7 +1009,7 @@ function AgentDetailInner() {
        * routing eligibility. The chip ships its own card chrome. */}
       {canonicalWallet && (
         <section aria-label="Reputation aggregation">
-          <FairScaleAggregatedChip wallet={canonicalWallet} />
+            <FairScaleAggregatedChip wallet={canonicalWallet} />
         </section>
       )}
 
@@ -785,7 +1020,7 @@ function AgentDetailInner() {
        * scrolling the right column. */}
       <section
         aria-label="Merchant readiness"
-        className="rounded-xl border border-neutral-800/70 bg-neutral-900/40"
+        className="rounded-xl border border-border/40 bg-muted/30"
       >
         <MerchantReadiness
           stakedSol={stakingData?.stakedSol ?? null}
@@ -813,10 +1048,10 @@ function AgentDetailInner() {
                 aria-controls={`agent-tab-${activeTab}`}
                 onClick={() => openGroup(g.key)}
                 className={cn(
-                  'inline-flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50',
+                  'inline-flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                   isActive
-                    ? 'bg-neutral-100 text-neutral-900 shadow-sm'
-                    : 'text-neutral-400 hover:bg-neutral-800/60 hover:text-neutral-100',
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
               >
                 <span className="whitespace-nowrap">{g.label}</span>
@@ -824,7 +1059,7 @@ function AgentDetailInner() {
                   <span
                     className={cn(
                       'inline-flex h-4 min-w-[1rem] items-center justify-center rounded px-1 text-[10px] font-mono tabular-nums',
-                      isActive ? 'bg-neutral-900/10 text-neutral-700' : 'bg-neutral-800 text-neutral-400',
+                      isActive ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
                     )}
                   >
                     {count}
@@ -862,14 +1097,14 @@ function AgentDetailInner() {
                   aria-controls={`agent-tab-${value}`}
                   onClick={() => openSection(value)}
                   className={cn(
-                    'group/subtab relative inline-flex shrink-0 items-center gap-1.5 px-3.5 pt-1.5 pb-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40',
+                    'group/subtab relative inline-flex shrink-0 items-center gap-1.5 px-3.5 pt-1.5 pb-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                     // Bottom-rounded folder tab. Active tab adopts the
                     // panel's background + border colour so it looks
                     // joined; inactive tabs have a subtle tinted background.
                     'rounded-b-md border-x border-b',
                     isActive
-                      ? 'bg-card/60 border-border/30 text-emerald-300 shadow-[0_4px_12px_-6px_rgba(16,185,129,0.35)]'
-                      : 'bg-neutral-900/40 border-transparent text-neutral-500 hover:bg-neutral-900/70 hover:text-neutral-200',
+                      ? 'bg-card border-border text-foreground shadow-sm'
+                      : 'bg-muted/40 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
                   <span className="whitespace-nowrap">{meta.label}</span>
@@ -878,10 +1113,10 @@ function AgentDetailInner() {
                       className={cn(
                         'inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-mono tabular-nums transition-colors',
                         isActive
-                          ? 'bg-emerald-400/15 text-emerald-200'
+                          ? 'bg-primary/10 text-primary'
                           : count > 0
-                            ? 'bg-neutral-800/80 text-neutral-400 group-hover/subtab:text-neutral-200'
-                            : 'bg-neutral-900/60 text-neutral-600',
+                            ? 'bg-muted text-muted-foreground group-hover/subtab:text-foreground'
+                            : 'bg-muted/50 text-muted-foreground/60',
                       )}
                     >
                       {count}
@@ -893,7 +1128,7 @@ function AgentDetailInner() {
                     aria-hidden="true"
                     className={cn(
                       'pointer-events-none absolute inset-x-2 top-0 h-[2px] rounded-b-sm transition-opacity',
-                      isActive ? 'bg-emerald-400 opacity-100' : 'opacity-0',
+                      isActive ? 'bg-primary opacity-100' : 'opacity-0',
                     )}
                   />
                 </button>
@@ -907,7 +1142,7 @@ function AgentDetailInner() {
           role="tabpanel"
           aria-label={`${activeTab} content`}
           className={cn(
-            'scroll-mt-20 border  bg-transparent p-4 sm:p-6 space-y-4',
+            'scroll-mt-20 border bg-card/50 p-4 sm:p-6 space-y-4 text-card-foreground shadow-sm',
             // When sub-tabs are present, the active one drops INTO the
             // panel: drop the top-left rounding so the panel reads as a
             // continuous folder body. Otherwise keep the full rounded box.
@@ -919,17 +1154,17 @@ function AgentDetailInner() {
             const subMeta = sidebarSections.find((s) => s.value === activeTab);
             const subCount = typeof subMeta?.count === 'number' ? subMeta.count : null;
             return (
-              <div className="flex items-center justify-between gap-3 pb-3 border-b border-neutral-800/60">
+              <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/60">
                 <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="text-[10px] uppercase tracking-[0.15em] text-neutral-600 shrink-0">
+                  <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground shrink-0">
                     {activeGroupMeta.label}
                   </span>
-                  <span className="text-neutral-700" aria-hidden>›</span>
-                  <h2 className="text-sm font-semibold text-neutral-100 truncate text-balance">
+                  <span className="text-muted-foreground/60" aria-hidden>›</span>
+                  <h2 className="text-sm font-semibold text-foreground truncate text-balance">
                     {subMeta?.label ?? activeTab}
                   </h2>
                   {subCount != null && subCount > 0 && (
-                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono tabular-nums text-neutral-400 shrink-0">
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono tabular-nums text-muted-foreground shrink-0">
                       {subCount}
                     </span>
                   )}
@@ -955,8 +1190,8 @@ function AgentDetailInner() {
                     aria-label="Protocol & Capabilities"
                     className="lg:col-span-2 min-w-0"
                   >
-                    <div className="rounded-lg border border-border/40 bg-card/60 overflow-hidden h-full flex flex-col backdrop-blur-sm">
-                      <div className="px-5 py-4 border-b border-neutral-800/60">
+                    <Card className="overflow-hidden h-full flex flex-col">
+                      <div className="px-5 py-4 border-b border-border/60">
                         <SectionLabel>Protocols</SectionLabel>
                         {protocols.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -965,41 +1200,41 @@ function AgentDetailInner() {
                             ))}
                           </div>
                         ) : (
-                          <p className="mt-2 text-xs text-neutral-600">No protocol metadata available.</p>
+                          <p className="mt-2 text-xs text-muted-foreground">No protocol metadata available.</p>
                         )}
                       </div>
 
                       <div className="px-5 py-4 flex-1 flex flex-col">
                         <SectionLabel>Capabilities</SectionLabel>
                         {id.capabilities.length > 0 ? (
-                          <div className="mt-2 divide-y divide-neutral-800/60 rounded-md border border-neutral-800/60 bg-neutral-950/40">
+                          <div className="mt-2 divide-y divide-border/60 rounded-md border bg-muted/20">
                             {id.capabilities.map((c) => (
                               <Link
                                 key={c.id}
                                 href={`/capabilities/${encodeURIComponent(c.id)}`}
-                                className="flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800/40 transition-colors group focus-visible:outline-none focus-visible:bg-neutral-800/40"
+                                className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors group focus-visible:outline-none focus-visible:bg-muted/60"
                               >
                                 <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 shrink-0 ring-1 ring-primary/20">
                                   <Zap className="h-3 w-3 text-primary" />
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-mono text-xs font-medium text-neutral-100 truncate">{c.id}</span>
+                                    <span className="font-mono text-xs font-medium text-foreground truncate">{c.id}</span>
                                     {c.protocolId && <ProtocolBadge protocol={c.protocolId} />}
                                   </div>
                                   {c.description && (
-                                    <p className="text-[11px] text-neutral-500 mt-0.5 truncate leading-snug">{c.description}</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate leading-snug">{c.description}</p>
                                   )}
                                 </div>
-                                <ChevronRight className="h-3.5 w-3.5 text-neutral-700 group-hover:text-neutral-400 transition-colors shrink-0" />
+                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60 group-hover:text-foreground transition-colors shrink-0" />
                               </Link>
                             ))}
                           </div>
                         ) : (
-                          <p className="mt-2 text-xs text-neutral-600">No capabilities published yet.</p>
+                          <p className="mt-2 text-xs text-muted-foreground">No capabilities published yet.</p>
                         )}
                       </div>
-                    </div>
+                    </Card>
                   </section>
 
                   {/* Pricing tiers (right, span-1): vertical stack so each
@@ -1008,7 +1243,7 @@ function AgentDetailInner() {
                  * continuity. Renders an empty-state CTA when no tiers
                  * are defined so the column never collapses. */}
                   <section aria-label="Pricing" className="min-w-0">
-                    <div className="rounded-lg border border-border/40 bg-card/60 overflow-hidden h-full flex flex-col backdrop-blur-sm">
+                    <Card className="overflow-hidden h-full flex flex-col">
                       <div className="px-5 py-4 flex-1">
                         <SectionLabel>Pricing tiers</SectionLabel>
                         {id.pricing.length > 0 ? (
@@ -1016,52 +1251,52 @@ function AgentDetailInner() {
                             {id.pricing.map((p) => (
                               <div
                                 key={p.tierId}
-                                className="rounded-md border border-neutral-800/60 bg-neutral-950/40 p-3 hover:border-primary/30 transition-colors"
+                                className="rounded-md border bg-muted/20 p-3 hover:border-primary/40 transition-colors"
                               >
                                 <div className="flex items-baseline justify-between gap-2">
                                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary truncate">
                                     {p.tierId}
                                   </p>
-                                  <span className="text-[10px] text-neutral-600 uppercase tracking-wider shrink-0">
+                                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">
                                     {formatTokenType(p.tokenType)}/call
                                   </span>
                                 </div>
-                                <p className="mt-1 text-base font-bold text-neutral-100 font-mono tabular-nums">
+                                <p className="mt-1 text-base font-bold text-foreground font-mono tabular-nums">
                                   {formatPrice(p.pricePerCall, p.tokenDecimals)}
                                 </p>
                                 <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10px]">
-                                  <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
-                                    <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Rate</p>
-                                    <p className="text-neutral-200 font-mono tabular-nums">{p.rateLimit}/s</p>
+                                  <div className="rounded bg-background/70 px-1.5 py-1 border">
+                                    <p className="text-muted-foreground uppercase tracking-wider text-[9px]">Rate</p>
+                                    <p className="text-foreground font-mono tabular-nums">{p.rateLimit}/s</p>
                                   </div>
-                                  <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
-                                    <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Max</p>
-                                    <p className="text-neutral-200 font-mono tabular-nums">{p.maxCallsPerSession === 0 ? '∞' : p.maxCallsPerSession}</p>
+                                  <div className="rounded bg-background/70 px-1.5 py-1 border">
+                                    <p className="text-muted-foreground uppercase tracking-wider text-[9px]">Max</p>
+                                    <p className="text-foreground font-mono tabular-nums">{p.maxCallsPerSession === 0 ? '∞' : p.maxCallsPerSession}</p>
                                   </div>
-                                  <div className="rounded bg-neutral-900/60 px-1.5 py-1 border border-neutral-800/60">
-                                    <p className="text-neutral-600 uppercase tracking-wider text-[9px]">Mode</p>
-                                    <p className="text-neutral-200 truncate">{formatSettlement(p.settlementMode)}</p>
+                                  <div className="rounded bg-background/70 px-1.5 py-1 border">
+                                    <p className="text-muted-foreground uppercase tracking-wider text-[9px]">Mode</p>
+                                    <p className="text-foreground truncate">{formatSettlement(p.settlementMode)}</p>
                                   </div>
                                 </div>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="mt-3 rounded-md border border-dashed border-neutral-700/60 bg-neutral-950/40 px-3 py-6 text-center">
-                            <p className="text-xs text-neutral-500">No pricing tiers published</p>
-                            <p className="mt-1 text-[10px] text-neutral-600 leading-relaxed">
-                              Agents define tiers via the SAP <span className="font-mono text-neutral-400">register_pricing</span> instruction
+                          <div className="mt-3 rounded-md border border-dashed bg-muted/20 px-3 py-6 text-center">
+                            <p className="text-xs text-muted-foreground">No pricing tiers published</p>
+                            <p className="mt-1 text-[10px] text-muted-foreground/80 leading-relaxed">
+                              Agents define tiers via the SAP <span className="font-mono text-foreground/80">register_pricing</span> instruction
                             </p>
                           </div>
                         )}
                       </div>
-                    </div>
+                    </Card>
                   </section>
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-border/40 bg-card/40 px-6 py-10 text-center">
-                  <p className="text-sm text-neutral-400">No protocol, capability, or pricing metadata published yet.</p>
-                  <p className="mt-1 text-xs text-neutral-600">All other tabs remain available for inspection.</p>
+                <div className="rounded-lg border border-dashed bg-muted/20 px-6 py-10 text-center">
+                  <p className="text-sm text-muted-foreground">No protocol, capability, or pricing metadata published yet.</p>
+                  <p className="mt-1 text-xs text-muted-foreground/80">All other tabs remain available for inspection.</p>
                 </div>
               )}
             </div>
@@ -1082,7 +1317,7 @@ function AgentDetailInner() {
                 revenueData={revenueData}
                 loading={revLoading}
                 escrows={agentEscrows}
-                totalSolSettled={totalSolSettled}
+                totalSettledDisplay={totalSettledDisplay}
                 totalCallsSettled={totalCallsSettled}
               />
             </div>
@@ -1090,9 +1325,9 @@ function AgentDetailInner() {
 
           {/* Tab: Tools */}
           {activeTab === 'tools' && (
-            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+            <Card className="overflow-hidden">
               <CardHeader className="pb-0 px-5 pt-4">
-                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Registered Tools</CardTitle>
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Registered Tools</CardTitle>
               </CardHeader>
               <CardContent className="px-5 pt-3 pb-4">
                 {agentTools.length === 0 ? (
@@ -1111,7 +1346,9 @@ function AgentDetailInner() {
                           ? Object.keys(d.category)[0]
                           : String(d.category)
                         : null;
-                      const calls = Number(d?.totalInvocations ?? 0);
+                      const descriptorCalls = Number(d?.totalInvocations ?? 0);
+                      const hasDescriptorCalls = Number.isFinite(descriptorCalls) && descriptorCalls > 0;
+                      const calls = hasDescriptorCalls ? descriptorCalls : totalCallsSettled;
                       return (
                         <ToolRow
                           key={t.pda}
@@ -1120,6 +1357,10 @@ function AgentDetailInner() {
                           httpMethod={method}
                           category={cat}
                           totalInvocations={calls}
+                          callsLabel={hasDescriptorCalls ? 'calls' : 'settled calls'}
+                          callsTitle={hasDescriptorCalls
+                            ? 'ToolDescriptor totalInvocations'
+                            : 'Agent-level settled calls fallback: escrow accounts do not expose a per-tool PDA link'}
                           inscribedSchemaCount={t.inscribedSchemaCount ?? 0}
                         />
                       );
@@ -1132,9 +1373,9 @@ function AgentDetailInner() {
 
           {/* Tab: Escrows */}
           {activeTab === 'escrows' && (
-            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+            <Card className="overflow-hidden">
               <CardHeader className="pb-0 px-5 pt-4">
-                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Escrow Accounts</CardTitle>
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Escrow Accounts</CardTitle>
               </CardHeader>
               <CardContent className="px-5 pt-3 pb-4">
                 {agentEscrows.length === 0 ? (
@@ -1142,27 +1383,27 @@ function AgentDetailInner() {
                 ) : (
                   <div className="space-y-3">
                     {agentEscrows.map((e) => (
-                      <div key={e.pda} className="rounded-lg border border-neutral-800 bg-neutral-800/40 p-4">
+                      <div key={e.pda} className="rounded-lg border bg-muted/20 p-4">
                         <div className="flex items-center justify-between mb-2">
                           <Address value={e.pda} copy />
                           {Number(e.balance) > 0 ? (
-                            <Badge className="bg-emerald-500/15 text-emerald-400 text-xs">Funded</Badge>
+                            <Badge variant="secondary" className="text-xs">Funded</Badge>
                           ) : (
                             <Badge variant="destructive" className="text-xs">Empty</Badge>
                           )}
                         </div>
                         <div className="grid grid-cols-3 gap-3 text-center">
                           <div>
-                            <p className="text-sm font-bold tabular-nums text-white font-mono">{e.balance}</p>
-                            <p className="text-xs text-neutral-500">Balance</p>
+                            <p className="text-sm font-bold tabular-nums text-foreground font-mono">{e.balance}</p>
+                            <p className="text-xs text-muted-foreground">Balance</p>
                           </div>
                           <div>
-                            <p className="text-sm font-bold tabular-nums text-white font-mono">{e.totalDeposited}</p>
-                            <p className="text-xs text-neutral-500">Deposited</p>
+                            <p className="text-sm font-bold tabular-nums text-foreground font-mono">{e.totalDeposited}</p>
+                            <p className="text-xs text-muted-foreground">Deposited</p>
                           </div>
                           <div>
-                            <p className="text-sm font-bold tabular-nums text-white font-mono">{e.totalCallsSettled}</p>
-                            <p className="text-xs text-neutral-500">Calls Settled</p>
+                            <p className="text-sm font-bold tabular-nums text-foreground font-mono">{e.totalCallsSettled}</p>
+                            <p className="text-xs text-muted-foreground">Calls Settled</p>
                           </div>
                         </div>
                       </div>
@@ -1175,9 +1416,9 @@ function AgentDetailInner() {
 
           {/* Tab: Feedbacks */}
           {activeTab === 'feedbacks' && (
-            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+            <Card className="overflow-hidden">
               <CardHeader className="pb-0 px-5 pt-4">
-                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Feedback Received</CardTitle>
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Feedback Received</CardTitle>
               </CardHeader>
               <CardContent className="px-5 pt-3 pb-4">
                 {agentFeedbacks.length === 0 ? (
@@ -1185,7 +1426,7 @@ function AgentDetailInner() {
                 ) : (
                   <div className="space-y-2">
                     {agentFeedbacks.map((f) => (
-                      <div key={f.pda} className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
+                      <div key={f.pda} className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                           <span className="text-xs font-bold text-primary">{f.score}</span>
                         </div>
@@ -1194,7 +1435,7 @@ function AgentDetailInner() {
                             <Address value={f.reviewer} />
                             {f.tag && <Badge variant="outline" className="text-xs">{f.tag}</Badge>}
                           </div>
-                          <p className="text-xs text-neutral-500">{new Date(Number(f.createdAt) * 1000).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(Number(f.createdAt) * 1000).toLocaleDateString()}</p>
                         </div>
                         {f.isRevoked && <Badge variant="destructive" className="text-xs">Revoked</Badge>}
                       </div>
@@ -1207,9 +1448,9 @@ function AgentDetailInner() {
 
           {/* Tab: Attestations */}
           {activeTab === 'attestations' && (
-            <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+            <Card className="overflow-hidden">
               <CardHeader className="pb-0 px-5 pt-4">
-                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Attestations</CardTitle>
+                <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Attestations</CardTitle>
               </CardHeader>
               <CardContent className="px-5 pt-3 pb-4">
                 {agentAttestations.length === 0 ? (
@@ -1217,13 +1458,13 @@ function AgentDetailInner() {
                 ) : (
                   <div className="space-y-2">
                     {agentAttestations.map((a) => (
-                      <div key={a.pda} className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2.5">
+                      <div key={a.pda} className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="text-xs">{a.attestationType}</Badge>
                             <Address value={a.attester} />
                           </div>
-                          <p className="text-xs text-neutral-500">{new Date(Number(a.createdAt) * 1000).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(Number(a.createdAt) * 1000).toLocaleDateString()}</p>
                         </div>
                         <StatusBadge active={a.isActive} size="xs" />
                       </div>
@@ -1236,7 +1477,7 @@ function AgentDetailInner() {
 
           {/* Tab: Events */}
           {activeTab === 'events' && (
-            <AgentEventTimeline events={agentEvents} scanned={eventsData?.scanned ?? 0} loading={evLoading} />
+            <AgentEventTimeline events={agentEvents} scanned={eventsScanned} loading={evLoading || walletEvLoading} />
           )}
 
           {/* Tab: Vault / Memory */}
@@ -1315,12 +1556,12 @@ function InfoTip({
     >
       <HelpCircle
         aria-hidden="true"
-        className="size-3.5 text-neutral-500 transition-colors group-hover/tip:text-amber-300 group-focus-visible/tip:text-amber-300"
+        className="size-3.5 text-muted-foreground transition-colors group-hover/tip:text-primary group-focus-visible/tip:text-primary"
       />
       <span
         role="tooltip"
         className={cn(
-          'pointer-events-none absolute left-1/2 z-50 -translate-x-1/2 w-64 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs font-normal normal-case tracking-normal text-neutral-200 text-pretty shadow-md',
+          'pointer-events-none absolute left-1/2 z-50 -translate-x-1/2 w-64 rounded-md border bg-popover px-3 py-2 text-xs font-normal normal-case tracking-normal text-popover-foreground text-pretty shadow-md',
           'opacity-0 transition-opacity duration-150 ease-out group-hover/tip:opacity-100 group-focus-visible/tip:opacity-100 motion-reduce:transition-none',
           side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
         )}
@@ -1341,9 +1582,9 @@ function DegradedBanner({ label }: { label: string }) {
     <div
       role="status"
       aria-live="polite"
-      className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90"
+      className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
     >
-      <span aria-hidden="true" className="text-amber-400">⚠</span>
+      <span aria-hidden="true" className="text-primary">⚠</span>
       <span className="text-pretty">
         {label} data is temporarily unavailable — the indexer is recovering. Refresh in a moment.
       </span>
@@ -1356,7 +1597,7 @@ function DegradedBanner({ label }: { label: string }) {
 function PropertyRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 px-5 py-2.5">
-      <span className="text-xs text-neutral-500 shrink-0">{label}</span>
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
       <div className="text-right min-w-0 [overflow-wrap:anywhere]">{value}</div>
     </div>
   );
@@ -1387,9 +1628,8 @@ import type { SerializedEscrow } from '~/lib/sap/discovery';
 
 /* ── Agent x402 Direct Payments Tab ───────────── */
 
-const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const KNOWN_MINTS: Record<string, { symbol: string; icon: string; color: string }> = {
-  [USDC_MINT]: { symbol: 'USDC', icon: '$', color: '#2775CA' },
+const KNOWN_MINTS: Record<string, { symbol: string; icon: string }> = {
+  [USDC_MINT]: { symbol: 'USDC', icon: '$' },
 };
 
 function AgentX402Tab({
@@ -1425,19 +1665,19 @@ function AgentX402Tab({
           { label: 'Unique Payers', value: String(stats?.uniquePayers ?? 0) },
           { label: 'With x402 Memo', value: String(stats?.withMemo ?? 0) },
         ].map((kpi) => (
-          <Card key={kpi.label} className="bg-neutral-900 border-neutral-800 overflow-hidden">
+          <Card key={kpi.label} className="overflow-hidden">
             <CardContent className="mt-5 pb-4 text-center">
-              <p className="text-xl font-bold tabular-nums text-white font-mono">{kpi.value}</p>
-              <p className="text-xs text-neutral-500 mt-1">{kpi.label}</p>
+              <p className="text-xl font-bold tabular-nums text-foreground font-mono">{kpi.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Payment list */}
-      <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="pb-0 px-5 pt-4">
-          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2">
+          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2">
             <DollarSign className="h-3.5 w-3.5" />
             Direct Payments ({total})
           </CardTitle>
@@ -1446,7 +1686,7 @@ function AgentX402Tab({
           {payments.length === 0 ? (
             <EmptyState icon={<DollarSign className="h-6 w-6" />} message="No x402 direct payments detected yet" />
           ) : (
-            <div className="divide-y divide-neutral-800">
+            <div className="divide-y divide-border">
               {paged.map((p) => {
                 const mintInfo = KNOWN_MINTS[p.mint];
                 const symbol = mintInfo?.symbol ?? p.mint.slice(0, 6);
@@ -1455,28 +1695,28 @@ function AgentX402Tab({
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/tx/${p.signature}`}
+                          href={entityPath('/tx', p.signature)}
                           className="text-xs font-mono text-primary hover:text-primary transition-colors truncate max-w-[200px]"
                         >
-                          {p.signature.slice(0, 16)}…
+                          {shortText(p.signature, 16, 4)}
                         </Link>
                         {p.hasX402Memo && (
                           <Badge className="text-xs bg-primary/15 text-primary border border-primary/20 px-1.5 py-0">x402</Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-neutral-500">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span>From:</span>
-                        <span className="font-mono text-neutral-400">{p.payerWallet.slice(0, 12)}…{p.payerWallet.slice(-6)}</span>
+                        <span className="font-mono text-foreground/80">{p.payerWallet.slice(0, 12)}…{p.payerWallet.slice(-6)}</span>
                         {p.memo && (
-                          <span className="ml-2 italic truncate max-w-[200px] text-neutral-600">{p.memo}</span>
+                          <span className="ml-2 italic truncate max-w-[200px] text-muted-foreground/70">{p.memo}</span>
                         )}
                       </div>
                     </div>
                     <div className="text-right shrink-0 space-y-1">
-                      <p className="text-sm font-bold tabular-nums font-mono" style={{ color: mintInfo?.color ?? '#f97316' }}>
+                      <p className="text-sm font-bold tabular-nums font-mono text-primary">
                         +{Number(p.amount).toFixed(p.decimals > 2 ? 4 : 2)} {symbol}
                       </p>
-                      <p className="text-xs text-neutral-600">
+                      <p className="text-xs text-muted-foreground">
                         {p.blockTime ? new Date(p.blockTime).toLocaleString() : `Slot ${p.slot}`}
                       </p>
                     </div>
@@ -1505,13 +1745,13 @@ function AgentRevenueTab({
   revenueData,
   loading,
   escrows: agentEscrows,
-  totalSolSettled,
+  totalSettledDisplay,
   totalCallsSettled,
 }: {
   revenueData: AgentRevenueResponse | null;
   loading: boolean;
   escrows: SerializedEscrow[];
-  totalSolSettled: number;
+  totalSettledDisplay: string;
   totalCallsSettled: number;
 }) {
   const series = revenueData?.series ?? [];
@@ -1522,29 +1762,29 @@ function AgentRevenueTab({
       {/* KPI strip */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         {[
-          { label: 'Total Settled', value: `${(totalSolSettled / 1e9).toFixed(4)} SOL` },
+          { label: 'Total Settled', value: totalSettledDisplay },
           { label: 'Total Calls Settled', value: totalCallsSettled.toLocaleString('en-US') },
           { label: 'Total Escrows', value: String(agentEscrows.length) },
         ].map((kpi) => (
-          <Card key={kpi.label} className="bg-neutral-900 border-neutral-800 overflow-hidden">
+          <Card key={kpi.label} className="overflow-hidden">
             <CardContent className="mt-5 pb-4 text-center">
-              <p className="text-xl font-bold tabular-nums text-white font-mono">{kpi.value}</p>
-              <p className="text-xs text-neutral-500 mt-1">{kpi.label}</p>
+              <p className="text-xl font-bold tabular-nums text-foreground font-mono">{kpi.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Daily bar chart */}
-      <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="pb-0 px-5 pt-4">
-          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Daily Settlement (last 30d)</CardTitle>
+          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Daily Settlement (last 30d)</CardTitle>
         </CardHeader>
         <CardContent className="px-5 pt-3 pb-4">
           {loading ? (
             <Skeleton className="h-24 w-full rounded" />
           ) : series.length === 0 ? (
-            <p className="text-xs text-neutral-600 py-4 text-center">
+            <p className="text-xs text-muted-foreground py-4 text-center">
               No settlement ledger data yet. Populate via the indexer sync job.
             </p>
           ) : (
@@ -1553,13 +1793,13 @@ function AgentRevenueTab({
                 const pct = Math.max(2, Math.round((Number(s.lamports) / maxLamports) * 100));
                 return (
                   <div key={s.day} className="flex items-center gap-3">
-                    <span className="text-xs text-neutral-500 w-20 shrink-0">
+                    <span className="text-xs text-muted-foreground w-20 shrink-0">
                       {new Date(s.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </span>
-                    <div className="flex-1 h-4 bg-neutral-800/50 rounded-sm overflow-hidden">
-                      <div className="h-full rounded-sm bg-primary/50 transition-all" style={{ width: `${pct}%` }} />
+                    <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden">
+                      <div className="h-full rounded-sm bg-primary/60 transition-all" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="text-xs font-mono text-neutral-300 w-20 text-right shrink-0">{s.sol} SOL</span>
+                    <span className="text-xs font-mono text-foreground w-20 text-right shrink-0">{s.sol} SOL</span>
                   </div>
                 );
               })}
@@ -1569,29 +1809,31 @@ function AgentRevenueTab({
       </Card>
 
       {/* Escrow breakdown */}
-      <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+      <Card className="overflow-hidden">
         <CardHeader className="pb-0 px-5 pt-4">
-          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Escrow Breakdown</CardTitle>
+          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Escrow Breakdown</CardTitle>
         </CardHeader>
         <CardContent className="px-5 pt-3 pb-4">
-          <div className="divide-y divide-neutral-800">
-            {agentEscrows.map((e) => (
-              <div key={e.pda} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between py-3">
+          <div className="divide-y divide-border">
+            {agentEscrows.map((e, i) => {
+              const escrowPda = asText(e.pda);
+              return (
+              <div key={escrowPda || i} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between py-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  <Link href={`/escrows/${e.pda}`} className="text-xs font-mono text-neutral-300 hover:text-primary transition-colors truncate">
-                    {e.pda.slice(0, 12)}…{e.pda.slice(-8)}
+                  <Link href={entityPath('/escrows', escrowPda)} className="text-xs font-mono text-foreground hover:text-primary transition-colors truncate">
+                    {shortText(escrowPda, 12, 8)}
                   </Link>
                   {Number(e.balance) > 0
-                    ? <Badge className="text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-1.5 py-0 shrink-0">Funded</Badge>
-                    : <Badge className="text-xs bg-neutral-800 text-neutral-500 border border-neutral-700 px-1.5 py-0 shrink-0">Empty</Badge>
+                    ? <Badge variant="secondary" className="text-xs px-1.5 py-0 shrink-0">Funded</Badge>
+                    : <Badge variant="outline" className="text-xs px-1.5 py-0 shrink-0">Empty</Badge>
                   }
                 </div>
-                <div className="flex items-center gap-4 text-xs text-neutral-500 shrink-0">
-                  <span className="font-mono tabular-nums">{(Number(e.totalSettled) / 1e9).toFixed(4)} SOL settled</span>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground shrink-0">
+                  <span className="font-mono tabular-nums">{formatSettlementToken(e.totalSettled, e.tokenMint, e.tokenDecimals)} settled</span>
                   <span className="font-mono tabular-nums">{e.totalCallsSettled} calls</span>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </CardContent>
       </Card>
@@ -1602,19 +1844,19 @@ function AgentRevenueTab({
 /* ── Agent Event Timeline ─────────────────────── */
 
 const EVENT_COLORS: Record<string, string> = {
-  AgentRegisteredEvent: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  AgentUpdatedEvent: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  AgentDeactivatedEvent: 'bg-red-500/10 text-red-500 border-red-500/20',
-  AgentReactivatedEvent: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  AgentClosedEvent: 'bg-red-500/10 text-red-500 border-red-500/20',
-  ReputationUpdatedEvent: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  CallsReportedEvent: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  AgentRegisteredEvent: 'bg-primary/10 text-primary border-primary/20',
+  AgentUpdatedEvent: 'bg-secondary text-secondary-foreground border-border',
+  AgentDeactivatedEvent: 'bg-destructive/10 text-destructive border-destructive/20',
+  AgentReactivatedEvent: 'bg-primary/10 text-primary border-primary/20',
+  AgentClosedEvent: 'bg-destructive/10 text-destructive border-destructive/20',
+  ReputationUpdatedEvent: 'bg-accent text-accent-foreground border-border',
+  CallsReportedEvent: 'bg-muted text-muted-foreground border-border',
   ToolPublishedEvent: 'bg-primary/10 text-primary border-primary/20',
-  ToolUpdatedEvent: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  ToolSchemaInscribedEvent: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-  PaymentSettledEvent: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-  EscrowDepositedEvent: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
-  EscrowClosedEvent: 'bg-neutral-800 text-neutral-400 border-neutral-700',
+  ToolUpdatedEvent: 'bg-secondary text-secondary-foreground border-border',
+  ToolSchemaInscribedEvent: 'bg-primary/10 text-primary border-primary/20',
+  PaymentSettledEvent: 'bg-primary/10 text-primary border-primary/20',
+  EscrowDepositedEvent: 'bg-primary/10 text-primary border-primary/20',
+  EscrowClosedEvent: 'bg-muted text-muted-foreground border-border',
 };
 
 /* ── Agent Memory Tab ──────────────────────────── */
@@ -1659,17 +1901,17 @@ function AgentMemoryTab({
     }
     // Fallback to basic vault data
     return (
-      <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
-        <CardHeader className="pb-0 px-5 pt-4"><CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">Memory Vaults</CardTitle></CardHeader>
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-0 px-5 pt-4"><CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Memory Vaults</CardTitle></CardHeader>
         <CardContent className="px-5 pt-3 pb-4">
           <div className="space-y-3">
-            {fallbackVaults.map((v) => (
-              <Link key={v.pda} href={`/vaults/${v.pda}`} className="block rounded-lg border border-neutral-800 bg-neutral-800/40 p-4 hover:bg-neutral-800/70 transition-colors">
+            {fallbackVaults.map((v, i) => (
+              <Link key={asText(v.pda) || i} href={entityPath('/vaults', v.pda)} className="block rounded-lg border bg-muted/20 p-4 hover:bg-muted/50 transition-colors">
                 <Address value={v.pda} copy />
                 <div className="mt-3 grid grid-cols-3 gap-3 text-center">
-                  <div><p className="text-sm font-bold tabular-nums text-white font-mono">{v.totalSessions}</p><p className="text-xs text-neutral-500">Sessions</p></div>
-                  <div><p className="text-sm font-bold tabular-nums text-white font-mono">{v.totalInscriptions}</p><p className="text-xs text-neutral-500">Inscriptions</p></div>
-                  <div><p className="text-sm font-bold tabular-nums text-white font-mono">{v.totalBytesInscribed}</p><p className="text-xs text-neutral-500">Bytes</p></div>
+                  <div><p className="text-sm font-bold tabular-nums text-foreground font-mono">{v.totalSessions}</p><p className="text-xs text-muted-foreground">Sessions</p></div>
+                  <div><p className="text-sm font-bold tabular-nums text-foreground font-mono">{v.totalInscriptions}</p><p className="text-xs text-muted-foreground">Inscriptions</p></div>
+                  <div><p className="text-sm font-bold tabular-nums text-foreground font-mono">{v.totalBytesInscribed}</p><p className="text-xs text-muted-foreground">Bytes</p></div>
                 </div>
               </Link>
             ))}
@@ -1691,34 +1933,36 @@ function AgentMemoryTab({
           { label: 'Inscriptions', value: stats.totalInscriptions.toLocaleString(), icon: HardDrive },
           { label: 'Bytes Inscribed', value: fmtBytes(stats.totalBytesInscribed), icon: KeyRound },
         ].map((kpi) => (
-          <Card key={kpi.label} className="bg-neutral-900 border-neutral-800 overflow-hidden">
+          <Card key={kpi.label} className="overflow-hidden">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-1">
-                <kpi.icon className="h-3.5 w-3.5 text-neutral-600" />
-                <p className="text-xs text-neutral-500">{kpi.label}</p>
+                <kpi.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">{kpi.label}</p>
               </div>
-              <p className="text-xl font-bold tabular-nums text-white font-mono">{kpi.value}</p>
+              <p className="text-xl font-bold tabular-nums text-foreground font-mono">{kpi.value}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Vault cards */}
-      {vaults.map((v) => (
-        <Card key={v.pda} className="bg-neutral-900 border-neutral-800 overflow-hidden">
+      {vaults.map((v, i) => {
+        const vaultPda = asText(v.pda);
+        return (
+        <Card key={vaultPda || i} className="overflow-hidden">
           <CardHeader className="pb-0 px-5 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-sm flex items-center gap-2 min-w-0">
                 <Database className="h-4 w-4 text-primary shrink-0" />
-                <Link href={`/vaults/${v.pda}`} className="font-mono text-neutral-300 hover:text-primary transition-colors truncate">
-                  {v.pda.slice(0, 12)}…{v.pda.slice(-8)}
+                <Link href={entityPath('/vaults', vaultPda)} className="font-mono text-foreground hover:text-primary transition-colors truncate">
+                  {shortText(vaultPda, 12, 8)}
                 </Link>
               </CardTitle>
               <div className="flex items-center gap-2 flex-wrap shrink-0">
                 <Badge variant="secondary" className="text-xs">v{v.protocolVersion}</Badge>
                 <Badge variant="secondary" className="text-xs">Nonce v{v.nonceVersion}</Badge>
                 {v.delegateCount > 0 && (
-                  <Badge className="text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  <Badge variant="destructive" className="text-xs">
                     <Users className="h-2.5 w-2.5 mr-0.5" /> {v.delegateCount}
                   </Badge>
                 )}
@@ -1733,26 +1977,26 @@ function AgentMemoryTab({
                 { label: 'Bytes', value: fmtBytes(v.totalBytesInscribed) },
                 { label: 'Created', value: fmtTime(v.createdAt) },
               ].map((cell) => (
-                <div key={cell.label} className="rounded-lg bg-neutral-800/50 p-2.5">
-                  <p className="text-xs text-neutral-500">{cell.label}</p>
-                  <p className="text-sm font-bold tabular-nums text-white font-mono">{cell.value}</p>
+                <div key={cell.label} className="rounded-lg bg-muted/50 p-2.5">
+                  <p className="text-xs text-muted-foreground">{cell.label}</p>
+                  <p className="text-sm font-bold tabular-nums text-foreground font-mono">{cell.value}</p>
                 </div>
               ))}
             </div>
 
             {v.sessions.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-neutral-600 font-semibold uppercase tracking-widest">Sessions</p>
-                {v.sessions.map((s) => (
-                  <div key={s.pda} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-neutral-800 bg-neutral-800/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-widest">Sessions</p>
+                {v.sessions.map((s, idx) => (
+                  <div key={asText(s.pda) || idx} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between rounded-lg border bg-muted/20 px-3 py-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {s.isClosed
-                        ? <span className="h-2 w-2 rounded-full bg-red-400 shrink-0" />
-                        : <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />}
-                      <span className="text-xs font-mono text-neutral-300 truncate">{s.pda.slice(0, 12)}…{s.pda.slice(-6)}</span>
+                        ? <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />
+                        : <span className="h-2 w-2 rounded-full bg-primary shrink-0" />}
+                      <span className="text-xs font-mono text-foreground truncate">{shortText(s.pda, 12, 6)}</span>
                       <Badge variant="secondary" className="text-xs px-1">seq {s.sequenceCounter}</Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-neutral-500 flex-wrap sm:shrink-0">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap sm:shrink-0">
                       <span className="font-mono">{fmtBytes(s.totalBytes)}</span>
                       <span className="font-mono">{s.totalEpochs} epochs</span>
                       <span>{s.isClosed ? 'Closed' : 'Active'}</span>
@@ -1763,13 +2007,13 @@ function AgentMemoryTab({
             )}
 
             <div className="mt-3 flex justify-end">
-              <Link href={`/vaults/${v.pda}`} className="text-xs text-primary hover:text-primary transition-colors">
+              <Link href={entityPath('/vaults', vaultPda)} className="text-xs text-primary hover:text-primary transition-colors">
                 View full vault detail →
               </Link>
             </div>
           </CardContent>
         </Card>
-      ))}
+      );})}
     </div>
   );
 }
@@ -1788,13 +2032,13 @@ function AgentEventTimeline({
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   return (
-    <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+    <Card className="overflow-hidden">
       <CardHeader className="px-5 pt-4 pb-0">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">SAP Event Timeline</CardTitle>
+          <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">SAP Event Timeline</CardTitle>
           <div className="flex items-center gap-2">
             {scanned > 0 && (
-              <span className="text-xs text-neutral-600">{scanned} txs scanned</span>
+              <span className="text-xs text-muted-foreground">{scanned} txs scanned</span>
             )}
             {events.length > 0 && (
               <Badge variant="secondary" className="text-xs tabular-nums">{events.length}</Badge>
@@ -1804,15 +2048,15 @@ function AgentEventTimeline({
       </CardHeader>
       <CardContent className="px-5 pt-3 pb-4">
         {loading ? (
-          <div className="flex items-center gap-2 py-8 justify-center text-neutral-500">
+          <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span className="text-xs">Scanning transaction logs for SAP events…</span>
           </div>
         ) : events.length === 0 ? (
           <div className="py-8 text-center">
-            <Activity className="h-6 w-6 text-neutral-700 mx-auto mb-2" />
-            <p className="text-xs text-neutral-500">No SAP events found for this agent.</p>
-            <p className="text-xs text-neutral-600 mt-1">
+            <Activity className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground">No SAP events found for this agent.</p>
+            <p className="text-xs text-muted-foreground/80 mt-1">
               Events are Anchor-encoded in transaction log messages.
             </p>
           </div>
@@ -1820,21 +2064,21 @@ function AgentEventTimeline({
           <div className="space-y-2">
             {events.map((evt, idx) => {
               const isExpanded = expandedIdx === idx;
-              const col = EVENT_COLORS[evt.name] ?? 'bg-neutral-800 text-neutral-400 border-neutral-700';
+              const col = EVENT_COLORS[evt.name] ?? 'bg-muted text-muted-foreground border-border';
               const label = evt.name.replace(/Event$/, '');
               const dataKeys = Object.keys(evt.data ?? {});
 
               return (
-                <div key={`${evt.txSignature}-${idx}`} className="rounded-lg border border-neutral-800 overflow-hidden">
+                <div key={`${evt.txSignature}-${idx}`} className="rounded-lg border overflow-hidden">
                   <button
                     onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-neutral-800/50 transition-colors text-left"
+                    className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-muted/50 transition-colors text-left"
                   >
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border shrink-0 ${col}`}>
                       {label}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-mono text-neutral-500 truncate">
+                      <p className="text-xs font-mono text-muted-foreground truncate">
                         {evt.txSignature.slice(0, 20)}…
                         {evt.blockTime
                           ? ` · ${new Date(evt.blockTime * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
@@ -1842,10 +2086,10 @@ function AgentEventTimeline({
                       </p>
                     </div>
                     {dataKeys.length > 0 && (
-                      <span className="text-xs text-neutral-600 shrink-0">{dataKeys.length} fields</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{dataKeys.length} fields</span>
                     )}
                     <svg
-                      className={`h-3 w-3 text-neutral-600 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
+                      className={`h-3 w-3 text-muted-foreground transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`}
                       fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
                     >
                       <path d="M9 5l7 7-7 7" />
@@ -1853,15 +2097,15 @@ function AgentEventTimeline({
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-neutral-800 px-4 py-3 space-y-2">
-                      <div className="flex items-center gap-3 flex-wrap text-xs text-neutral-500 mb-2">
-                        <span className="font-mono font-semibold text-neutral-300">{evt.name}</span>
+                    <div className="border-t px-4 py-3 space-y-2">
+                      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground mb-2">
+                        <span className="font-mono font-semibold text-foreground">{evt.name}</span>
                         <span>·</span>
                         <a
-                          href={`/tx/${evt.txSignature}`}
+                          href={entityPath('/tx', evt.txSignature)}
                           className="text-primary hover:text-primary font-mono transition-colors"
                         >
-                          {evt.txSignature.slice(0, 20)}… →
+                          {shortText(evt.txSignature, 20, 4)} →
                         </a>
                         {evt.blockTime && (
                           <>
@@ -1871,7 +2115,7 @@ function AgentEventTimeline({
                         )}
                       </div>
                       {dataKeys.length > 0 ? (
-                        <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800">
+                        <div className="rounded-lg border divide-y">
                           {dataKeys.map((k) => {
                             const v = evt.data[k];
                             const display = v === null ? 'null'
@@ -1880,13 +2124,13 @@ function AgentEventTimeline({
                             return (
                               <div key={k} className="flex items-start justify-between gap-4 px-3 py-1.5">
                                 <span className="text-xs font-mono text-primary shrink-0 min-w-[80px] pt-0.5">{k}</span>
-                                <span className="text-xs font-mono text-neutral-300 text-right break-all min-w-0 flex-1">{display}</span>
+                                <span className="text-xs font-mono text-foreground text-right break-all min-w-0 flex-1">{display}</span>
                               </div>
                             );
                           })}
                         </div>
                       ) : (
-                        <p className="text-xs text-neutral-600 italic">No fields decoded</p>
+                        <p className="text-xs text-muted-foreground italic">No fields decoded</p>
                       )}
                     </div>
                   )}
@@ -1924,10 +2168,10 @@ function Pill({
   const base =
     'inline-flex items-center gap-1 text-[10px] font-medium leading-none whitespace-nowrap';
   const styles: Record<PillVariant, string> = {
-    status: 'uppercase tracking-wider text-emerald-300/90',
-    kind: 'rounded-md bg-neutral-800/60 px-1.5 py-1 font-mono text-neutral-300',
-    sap: 'rounded-md bg-pink-500/10 px-1.5 py-1 font-mono text-pink-300',
-    mpl: 'rounded-md bg-amber-500/10 px-1.5 py-1 font-mono text-amber-300',
+    status: 'uppercase tracking-wider text-primary',
+    kind: 'rounded-md bg-muted px-1.5 py-1 font-mono text-muted-foreground',
+    sap: 'rounded-md bg-primary/10 px-1.5 py-1 font-mono text-primary',
+    mpl: 'rounded-md bg-secondary px-1.5 py-1 font-mono text-secondary-foreground',
   };
   return <span className={cn(base, styles[variant], className)} title={title}>{children}</span>;
 }
@@ -1966,7 +2210,7 @@ function AgentMetaplexTab({
 
   if (!data) {
     return (
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card>
         <CardContent className="py-10">
           <EmptyState
             icon={<Globe className="h-6 w-6" />}
@@ -1978,6 +2222,8 @@ function AgentMetaplexTab({
   }
 
   const { linked, asset, agentIdentityUri, expectedUrl, sapAgentPda, registration, error } = data;
+  const expectedHref = safeExternalUrl(expectedUrl);
+  const agentIdentityHref = safeExternalUrl(agentIdentityUri);
 
   const identityNfts = (nfts ?? []).filter((n) => n.hasAgentIdentity);
   const registryAgents = registry?.agents ?? [];
@@ -2009,6 +2255,8 @@ function AgentMetaplexTab({
   const activeSubTab = subSections.some((s) => s.key === mplSubTab)
     ? mplSubTab
     : subSections[0]?.key ?? 'mapping';
+  const canonicalAgentUriHref = safeExternalUrl(canonicalCard?.agentUri);
+  const canonicalX402Href = safeExternalUrl(canonicalCard?.x402Endpoint);
 
   return (
     <div className="space-y-4">
@@ -2016,15 +2264,15 @@ function AgentMetaplexTab({
       <Card className={cn(
         'overflow-hidden border',
         heroState === 'both'
-          ? 'bg-pink-500/5 border-pink-500/20'
-          : 'bg-neutral-900 border-neutral-800',
+          ? 'bg-primary/5 border-primary/20'
+          : 'bg-card border-border',
       )}>
         <CardContent className="px-5 py-2 lg:mt-4 mt-2 flex items-center align-middle gap-4">
           <div className={cn(
             'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
             heroState === 'both'
-              ? 'bg-pink-500/15 text-pink-400'
-              : 'bg-neutral-800 text-neutral-500',
+              ? 'bg-primary/10 text-primary'
+              : 'bg-muted text-muted-foreground',
           )}>
             <Globe className="h-5 w-5" />
           </div>
@@ -2036,7 +2284,7 @@ function AgentMetaplexTab({
               </Pill>
               {linked && <Pill variant="status">URI-BOUND</Pill>}
             </div>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-muted-foreground">
               {heroState === 'both'
                 ? (() => {
                   const parts: string[] = [];
@@ -2058,7 +2306,7 @@ function AgentMetaplexTab({
         <div
           role="tablist"
           aria-label="Metaplex Core Bridge sections"
-          className="-mx-1 flex items-center gap-1 overflow-x-auto rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-1 scrollbar-thin [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
+          className="-mx-1 flex items-center gap-1 overflow-x-auto rounded-lg border bg-muted/30 p-1 scrollbar-thin [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
         >
           {subSections.map((s) => {
             const isActive = activeSubTab === s.key;
@@ -2071,10 +2319,10 @@ function AgentMetaplexTab({
                 aria-controls={`mpl-sub-${s.key}`}
                 onClick={() => setMplSubTab(s.key)}
                 className={cn(
-                  'inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50',
+                  'inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                   isActive
-                    ? 'bg-amber-400/90 text-neutral-950 shadow-sm'
-                    : 'text-amber-200/80 hover:bg-amber-500/10 hover:text-amber-100',
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-background hover:text-foreground',
                 )}
               >
                 <span className="whitespace-nowrap">{s.label}</span>
@@ -2082,7 +2330,7 @@ function AgentMetaplexTab({
                   <span
                     className={cn(
                       'inline-flex h-4 min-w-[1rem] items-center justify-center rounded px-1 text-[10px] font-mono tabular-nums',
-                      isActive ? 'bg-neutral-950/15 text-neutral-900' : 'bg-amber-500/15 text-amber-200',
+                      isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground',
                     )}
                   >
                     {s.count}
@@ -2096,17 +2344,17 @@ function AgentMetaplexTab({
 
       {/* Identity rows */}
       {activeSubTab === 'mapping' && (
-        <div id="mpl-sub-mapping" role="tabpanel"><Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+        <div id="mpl-sub-mapping" role="tabpanel"><Card className="overflow-hidden">
           <CardHeader className="pb-0 px-5 pt-4">
-            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               Identity Mapping
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-0 py-2 divide-y divide-neutral-800">
+          <CardContent className="px-0 py-2 divide-y divide-border">
             <PropertyRow
               label="SAP PDA"
               value={
-                <span className="font-mono text-xs text-neutral-300 break-all">{sapAgentPda}</span>
+                <span className="font-mono text-xs text-foreground break-all">{sapAgentPda}</span>
               }
             />
             <PropertyRow
@@ -2118,7 +2366,7 @@ function AgentMetaplexTab({
                       href={`${SOLSCAN}/token/${asset}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-xs text-pink-400 hover:underline break-all inline-flex items-center gap-1"
+                      className="font-mono text-xs text-primary hover:underline break-all inline-flex items-center gap-1"
                     >
                       {asset}
                       <ExternalLink className="h-3 w-3 shrink-0" />
@@ -2136,40 +2384,48 @@ function AgentMetaplexTab({
                           : `Discovered on ${identityNfts[0].identityHost ?? 'a foreign host'} — AgentIdentity plugin URI is not bound to the SAP host. See NFT cards below for full details.`
                       }
                     >
-                      <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                      <Sparkles className="h-3.5 w-3.5 text-secondary-foreground" />
                     </span>
                     <Link
                       href={`${SOLSCAN}/token/${identityNfts[0].asset}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-mono text-xs text-amber-400 hover:underline break-all inline-flex items-center gap-1"
+                      className="font-mono text-xs text-secondary-foreground hover:underline break-all inline-flex items-center gap-1"
                     >
                       {identityNfts[0].asset}
                       <ExternalLink className="h-3 w-3 shrink-0" />
                     </Link>
                   </div>
                 ) : (
-                  <span className="text-xs text-neutral-600 italic">none discovered</span>
+                  <span className="text-xs text-muted-foreground/80 italic">none discovered</span>
                 )
               }
             />
-            <PropertyRow
-              label="Expected EIP-8004 URL"
-              value={
-                <Link href={expectedUrl} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 break-all">
-                  {expectedUrl}
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                </Link>
-              }
-            />
+	            <PropertyRow
+	              label="Expected EIP-8004 URL"
+	              value={
+	                expectedHref ? (
+	                  <Link href={expectedHref} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 break-all">
+	                    {expectedUrl}
+	                    <ExternalLink className="h-3 w-3 shrink-0" />
+	                  </Link>
+	                ) : (
+	                  <span className="text-xs text-primary break-all">{expectedUrl}</span>
+	                )
+	              }
+	            />
             {agentIdentityUri && agentIdentityUri !== expectedUrl && (
               <PropertyRow
                 label="On-chain AgentIdentity URI"
                 value={
-                  <Link href={agentIdentityUri} target="_blank" rel="noreferrer" className="text-xs text-amber-400 hover:underline inline-flex items-center gap-1 break-all">
-                    {agentIdentityUri}
-                    <ExternalLink className="h-3 w-3 shrink-0" />
-                  </Link>
+                  agentIdentityHref ? (
+                    <Link href={agentIdentityHref} target="_blank" rel="noreferrer" className="text-xs text-secondary-foreground hover:underline inline-flex items-center gap-1 break-all">
+                      {agentIdentityUri}
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-secondary-foreground break-all">{agentIdentityUri}</span>
+                  )
                 }
               />
             )}
@@ -2181,10 +2437,10 @@ function AgentMetaplexTab({
           /agents/<sapPda>/eip-8004.json. Same JSON third-party
           consumers receive (Metaplex, peer agents, indexers). */}
       {activeSubTab === 'card' && sapPda && (canonicalLoading || canonicalCard) && (
-        <div id="mpl-sub-card" role="tabpanel"><Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+        <div id="mpl-sub-card" role="tabpanel"><Card className="bg-card border-border overflow-hidden">
           <CardHeader className="pb-3 px-5 pt-4">
-            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2 flex-wrap">
-              <Sparkles className="h-3.5 w-3.5 text-pink-400" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2 flex-wrap">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
               Canonical EIP-8004 Card
               <InfoTip label={"Hybrid card served at /agents/<sapPda>/eip-8004.json. Merges SAP on-chain state, the MPL Core AgentIdentity plugin (if any) and the public Metaplex registry into one canonical JSON. This is exactly what third-party consumers see when they resolve this agent."} />
               {canonicalCard && (
@@ -2198,13 +2454,13 @@ function AgentMetaplexTab({
             ) : canonicalCard ? (
               <>
                 {/* JSON URL */}
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/50 px-3 py-2 text-xs">
-                  <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">Canonical URL</div>
+                <div className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80 mb-1">Canonical URL</div>
                   <Link
-                    href={`/agents/${sapPda}/eip-8004.json`}
+                    href={`${entityPath('/agents', sapPda)}/eip-8004.json`}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-pink-300 hover:underline inline-flex items-center gap-1 [overflow-wrap:anywhere]"
+                    className="font-mono text-primary hover:underline inline-flex items-center gap-1 [overflow-wrap:anywhere]"
                   >
                     /agents/{sapPda}/eip-8004.json
                     <ExternalLink className="h-3 w-3 shrink-0" />
@@ -2213,24 +2469,24 @@ function AgentMetaplexTab({
 
                 {/* Identity */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-                  <div><span className="text-neutral-600">Name · </span><span className="text-neutral-200">{canonicalCard.name}</span></div>
-                  <div><span className="text-neutral-600">Version · </span><span className="text-neutral-300 font-mono">{canonicalCard.version}</span></div>
+                  <div><span className="text-muted-foreground/80">Name · </span><span className="text-foreground">{canonicalCard.name}</span></div>
+                  <div><span className="text-muted-foreground/80">Version · </span><span className="text-foreground/80 font-mono">{canonicalCard.version}</span></div>
                   <div className="sm:col-span-2 flex items-baseline gap-1.5 flex-wrap">
-                    <span className="text-neutral-600 shrink-0">Owner · </span>
-                    <Link href={`/agents/${canonicalCard.owner}`} className="font-mono text-neutral-300 hover:text-pink-300 [overflow-wrap:anywhere]">
+                    <span className="text-muted-foreground/80 shrink-0">Owner · </span>
+                    <Link href={entityPath('/agents', canonicalCard.owner)} className="font-mono text-foreground/80 hover:text-primary [overflow-wrap:anywhere]">
                       {canonicalCard.owner}
                     </Link>
                   </div>
                   {canonicalCard.issuedAt && (
-                    <div><span className="text-neutral-600">Issued · </span><span className="text-neutral-300">{safeDateStr(canonicalCard.issuedAt)}</span></div>
+                    <div><span className="text-muted-foreground/80">Issued · </span><span className="text-foreground/80">{safeDateStr(canonicalCard.issuedAt)}</span></div>
                   )}
                   {canonicalCard.updatedAt && canonicalCard.updatedAt !== canonicalCard.issuedAt && (
-                    <div><span className="text-neutral-600">Updated · </span><span className="text-neutral-300">{safeDateStr(canonicalCard.updatedAt)}</span></div>
+                    <div><span className="text-muted-foreground/80">Updated · </span><span className="text-foreground/80">{safeDateStr(canonicalCard.updatedAt)}</span></div>
                   )}
                 </div>
 
                 {canonicalCard.description && (
-                  <p className="text-xs text-neutral-300 leading-relaxed text-pretty">{canonicalCard.description}</p>
+                  <p className="text-xs text-foreground/80 leading-relaxed text-pretty">{canonicalCard.description}</p>
                 )}
 
                 {/* Endpoints */}
@@ -2238,20 +2494,28 @@ function AgentMetaplexTab({
                   <div className="space-y-1.5 text-xs">
                     {canonicalCard.agentUri && (
                       <div className="flex items-baseline gap-1.5 flex-wrap">
-                        <span className="text-neutral-600 shrink-0">Agent URI · </span>
-                        <Link href={canonicalCard.agentUri} target="_blank" rel="noreferrer" className="text-neutral-300 hover:text-pink-300 inline-flex items-center gap-1 [overflow-wrap:anywhere]">
-                          {canonicalCard.agentUri}
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                        </Link>
+                        <span className="text-muted-foreground/80 shrink-0">Agent URI · </span>
+                        {canonicalAgentUriHref ? (
+                          <Link href={canonicalAgentUriHref} target="_blank" rel="noreferrer" className="text-foreground/80 hover:text-primary inline-flex items-center gap-1 [overflow-wrap:anywhere]">
+                            {canonicalCard.agentUri}
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                          </Link>
+                        ) : (
+                          <span className="text-foreground/80 [overflow-wrap:anywhere]">{canonicalCard.agentUri}</span>
+                        )}
                       </div>
                     )}
                     {canonicalCard.x402Endpoint && (
                       <div className="flex items-baseline gap-1.5 flex-wrap">
-                        <span className="text-neutral-600 shrink-0">x402 · </span>
-                        <Link href={canonicalCard.x402Endpoint} target="_blank" rel="noreferrer" className="text-amber-300 hover:underline inline-flex items-center gap-1 [overflow-wrap:anywhere]">
-                          {canonicalCard.x402Endpoint}
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                        </Link>
+                        <span className="text-muted-foreground/80 shrink-0">x402 · </span>
+                        {canonicalX402Href ? (
+                          <Link href={canonicalX402Href} target="_blank" rel="noreferrer" className="text-secondary-foreground hover:underline inline-flex items-center gap-1 [overflow-wrap:anywhere]">
+                            {canonicalCard.x402Endpoint}
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                          </Link>
+                        ) : (
+                          <span className="text-secondary-foreground [overflow-wrap:anywhere]">{canonicalCard.x402Endpoint}</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2260,7 +2524,7 @@ function AgentMetaplexTab({
                 {/* Protocols */}
                 {canonicalCard.protocols.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-wider text-neutral-600">Protocols</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">Protocols</p>
                     <div className="flex flex-wrap gap-1.5">
                       {canonicalCard.protocols.map((p) => (
                         <Pill key={p}>{p}</Pill>
@@ -2272,17 +2536,17 @@ function AgentMetaplexTab({
                 {/* Capabilities */}
                 {canonicalCard.capabilities.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-wider text-neutral-600">Capabilities <span className="text-neutral-500 normal-case tracking-normal tabular-nums">· {canonicalCard.capabilities.length}</span></p>
-                    <div className="rounded-md border border-neutral-800/80 divide-y divide-neutral-800/80">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">Capabilities <span className="text-muted-foreground normal-case tracking-normal tabular-nums">· {canonicalCard.capabilities.length}</span></p>
+                    <div className="rounded-md border border-border/80 divide-y divide-border/80">
                       {canonicalCard.capabilities.map((c, i) => (
                         <div key={i} className="px-2.5 py-1.5 text-xs space-y-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <Pill variant="sap">{c.id}</Pill>
-                            {c.version && <span className="text-neutral-600 font-mono">v{c.version}</span>}
-                            {c.protocolId && <span className="text-neutral-600">· {c.protocolId}</span>}
+                            {c.version && <span className="text-muted-foreground/80 font-mono">v{c.version}</span>}
+                            {c.protocolId && <span className="text-muted-foreground/80">· {c.protocolId}</span>}
                           </div>
                           {c.description && (
-                            <p className="text-neutral-500 leading-relaxed">{c.description}</p>
+                            <p className="text-muted-foreground leading-relaxed">{c.description}</p>
                           )}
                         </div>
                       ))}
@@ -2293,16 +2557,16 @@ function AgentMetaplexTab({
                 {/* Services */}
                 {canonicalCard.services.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-wider text-neutral-600">Services</p>
-                    <div className="rounded-md border border-neutral-800/80 divide-y divide-neutral-800/80">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">Services</p>
+                    <div className="rounded-md border border-border/80 divide-y divide-border/80">
                       {canonicalCard.services.map((s, i) => (
                         <div key={`${s.id}-${i}`} className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <Pill className="shrink-0">{s.type}</Pill>
-                            <span className="text-neutral-300 [overflow-wrap:anywhere]">{s.id}</span>
+                            <span className="text-foreground/80 [overflow-wrap:anywhere]">{s.id}</span>
                           </div>
-                          {s.url && (
-                            <Link href={s.url} target="_blank" rel="noreferrer" className="text-pink-300 hover:underline inline-flex items-center gap-1 shrink-0">
+                          {safeExternalUrl(s.url) && (
+                            <Link href={safeExternalUrl(s.url)!} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 shrink-0">
                               <ExternalLink className="h-3 w-3" />
                             </Link>
                           )}
@@ -2313,40 +2577,40 @@ function AgentMetaplexTab({
                 )}
 
                 {/* Sources summary */}
-                <div className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs space-y-1">
-                  <p className="text-[10px] uppercase tracking-wider text-neutral-600">Sources</p>
+                <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs space-y-1">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">Sources</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
                     <span className="inline-flex items-center gap-1.5">
                       <span className={cn(
                         'inline-block h-1.5 w-1.5 rounded-full',
-                        canonicalCard.diagnostics?.sap === 'ok' ? 'bg-emerald-400' : 'bg-neutral-600',
+                        canonicalCard.diagnostics?.sap === 'ok' ? 'bg-primary' : 'bg-muted',
                       )} />
-                      <span className="text-neutral-400">SAP</span>
-                      <span className="text-neutral-600 font-mono">v{canonicalCard.sources.sap.version ?? '?'}</span>
+                      <span className="text-muted-foreground">SAP</span>
+                      <span className="text-muted-foreground/80 font-mono">v{canonicalCard.sources.sap.version ?? '?'}</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span className={cn(
                         'inline-block h-1.5 w-1.5 rounded-full',
-                        canonicalCard.sources.metaplex.linked ? 'bg-emerald-400' : 'bg-neutral-700',
+                        canonicalCard.sources.metaplex.linked ? 'bg-primary' : 'bg-muted',
                       )} />
-                      <span className="text-neutral-400">Metaplex link</span>
-                      <span className="text-neutral-600">{canonicalCard.sources.metaplex.linked ? 'bound' : 'none'}</span>
+                      <span className="text-muted-foreground">Metaplex link</span>
+                      <span className="text-muted-foreground/80">{canonicalCard.sources.metaplex.linked ? 'bound' : 'none'}</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span className={cn(
                         'inline-block h-1.5 w-1.5 rounded-full',
-                        canonicalCard.sources.metaplex.registry.agents.length > 0 ? 'bg-emerald-400' : 'bg-neutral-700',
+                        canonicalCard.sources.metaplex.registry.agents.length > 0 ? 'bg-primary' : 'bg-muted',
                       )} />
-                      <span className="text-neutral-400">Registry</span>
-                      <span className="text-neutral-600 tabular-nums">{canonicalCard.sources.metaplex.registry.agents.length}</span>
+                      <span className="text-muted-foreground">Registry</span>
+                      <span className="text-muted-foreground/80 tabular-nums">{canonicalCard.sources.metaplex.registry.agents.length}</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span className={cn(
                         'inline-block h-1.5 w-1.5 rounded-full',
-                        canonicalCard.reputation.isActive ? 'bg-emerald-400' : 'bg-neutral-600',
+                        canonicalCard.reputation.isActive ? 'bg-primary' : 'bg-muted',
                       )} />
-                      <span className="text-neutral-400">Reputation</span>
-                      <span className="text-neutral-600 tabular-nums">{canonicalCard.reputation.score} · {canonicalCard.reputation.totalFeedbacks} fb</span>
+                      <span className="text-muted-foreground">Reputation</span>
+                      <span className="text-muted-foreground/80 tabular-nums">{canonicalCard.reputation.score} · {canonicalCard.reputation.totalFeedbacks} fb</span>
                     </span>
                   </div>
                 </div>
@@ -2358,31 +2622,31 @@ function AgentMetaplexTab({
 
       {/* Registration */}
       {activeSubTab === 'registration' && registration && (
-        <div id="mpl-sub-registration" role="tabpanel"><Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+        <div id="mpl-sub-registration" role="tabpanel"><Card className="bg-card border-border overflow-hidden">
           <CardHeader className="pb-0 px-5 pt-4">
-            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500">
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               EIP-8004 Registration
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-0 py-2 divide-y divide-neutral-800">
-            <PropertyRow label="Schema" value={<span className="text-xs text-neutral-400 font-mono">{registration.schema ?? '—'}</span>} />
-            <PropertyRow label="Name" value={<span className="text-xs text-neutral-300">{registration.name ?? '—'}</span>} />
-            <PropertyRow label="Version" value={<span className="text-xs text-neutral-400 font-mono">{registration.version ?? '—'}</span>} />
+          <CardContent className="px-0 py-2 divide-y divide-border">
+            <PropertyRow label="Schema" value={<span className="text-xs text-muted-foreground font-mono">{registration.schema ?? '—'}</span>} />
+            <PropertyRow label="Name" value={<span className="text-xs text-foreground/80">{registration.name ?? '—'}</span>} />
+            <PropertyRow label="Version" value={<span className="text-xs text-muted-foreground font-mono">{registration.version ?? '—'}</span>} />
             {registration.synapseAgent && (
-              <PropertyRow label="Synapse Agent" value={<span className="text-xs text-neutral-400 font-mono break-all">{registration.synapseAgent}</span>} />
+              <PropertyRow label="Synapse Agent" value={<span className="text-xs text-muted-foreground font-mono break-all">{registration.synapseAgent}</span>} />
             )}
             {registration.owner && (
-              <PropertyRow label="Owner" value={<span className="text-xs text-neutral-400 font-mono break-all">{registration.owner}</span>} />
+              <PropertyRow label="Owner" value={<span className="text-xs text-muted-foreground font-mono break-all">{registration.owner}</span>} />
             )}
             {registration.issuedAt && (
-              <PropertyRow label="Issued" value={<span className="text-xs text-neutral-400">{safeDateStr(registration.issuedAt)}</span>} />
+              <PropertyRow label="Issued" value={<span className="text-xs text-muted-foreground">{safeDateStr(registration.issuedAt)}</span>} />
             )}
           </CardContent>
 
           {/* Capabilities */}
           {registration.capabilities && registration.capabilities.length > 0 && (
-            <CardContent className="px-5 pt-3 pb-4 border-t border-neutral-800">
-              <p className="text-xs text-neutral-600 uppercase tracking-wider font-medium mb-2">Capabilities</p>
+            <CardContent className="px-5 pt-3 pb-4 border-t border-border">
+              <p className="text-xs text-muted-foreground/80 uppercase tracking-wider font-medium mb-2">Capabilities</p>
               <div className="flex flex-wrap gap-1.5">
                 {registration.capabilities.map((c, i) => (
                   <Pill key={i}>{String(c)}</Pill>
@@ -2393,13 +2657,13 @@ function AgentMetaplexTab({
 
           {/* Executives */}
           {registration.executives && registration.executives.length > 0 && (
-            <CardContent className="px-5 pt-3 pb-4 border-t border-neutral-800">
-              <p className="text-xs text-neutral-600 uppercase tracking-wider font-medium mb-2">Executives</p>
+            <CardContent className="px-5 pt-3 pb-4 border-t border-border">
+              <p className="text-xs text-muted-foreground/80 uppercase tracking-wider font-medium mb-2">Executives</p>
               <div className="space-y-1.5">
                 {registration.executives.map((ex, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 rounded-md border border-neutral-800 bg-neutral-950/40 px-3.5 py-2.5 text-xs">
-                    <span className="font-mono text-neutral-300 break-all min-w-0 flex-1">{ex.address}</span>
-                    <div className="flex items-center gap-2 text-neutral-500 shrink-0">
+                  <div key={i} className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 px-3.5 py-2.5 text-xs">
+                    <span className="font-mono text-foreground/80 break-all min-w-0 flex-1">{ex.address}</span>
+                    <div className="flex items-center gap-2 text-muted-foreground shrink-0">
                       {typeof ex.permissions === 'number' && (
                         <span className="font-mono">perm 0x{ex.permissions.toString(16)}</span>
                       )}
@@ -2415,25 +2679,32 @@ function AgentMetaplexTab({
 
           {/* Services */}
           {registration.services && registration.services.length > 0 && (
-            <CardContent className="px-5 pt-3 pb-4 border-t border-neutral-800">
-              <p className="text-xs text-neutral-600 uppercase tracking-wider font-medium mb-2">Services</p>
+            <CardContent className="px-5 pt-3 pb-4 border-t border-border">
+              <p className="text-xs text-muted-foreground/80 uppercase tracking-wider font-medium mb-2">Services</p>
               <div className="space-y-1.5">
-                {registration.services.map((svc, i) => (
-                  <div key={i} className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3.5 py-2.5 text-xs">
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-neutral-300 font-medium break-all">{svc.id}</span>
-                        <Pill className="shrink-0">{svc.type}</Pill>
+                {registration.services.map((svc, i) => {
+                  const serviceHref = safeExternalUrl(svc.url);
+                  return (
+                    <div key={i} className="rounded-md border border-border bg-muted/20 px-3.5 py-2.5 text-xs">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-foreground/80 font-medium break-all">{svc.id}</span>
+                          <Pill className="shrink-0">{svc.type}</Pill>
+                        </div>
+                        {svc.url && (
+                          serviceHref ? (
+                            <Link href={serviceHref} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 break-all">
+                              {svc.url}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </Link>
+                          ) : (
+                            <span className="text-primary break-all">{svc.url}</span>
+                          )
+                        )}
                       </div>
-                      {svc.url && (
-                        <Link href={svc.url} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 break-all">
-                          {svc.url}
-                          <ExternalLink className="h-3 w-3 shrink-0" />
-                        </Link>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           )}
@@ -2442,29 +2713,29 @@ function AgentMetaplexTab({
 
       {/* Error fallback */}
       {error && !linked && (
-        <Card className="bg-amber-500/5 border border-amber-500/20">
-          <CardContent className="px-5 py-4 text-xs text-amber-400">
+        <Card className="bg-secondary/5 border border-secondary/20">
+          <CardContent className="px-5 py-4 text-xs text-secondary-foreground">
             <strong className="block mb-1">Discovery warning</strong>
-            <span className="text-amber-300/70">{error}</span>
+            <span className="text-secondary-foreground/70">{error}</span>
           </CardContent>
         </Card>
       )}
 
       {/* Metaplex Registry (api.metaplex.com) — agents this wallet has minted on the public registry */}
       {activeSubTab === 'registry' && registry && (registryAgents.length > 0 || registry.error) && (
-        <div id="mpl-sub-registry" role="tabpanel"><Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+        <div id="mpl-sub-registry" role="tabpanel"><Card className="bg-card border-border overflow-hidden">
           <CardHeader className="pb-3 px-5 pt-4">
-            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2">
-              <Globe className="h-3.5 w-3.5 text-amber-400" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2">
+              <Globe className="h-3.5 w-3.5 text-secondary-foreground" />
               Metaplex Registry
-              <span className="text-xs font-normal text-neutral-600 normal-case tracking-normal">api.metaplex.com</span>
+              <span className="text-xs font-normal text-muted-foreground/80 normal-case tracking-normal">api.metaplex.com</span>
               <InfoTip label={"Public peer-trust index hosted by Metaplex. Lists every agent minted through MPL Core's AgentIdentity bridge — independent of the SAP host. An entry here proves a third party indexed this agent. Not all on-chain plugins end up here, and the registry can list off-chain-only cards."} />
-              <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-neutral-500 tabular-nums">{registryAgents.length} {registryAgents.length === 1 ? 'entry' : 'entries'}</span>
+              <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-muted-foreground tabular-nums">{registryAgents.length} {registryAgents.length === 1 ? 'entry' : 'entries'}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-4 pt-0 space-y-3">
             {registry.error ? (
-              <p className="text-xs text-amber-400">Registry unreachable: {registry.error}</p>
+              <p className="text-xs text-secondary-foreground">Registry unreachable: {registry.error}</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {registryAgents.map((a) => {
@@ -2475,8 +2746,8 @@ function AgentMetaplexTab({
                       className={cn(
                         'relative rounded-lg border p-4 space-y-3 transition-colors',
                         hasToken
-                          ? 'border-amber-400/40 bg-amber-500/5'
-                          : 'border-neutral-800 bg-neutral-950/50',
+                          ? 'border-secondary/40 bg-secondary/5'
+                          : 'border-border bg-muted/50',
                       )}
                     >
                       <div className="flex items-start gap-3">
@@ -2485,16 +2756,16 @@ function AgentMetaplexTab({
                           <img
                             src={a.image}
                             alt={a.name ?? 'agent'}
-                            className="size-10 rounded-md object-cover bg-neutral-900 shrink-0"
+                            className="size-10 rounded-md object-cover bg-card shrink-0"
                             loading="lazy"
                             referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div className="size-10 rounded-md bg-neutral-900 shrink-0" />
+                          <div className="size-10 rounded-md bg-card shrink-0" />
                         )}
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="text-xs font-medium text-white truncate">{a.name ?? 'Unnamed agent'}</p>
+                            <p className="text-xs font-medium text-foreground truncate">{a.name ?? 'Unnamed agent'}</p>
                             {hasToken && (
                               <Pill variant="mpl" title="This agent has launched its own SPL token via the Metaplex Agent Token feature (typically a Meteora DBC bonding curve). The token is bound to the agent's MPL Core asset and tradeable.">
                                 <Coins className="h-3 w-3" />
@@ -2503,18 +2774,18 @@ function AgentMetaplexTab({
                             )}
                           </div>
                           {a.description && (
-                            <p className="text-xs text-neutral-500 line-clamp-2">{a.description}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">{a.description}</p>
                           )}
                         </div>
                       </div>
                       <div className="space-y-2 text-xs">
                         <div className="flex items-baseline gap-1.5 flex-wrap">
-                          <span className="text-neutral-600 shrink-0">Mint ·</span>
+                          <span className="text-muted-foreground/80 shrink-0">Mint ·</span>
                           <Link
                             href={`${SOLSCAN}/token/${a.mintAddress}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="font-mono text-neutral-400 hover:text-amber-300 inline-flex items-center gap-1 break-all"
+                            className="font-mono text-muted-foreground hover:text-secondary-foreground inline-flex items-center gap-1 break-all"
                           >
                             {a.mintAddress}
                             <ExternalLink className="h-3 w-3 shrink-0" />
@@ -2522,7 +2793,7 @@ function AgentMetaplexTab({
                         </div>
                         {hasToken && (
                           <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <span className="text-amber-400/80 inline-flex items-center gap-1 shrink-0">
+                            <span className="text-secondary-foreground/80 inline-flex items-center gap-1 shrink-0">
                               <Coins className="h-3 w-3" />
                               Token ·
                             </span>
@@ -2530,7 +2801,7 @@ function AgentMetaplexTab({
                               href={`${SOLSCAN}/token/${a.agentToken}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="font-mono text-amber-300 hover:underline inline-flex items-center gap-1 break-all"
+                              className="font-mono text-secondary-foreground hover:underline inline-flex items-center gap-1 break-all"
                             >
                               {a.agentToken!}
                               <ExternalLink className="h-3 w-3 shrink-0" />
@@ -2538,12 +2809,12 @@ function AgentMetaplexTab({
                           </div>
                         )}
                         <div className="flex items-baseline gap-1.5 flex-wrap">
-                          <span className="text-neutral-600 shrink-0">Metadata ·</span>
+                          <span className="text-muted-foreground/80 shrink-0">Metadata ·</span>
                           <Link
                             href={a.agentMetadataUri}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-amber-400 hover:underline inline-flex items-center gap-1 break-all"
+                            className="text-secondary-foreground hover:underline inline-flex items-center gap-1 break-all"
                           >
                             {a.agentMetadataUri}
                             <ExternalLink className="h-3 w-3 shrink-0" />
@@ -2561,40 +2832,40 @@ function AgentMetaplexTab({
 
       {/* Discovered AgentIdentity NFTs (foreign + canonical) */}
       {activeSubTab === 'nfts' && identityNfts.length > 0 && (
-        <div id="mpl-sub-nfts" role="tabpanel"><Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+        <div id="mpl-sub-nfts" role="tabpanel"><Card className="bg-card border-border overflow-hidden">
           <CardHeader className="pb-3 px-5 pt-4">
-            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-secondary-foreground" />
               Discovered AgentIdentity NFTs
               <InfoTip label={"Direct on-chain proof. MPL Core assets owned by this wallet that carry the AgentIdentity external plugin (EIP-8004 agent-card extension). The plugin URI is the source of truth — pointing it at the SAP host (gold cards) means this NFT is the canonical, transferable handle for this agent."} />
-              <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-neutral-500 tabular-nums">{identityNfts.length} {identityNfts.length === 1 ? 'asset' : 'assets'}</span>
+              <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-muted-foreground tabular-nums">{identityNfts.length} {identityNfts.length === 1 ? 'asset' : 'assets'}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-4 pt-3 space-y-3">
             {/* Compact one-line summary + legend */}
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                <span className="inline-flex items-center gap-1.5 text-neutral-500">
-                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-                  <span className="text-amber-300 font-medium">SAP × METAPLEX</span>
-                  <span className="text-neutral-600">URI bound to SAP host</span>
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <span className="inline-block h-2 w-2 rounded-full bg-secondary" />
+                  <span className="text-secondary-foreground font-medium">SAP × METAPLEX</span>
+                  <span className="text-muted-foreground/80">URI bound to SAP host</span>
                 </span>
-                <span className="text-neutral-700">·</span>
-                <span className="inline-flex items-center gap-1.5 text-neutral-500">
-                  <span className="inline-block h-2 w-2 rounded-full bg-neutral-500" />
-                  <span className="text-neutral-300 font-medium">METAPLEX</span>
-                  <span className="text-neutral-600">peer registry only</span>
+                <span className="text-muted-foreground/70">·</span>
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" />
+                  <span className="text-foreground/80 font-medium">METAPLEX</span>
+                  <span className="text-muted-foreground/80">peer registry only</span>
                 </span>
-                <span className="text-neutral-700">·</span>
-                <span className="inline-flex items-center gap-1.5 text-neutral-500">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-                  <span className="text-emerald-300 font-medium">✓ REGISTRY</span>
-                  <span className="text-neutral-600">indexed on api.metaplex.com</span>
+                <span className="text-muted-foreground/70">·</span>
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <span className="inline-block h-2 w-2 rounded-full bg-primary" />
+                  <span className="text-primary font-medium">✓ REGISTRY</span>
+                  <span className="text-muted-foreground/80">indexed on api.metaplex.com</span>
                 </span>
               </div>
               {registryAgents.length !== identityNfts.length && (
-                <details className="text-xs text-neutral-500">
-                  <summary className="cursor-pointer text-neutral-400 hover:text-neutral-200 select-none">
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
                     Why on-chain plugins ({identityNfts.length}) and registry entries ({registryAgents.length}) differ
                   </summary>
                   <p className="mt-1.5 pl-4 leading-relaxed">
@@ -2615,8 +2886,8 @@ function AgentMetaplexTab({
                   className={cn(
                     'rounded-lg border p-3 space-y-2.5',
                     isCanonical
-                      ? 'border-amber-400/40 bg-amber-500/5 shadow-[0_0_18px_-12px_hsl(var(--neon-amber)/0.6)]'
-                      : 'border-neutral-700 bg-neutral-950/40',
+                      ? 'border-secondary/40 bg-secondary/5 shadow-sm'
+                      : 'border-border bg-muted/20',
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -2625,14 +2896,14 @@ function AgentMetaplexTab({
                       <img
                         src={n.image}
                         alt={n.name ?? 'NFT'}
-                        className="h-12 w-12 rounded-md object-cover bg-neutral-950 shrink-0"
+                        className="h-12 w-12 rounded-md object-cover bg-muted shrink-0"
                         loading="lazy"
                         referrerPolicy="no-referrer"
                       />
                     )}
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium text-white truncate">{n.name ?? reg?.name ?? 'Unnamed asset'}</p>
+                        <p className="text-sm font-medium text-foreground truncate">{n.name ?? reg?.name ?? 'Unnamed asset'}</p>
                         <Pill variant={isCanonical ? 'sap' : 'mpl'}>
                           {isCanonical ? 'SAP × METAPLEX' : `METAPLEX · ${n.identityHost ?? 'registry'}`}
                         </Pill>
@@ -2649,7 +2920,7 @@ function AgentMetaplexTab({
                           rel="noreferrer"
                           className={cn(
                             'font-mono text-xs break-all inline-flex items-center gap-1 hover:underline',
-                            isCanonical ? 'text-amber-300/80' : 'text-neutral-400',
+                            isCanonical ? 'text-secondary-foreground/80' : 'text-muted-foreground',
                           )}
                         >
                           {n.asset}
@@ -2659,65 +2930,88 @@ function AgentMetaplexTab({
                     </div>
                   </div>
 
-                  {n.agentIdentityUri && (() => {
-                    const uri = n.agentIdentityUri;
-                    const mismatch = !!expectedUrl && uri !== expectedUrl;
-                    return (
+	                  {n.agentIdentityUri && (() => {
+	                    const uri = n.agentIdentityUri;
+	                    const uriHref = safeExternalUrl(uri);
+	                    const mismatch = !!expectedUrl && uri !== expectedUrl;
+	                    return (
                       <div
                         className={cn(
                           'rounded-md border px-2.5 py-1.5 text-xs space-y-1',
                           mismatch
-                            ? 'border-amber-500/40 bg-amber-950/20'
-                            : 'border-neutral-800 bg-neutral-950/40',
+                            ? 'border-secondary/40 bg-muted/20'
+                            : 'border-border bg-muted/20',
                         )}
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-600">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
                             On-chain plugin URI
                           </span>
                           {mismatch && (
-                            <span className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-[1px] text-[10px] uppercase tracking-wider text-amber-300">
+                            <span className="inline-flex items-center gap-1 rounded border border-secondary/40 bg-secondary/10 px-1.5 py-[1px] text-[10px] uppercase tracking-wider text-secondary-foreground">
                               foreign PDA
                             </span>
                           )}
                           {!mismatch && isCanonical && (
-                            <span className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-[1px] text-[10px] uppercase tracking-wider text-emerald-300">
+                            <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-[1px] text-[10px] uppercase tracking-wider text-primary">
                               matches this agent
                             </span>
                           )}
                         </div>
-                        <Link
-                          href={uri}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={uri}
-                          className={cn(
-                            'block truncate hover:underline',
-                            mismatch
-                              ? 'text-amber-300'
-                              : isCanonical
-                                ? 'text-amber-400'
-                                : 'text-neutral-400',
-                          )}
-                        >
-                          {uri}
-                        </Link>
-                        {mismatch && (
-                          <div className="space-y-1 pt-1">
-                            <p className="text-[10px] leading-relaxed text-amber-200/80">
+	                        {uriHref ? (
+	                          <Link
+	                            href={uriHref}
+	                            target="_blank"
+	                            rel="noreferrer"
+	                            title={uri}
+	                            className={cn(
+	                              'block truncate hover:underline',
+	                              mismatch
+	                                ? 'text-secondary-foreground'
+	                                : isCanonical
+	                                  ? 'text-secondary-foreground'
+	                                  : 'text-muted-foreground',
+	                            )}
+	                          >
+	                            {uri}
+	                          </Link>
+	                        ) : (
+	                          <span
+	                            title={uri}
+	                            className={cn(
+	                              'block truncate',
+	                              mismatch
+	                                ? 'text-secondary-foreground'
+	                                : isCanonical
+	                                  ? 'text-secondary-foreground'
+	                                  : 'text-muted-foreground',
+	                            )}
+	                          >
+	                            {uri}
+	                          </span>
+	                        )}
+	                        {mismatch && (
+	                          <div className="space-y-1 pt-1">
+                            <p className="text-[10px] leading-relaxed text-secondary-foreground/80">
                               The plugin URI baked into this NFT points to a
                               different SAP PDA. To bind it to this agent the
                               owner must update the AgentIdentity plugin URI to:
                             </p>
-                            <Link
-                              href={expectedUrl!}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={expectedUrl!}
-                              className="block truncate font-mono text-[11px] text-emerald-300 hover:underline"
-                            >
-                              {expectedUrl}
-                            </Link>
+	                            {expectedHref ? (
+	                              <Link
+	                                href={expectedHref}
+	                                target="_blank"
+	                                rel="noreferrer"
+	                                title={expectedUrl!}
+	                                className="block truncate font-mono text-[11px] text-primary hover:underline"
+	                              >
+	                                {expectedUrl}
+	                              </Link>
+	                            ) : (
+	                              <span title={expectedUrl!} className="block truncate font-mono text-[11px] text-primary">
+	                                {expectedUrl}
+	                              </span>
+	                            )}
                           </div>
                         )}
                       </div>
@@ -2735,13 +3029,13 @@ function AgentMetaplexTab({
                       <div className={cn(
                         'rounded-md border p-3 space-y-2.5',
                         isCanonical
-                          ? 'border-amber-500/25 bg-amber-500/[0.04]'
-                          : 'border-neutral-800 bg-neutral-950/50',
+                          ? 'border-secondary/25 bg-secondary/[0.04]'
+                          : 'border-border bg-muted/50',
                       )}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className={cn(
                             'text-xs uppercase tracking-wider font-semibold inline-flex items-center gap-1.5',
-                            isCanonical ? 'text-amber-300' : 'text-neutral-400',
+                            isCanonical ? 'text-secondary-foreground' : 'text-muted-foreground',
                           )}>
                             <Sparkles className="h-3 w-3" />
                             EIP-8004 Card
@@ -2750,7 +3044,7 @@ function AgentMetaplexTab({
                           {reg.x402Support && <Pill>x402</Pill>}
                           {trust.length > 0 && (
                             <span className="inline-flex items-center gap-1 flex-wrap">
-                              <span className="text-[10px] uppercase tracking-wider text-neutral-500">Trust ·</span>
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Trust ·</span>
                               {trust.map((t) => (
                                 <Pill key={String(t)}>{String(t)}</Pill>
                               ))}
@@ -2759,63 +3053,68 @@ function AgentMetaplexTab({
                         </div>
 
                         {reg.description && (
-                          <p className="text-xs text-neutral-300 leading-relaxed text-pretty">{reg.description}</p>
+                          <p className="text-xs text-foreground/80 leading-relaxed text-pretty">{reg.description}</p>
                         )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs">
                           {reg.name && (
-                            <div className="truncate"><span className="text-neutral-600">Name · </span><span className="text-neutral-200">{reg.name}</span></div>
+                            <div className="truncate"><span className="text-muted-foreground/80">Name · </span><span className="text-foreground">{reg.name}</span></div>
                           )}
                           {reg.version && (
-                            <div className="truncate"><span className="text-neutral-600">Version · </span><span className="text-neutral-300 font-mono">{reg.version}</span></div>
+                            <div className="truncate"><span className="text-muted-foreground/80">Version · </span><span className="text-foreground/80 font-mono">{reg.version}</span></div>
                           )}
                           {regOwner && (
                             <div className="sm:col-span-2 flex items-baseline gap-1.5 flex-wrap">
-                              <span className="text-neutral-600 shrink-0">Owner · </span>
+                              <span className="text-muted-foreground/80 shrink-0">Owner · </span>
                               <Link
-                                href={`/agents/${regOwner}`}
-                                className="font-mono text-neutral-300 hover:text-amber-300 break-all"
+                                href={entityPath('/agents', regOwner)}
+                                className="font-mono text-foreground/80 hover:text-secondary-foreground break-all"
                               >
                                 {regOwner}
                               </Link>
                             </div>
                           )}
                           {reg.issuedAt && (
-                            <div><span className="text-neutral-600">Issued · </span><span className="text-neutral-300">{safeDateStr(reg.issuedAt)}</span></div>
+                            <div><span className="text-muted-foreground/80">Issued · </span><span className="text-foreground/80">{safeDateStr(reg.issuedAt)}</span></div>
                           )}
                           {reg.synapseAgent && (
-                            <div className="sm:col-span-2 truncate"><span className="text-neutral-600">Synapse · </span><span className="text-neutral-300 font-mono">{String(reg.synapseAgent)}</span></div>
+                            <div className="sm:col-span-2 truncate"><span className="text-muted-foreground/80">Synapse · </span><span className="text-foreground/80 font-mono">{String(reg.synapseAgent)}</span></div>
                           )}
                         </div>
 
                         {services.length > 0 && (
                           <div className="space-y-1">
-                            <p className="text-xs uppercase tracking-wider text-neutral-600">Services</p>
-                            <div className="rounded-md border border-neutral-800/80 divide-y divide-neutral-800/80">
-                              {services.map((svc, i) => {
-                                const label = svc.name ?? svc.type ?? svc.id ?? `service-${i + 1}`;
-                                const endpoint = svc.endpoint ?? svc.url ?? null;
-                                return (
+                            <p className="text-xs uppercase tracking-wider text-muted-foreground/80">Services</p>
+                            <div className="rounded-md border border-border/80 divide-y divide-border/80">
+	                              {services.map((svc, i) => {
+	                                const label = svc.name ?? svc.type ?? svc.id ?? `service-${i + 1}`;
+	                                const endpoint = svc.endpoint ?? svc.url ?? null;
+	                                const endpointHref = safeExternalUrl(endpoint);
+	                                return (
                                   <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
                                     <div className="flex items-center gap-1.5 min-w-0">
                                       <Pill variant={isCanonical ? 'mpl' : 'kind'} className="shrink-0">
                                         {label}
                                       </Pill>
                                       {svc.version && (
-                                        <span className="text-xs text-neutral-600 font-mono">v{svc.version}</span>
+                                        <span className="text-xs text-muted-foreground/80 font-mono">v{svc.version}</span>
                                       )}
                                     </div>
-                                    {endpoint && (
-                                      <Link
-                                        href={endpoint}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-xs text-neutral-400 hover:text-amber-300 truncate inline-flex items-center gap-1 min-w-0"
-                                      >
-                                        <span className="truncate">{endpoint}</span>
-                                        <ExternalLink className="h-3 w-3 shrink-0" />
-                                      </Link>
-                                    )}
+	                                    {endpoint && (
+	                                      endpointHref ? (
+	                                        <Link
+	                                          href={endpointHref}
+	                                          target="_blank"
+	                                          rel="noreferrer"
+	                                          className="text-xs text-muted-foreground hover:text-secondary-foreground truncate inline-flex items-center gap-1 min-w-0"
+	                                        >
+	                                          <span className="truncate">{endpoint}</span>
+	                                          <ExternalLink className="h-3 w-3 shrink-0" />
+	                                        </Link>
+	                                      ) : (
+	                                        <span className="text-xs text-muted-foreground truncate min-w-0">{endpoint}</span>
+	                                      )
+	                                    )}
                                   </div>
                                 );
                               })}
@@ -2825,7 +3124,7 @@ function AgentMetaplexTab({
 
                         {registrations.length > 0 && (
                           <div className="space-y-1">
-                            <p className="text-xs uppercase tracking-wider text-neutral-600 inline-flex items-center gap-1.5">
+                            <p className="text-xs uppercase tracking-wider text-muted-foreground/80 inline-flex items-center gap-1.5">
                               Cross-chain identity
                               <InfoTip label={"This same agent is registered across multiple chains and registries (CAIP-10 format). Other apps can resolve this identity from any of these networks — making the agent portable, multi-chain discoverable, and decoupled from any single registry."} />
                             </p>
@@ -2833,7 +3132,7 @@ function AgentMetaplexTab({
                               {registrations.map((r, i) => {
                                 const decoded = decodeAgentRegistry(r.agentRegistry);
                                 return (
-                                  <div key={i} className="flex items-center justify-between gap-2 text-xs rounded border border-neutral-800/80 bg-neutral-950/40 px-3 py-2 flex-wrap">
+                                  <div key={i} className="flex items-center justify-between gap-2 text-xs rounded border border-border/80 bg-muted/20 px-3 py-2 flex-wrap">
                                     <div className="flex items-center gap-1.5 min-w-0">
                                       <Pill className="shrink-0">{decoded.chain}</Pill>
                                       {decoded.explorer ? (
@@ -2841,18 +3140,18 @@ function AgentMetaplexTab({
                                           href={decoded.explorer}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="font-mono text-neutral-500 hover:text-amber-300 break-all inline-flex items-center gap-1"
+                                          className="font-mono text-muted-foreground hover:text-secondary-foreground break-all inline-flex items-center gap-1"
                                         >
                                           {decoded.registryLabel}
                                           <ExternalLink className="h-3 w-3 shrink-0" />
                                         </Link>
                                       ) : (
-                                        <span className="font-mono text-neutral-500 break-all">{decoded.registryLabel}</span>
+                                        <span className="font-mono text-muted-foreground break-all">{decoded.registryLabel}</span>
                                       )}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
-                                      <span className="text-neutral-600">id ·</span>
-                                      <span className="font-mono text-neutral-300">{r.agentId}</span>
+                                      <span className="text-muted-foreground/80">id ·</span>
+                                      <span className="font-mono text-foreground/80">{r.agentId}</span>
                                     </div>
                                   </div>
                                 );
@@ -2863,7 +3162,7 @@ function AgentMetaplexTab({
                       </div>
                     );
                   })() : n.agentIdentityUri ? (
-                    <p className="text-xs text-neutral-600 italic">EIP-8004 JSON unreachable or invalid.</p>
+                    <p className="text-xs text-muted-foreground/80 italic">EIP-8004 JSON unreachable or invalid.</p>
                   ) : null}
                 </div>
               );
@@ -2875,11 +3174,7 @@ function AgentMetaplexTab({
   );
 }
 
-type AgentLaunchToken = {
-  mint: string;
-  name: string;
-  registryAgentMint: string;
-};
+type AgentLaunchToken = AgentLaunchTokenEntry;
 
 type DexPairPayload = {
   pairAddress: string | null;
@@ -2945,12 +3240,12 @@ function AgentTokenCard({
 }) {
   const statusTone =
     token.primaryLaunchStatus === 'live'
-      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+      ? 'bg-primary/15 text-primary border-primary/30'
       : token.primaryLaunchStatus === 'graduated'
-        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+        ? 'bg-secondary/15 text-secondary-foreground border-secondary/30'
         : token.primaryLaunchStatus === 'upcoming'
-          ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-          : 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20';
+          ? 'bg-primary/15 text-primary border-primary/30'
+          : 'bg-muted text-muted-foreground border-border';
 
   // No Genesis launch → surface the token program as the badge instead
   // (e.g. Token-2022 / SPL Token) so the partition stays informative.
@@ -2961,14 +3256,14 @@ function AgentTokenCard({
       : 'SPL TOKEN';
 
   return (
-    <div className="mt-2 rounded-md border border-neutral-800/60 bg-neutral-950/40 p-3">
+    <div className="mt-2 rounded-md border border-border/60 bg-muted/20 p-3">
       <div className="flex items-start gap-3">
         <TokenAvatar src={token.image} symbol={token.symbol ?? token.name.slice(0, 3).toUpperCase()} size={44} title={token.name} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-neutral-100 truncate">{token.name}</span>
+            <span className="text-sm font-medium text-foreground truncate">{token.name}</span>
             {token.symbol && (
-              <span className="text-[11px] font-mono text-neutral-400">{token.symbol}</span>
+              <span className="text-[11px] font-mono text-muted-foreground">{token.symbol}</span>
             )}
             <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium tracking-wide', statusTone)}>
               {badgeLabel}
@@ -2978,13 +3273,13 @@ function AgentTokenCard({
             type="button"
             onClick={() => onCopy(token.mint)}
             aria-label={`Copy mint ${token.mint}`}
-            className="mt-1 inline-flex items-center gap-1 rounded px-1 -mx-1 font-mono text-[11px] text-neutral-400 hover:bg-neutral-800/60 hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+            className="mt-1 inline-flex items-center gap-1 rounded px-1 -mx-1 font-mono text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <span>{token.mint.slice(0, 6)}…{token.mint.slice(-6)}</span>
-            <Copy className={cn('h-3 w-3', copied === token.mint ? 'text-emerald-400' : 'opacity-60')} />
+            <Copy className={cn('h-3 w-3', copied === token.mint ? 'text-primary' : 'opacity-60')} />
           </button>
           {token.launchCount > 0 && (
-            <p className="mt-1 text-[11px] text-neutral-500">
+            <p className="mt-1 text-[11px] text-muted-foreground">
               {token.launchCount} Genesis launch{token.launchCount === 1 ? '' : 'es'} indexed
             </p>
           )}
@@ -2994,7 +3289,7 @@ function AgentTokenCard({
         <button
           type="button"
           onClick={onOpenDetails}
-          className="inline-flex items-center gap-1 text-[11px] text-emerald-300 hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 rounded px-1 -mx-1"
+          className="inline-flex items-center gap-1 text-[11px] text-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded px-1 -mx-1"
         >
           Open token launch details <ChevronRight className="h-3 w-3" />
         </button>
@@ -3004,7 +3299,7 @@ function AgentTokenCard({
               href={`https://www.metaplex.com/agents/${encodeURIComponent(token.registryAgentMint)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] text-neutral-400 hover:text-neutral-200"
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
               title="Open on Metaplex Explorer"
             >
               <Globe className="h-3 w-3" /> Metaplex
@@ -3014,7 +3309,7 @@ function AgentTokenCard({
             href={`https://dexscreener.com/solana/${encodeURIComponent(token.mint)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] text-neutral-400 hover:text-neutral-200"
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
             title="Open on DexScreener"
           >
             <ExternalLink className="h-3 w-3" /> DexScreener
@@ -3022,7 +3317,7 @@ function AgentTokenCard({
         </div>
       </div>
       {extraCount > 0 && (
-        <p className="mt-2 text-[10px] text-neutral-500">
+        <p className="mt-2 text-[10px] text-muted-foreground">
           +{extraCount} additional token{extraCount === 1 ? '' : 's'} — see Token Launch tab
         </p>
       )}
@@ -3046,23 +3341,23 @@ const SYNAPSE_SAP_SKILLS_URL =
 function AgentTokenEmptyCta({ dense = false }: { dense?: boolean }) {
   if (dense) {
     return (
-      <div className="mt-2 rounded-md border border-dashed border-neutral-700/70 bg-neutral-950/40 p-3">
+      <div className="mt-2 rounded-md border border-dashed border-border/70 bg-muted/20 p-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-400/20 bg-emerald-500/10 text-emerald-300">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
             <Rocket className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-neutral-200">
+            <p className="text-xs font-medium text-foreground">
               No token launched yet
             </p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-neutral-400">
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
               Use the synapse-sap agent skills to launch a Metaplex Genesis token with your agent.
             </p>
             <a
               href={SYNAPSE_SAP_SKILLS_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1.5 inline-flex items-center gap-1 rounded px-1 -mx-1 text-[11px] text-emerald-300 hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+              className="mt-1.5 inline-flex items-center gap-1 rounded px-1 -mx-1 text-[11px] text-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               Read the agent skills <ExternalLink className="h-3 w-3" />
             </a>
@@ -3073,20 +3368,20 @@ function AgentTokenEmptyCta({ dense = false }: { dense?: boolean }) {
   }
 
   return (
-    <div className="rounded-md border border-dashed border-neutral-700/70 bg-neutral-950/40 px-4 py-6 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-emerald-400/20 bg-emerald-500/10 text-emerald-300">
+    <div className="rounded-md border border-dashed border-border/70 bg-muted/20 px-4 py-6 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
         <Rocket className="h-5 w-5" />
       </div>
-      <p className="mt-3 text-sm font-medium text-neutral-100">
+      <p className="mt-3 text-sm font-medium text-foreground">
         No token launched yet
       </p>
-      <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-neutral-400">
+      <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
         Use the{' '}
         <a
           href={SYNAPSE_SAP_SKILLS_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-mono text-emerald-300 underline-offset-2 hover:underline"
+          className="font-mono text-primary underline-offset-2 hover:underline"
         >
           synapse-sap agent skills
         </a>{' '}
@@ -3098,7 +3393,7 @@ function AgentTokenEmptyCta({ dense = false }: { dense?: boolean }) {
         href={SYNAPSE_SAP_SKILLS_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         Open agent skills.md <ExternalLink className="h-3 w-3" />
       </a>
@@ -3272,18 +3567,20 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
 
   const buyUrl = selectedMint ? `https://jup.ag/swap/SOL-${selectedMint}` : null;
   const sellUrl = selectedMint ? `https://jup.ag/swap/${selectedMint}-SOL` : null;
-  const chartUrl = marketPair?.pairAddress
-    ? `https://dexscreener.com/solana/${marketPair.pairAddress}?embed=1&theme=dark&trades=0&info=0`
-    : null;
+	  const chartUrl = marketPair?.pairAddress
+	    ? `https://dexscreener.com/solana/${marketPair.pairAddress}?embed=1&theme=dark&trades=0&info=0`
+	    : null;
+	  const launchPageHref = safeExternalUrl(genesisPrimaryLaunch?.launchPage);
+	  const marketPairHref = safeExternalUrl(marketPair?.url);
 
   return (
-    <Card className="bg-neutral-900 border-neutral-800 overflow-hidden">
+    <Card className="bg-card border-border overflow-hidden">
       <CardHeader className="pb-3 px-5 pt-4">
-        <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-neutral-500 flex items-center gap-2 flex-wrap">
-          <Coins className="h-3.5 w-3.5 text-emerald-400" />
+        <CardTitle className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2 flex-wrap">
+          <Coins className="h-3.5 w-3.5 text-primary" />
           Agent Token Launches
           <InfoTip label={'Tradeable agent token coordinated through Metaplex Genesis (launchpool / presale / bonding curve). After graduation the supply migrates to a Raydium CPMM pool and is tradeable on Jupiter. Live market metrics come from DexScreener; on-chain holder distribution comes from Solana RPC.'} />
-          <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-neutral-500 tabular-nums">
+          <span className="ml-auto text-[11px] font-normal normal-case tracking-normal text-muted-foreground tabular-nums">
             {tokens.length} {tokens.length === 1 ? 'token' : 'tokens'}
           </span>
         </CardTitle>
@@ -3304,8 +3601,8 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
                 className={cn(
                   'h-8 rounded-md text-xs',
                   token.mint === selectedMint
-                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30 hover:bg-emerald-500/30'
-                    : 'border-neutral-700 text-neutral-300 hover:text-emerald-300 hover:border-emerald-400/30',
+                    ? 'bg-primary/20 text-primary border-primary/30 hover:bg-primary/30'
+                    : 'border-border text-foreground/80 hover:text-primary hover:border-primary/30',
                 )}
               >
                 {token.name}
@@ -3320,29 +3617,29 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
            "Token mint info" stacked layout.
            ──────────────────────────────────────────────── */}
         {selected && (
-          <div className="rounded-xl border border-neutral-800 bg-gradient-to-br from-neutral-950/80 to-neutral-900/40 p-4 space-y-4">
+          <div className="rounded-xl border border-border bg-gradient-to-br from-neutral-950/80 to-neutral-900/40 p-4 space-y-4">
             <div className="flex items-start gap-3 flex-wrap">
               {genesisTokenData?.baseToken?.image ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={genesisTokenData.baseToken.image}
                   alt={genesisTokenData.baseToken.name ?? selected.name}
-                  className="h-14 w-14 rounded-xl object-cover border border-neutral-800 shrink-0"
+                  className="h-14 w-14 rounded-xl object-cover border border-border shrink-0"
                   loading="lazy"
                 />
               ) : (
-                <div className="h-14 w-14 rounded-xl border border-neutral-800 bg-neutral-900 flex items-center justify-center shrink-0">
-                  <Coins className="h-6 w-6 text-neutral-700" />
+                <div className="h-14 w-14 rounded-xl border border-border bg-card flex items-center justify-center shrink-0">
+                  <Coins className="h-6 w-6 text-muted-foreground/70" />
                 </div>
               )}
 
               <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-base font-semibold text-neutral-100 truncate">
+                  <span className="text-base font-semibold text-foreground truncate">
                     {genesisTokenData?.baseToken?.name ?? selected.name}
                   </span>
                   {genesisTokenData?.baseToken?.symbol && (
-                    <span className="text-xs font-mono text-emerald-300">
+                    <span className="text-xs font-mono text-primary">
                       ${genesisTokenData.baseToken.symbol}
                     </span>
                   )}
@@ -3351,26 +3648,26 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
                       className={cn(
                         'text-[10px] uppercase tracking-wider border',
                         genesisPrimaryLaunch.status === 'live'
-                          ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
+                          ? 'bg-primary/15 text-primary border-primary/30'
                           : genesisPrimaryLaunch.status === 'graduated'
-                            ? 'bg-cyan-500/15 text-cyan-200 border-cyan-400/30'
+                            ? 'bg-primary/15 text-primary border-primary/30'
                             : genesisPrimaryLaunch.status === 'upcoming'
-                              ? 'bg-amber-500/15 text-amber-200 border-amber-400/30'
-                              : 'bg-neutral-800 text-neutral-300 border-neutral-700',
+                              ? 'bg-secondary/15 text-secondary-foreground border-secondary/30'
+                              : 'bg-muted text-foreground/80 border-border',
                       )}
                     >
                       {genesisPrimaryLaunch.status}
                     </Badge>
                   )}
                   {genesisPrimaryLaunch?.type && (
-                    <Badge variant="outline" className="text-[10px] border-neutral-700 text-neutral-300 font-mono">
+                    <Badge variant="outline" className="text-[10px] border-border text-foreground/80 font-mono">
                       {genesisPrimaryLaunch.type}
                     </Badge>
                   )}
                 </div>
 
                 {genesisTokenData?.baseToken?.description && (
-                  <p className="text-[11px] text-neutral-400 line-clamp-2">
+                  <p className="text-[11px] text-muted-foreground line-clamp-2">
                     {genesisTokenData.baseToken.description}
                   </p>
                 )}
@@ -3380,27 +3677,27 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
                     href={`${SOLSCAN}/token/${selected.mint}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-neutral-500 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
+                    className="font-mono text-muted-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
                   >
                     {selected.mint.slice(0, 6)}…{selected.mint.slice(-4)}
                     <ExternalLink className="h-2.5 w-2.5" />
                   </Link>
-                  {genesisPrimaryLaunch?.launchPage && (
-                    <Link
-                      href={genesisPrimaryLaunch.launchPage}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-fuchsia-300 hover:underline inline-flex items-center gap-1"
+	                  {launchPageHref && (
+	                    <Link
+	                      href={launchPageHref}
+	                      target="_blank"
+	                      rel="noreferrer"
+                      className="text-primary hover:underline inline-flex items-center gap-1"
                     >
                       Metaplex <ExternalLink className="h-2.5 w-2.5" />
                     </Link>
                   )}
-                  {marketPair?.url && (
-                    <Link
-                      href={marketPair.url}
+	                  {marketPairHref && (
+	                    <Link
+	                      href={marketPairHref}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-neutral-400 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
+                      className="text-muted-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
                     >
                       DexScreener <ExternalLink className="h-2.5 w-2.5" />
                     </Link>
@@ -3410,7 +3707,7 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
                       href={genesisTokenData.website}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-neutral-400 hover:text-emerald-300 hover:underline inline-flex items-center gap-1"
+                      className="text-muted-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
                     >
                       website <ExternalLink className="h-2.5 w-2.5" />
                     </Link>
@@ -3433,27 +3730,27 @@ function AgentTokenMarketSection({ tokens }: { tokens: AgentLaunchToken[] }) {
             {/* Compact metrics strip — pulls from DexScreener when available */}
             {(marketPair || curveData) && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
-                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">Price</div>
-                  <div className="font-mono text-neutral-100 tabular-nums">
+                <div className="rounded-md border border-border/80 bg-muted/50 px-2.5 py-1.5">
+                  <div className="text-muted-foreground/80 text-[10px] uppercase tracking-wider">Price</div>
+                  <div className="font-mono text-foreground tabular-nums">
                     {marketPair?.priceUsd ? `$${marketPair.priceUsd}` : '—'}
                   </div>
                 </div>
-                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
-                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">24h</div>
-                  <div className={cn('font-mono tabular-nums', (marketPair?.priceChange24h ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
+                <div className="rounded-md border border-border/80 bg-muted/50 px-2.5 py-1.5">
+                  <div className="text-muted-foreground/80 text-[10px] uppercase tracking-wider">24h</div>
+                  <div className={cn('font-mono tabular-nums', (marketPair?.priceChange24h ?? 0) >= 0 ? 'text-primary' : 'text-destructive')}>
                     {marketPair?.priceChange24h == null ? '—' : `${marketPair.priceChange24h.toFixed(2)}%`}
                   </div>
                 </div>
-                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
-                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">24h Vol</div>
-                  <div className="font-mono text-neutral-100 tabular-nums">
+                <div className="rounded-md border border-border/80 bg-muted/50 px-2.5 py-1.5">
+                  <div className="text-muted-foreground/80 text-[10px] uppercase tracking-wider">24h Vol</div>
+                  <div className="font-mono text-foreground tabular-nums">
                     {marketPair?.volume24h == null ? '—' : `$${fmtCompact(marketPair.volume24h)}`}
                   </div>
                 </div>
-                <div className="rounded-md border border-neutral-800/80 bg-neutral-950/50 px-2.5 py-1.5">
-                  <div className="text-neutral-600 text-[10px] uppercase tracking-wider">Holders</div>
-                  <div className="font-mono text-neutral-100 tabular-nums">
+                <div className="rounded-md border border-border/80 bg-muted/50 px-2.5 py-1.5">
+                  <div className="text-muted-foreground/80 text-[10px] uppercase tracking-wider">Holders</div>
+                  <div className="font-mono text-foreground tabular-nums">
                     {curveData?.holderCount ?? '—'}
                   </div>
                 </div>
@@ -3520,12 +3817,12 @@ function _StatPill({
 }) {
   const cls =
     tone === 'pink'
-      ? 'bg-pink-500/10 text-pink-200 border-pink-500/30'
+      ? 'bg-primary/10 text-primary border-primary/30'
       : tone === 'emerald'
-        ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/30'
+        ? 'bg-primary/10 text-primary border-primary/30'
         : tone === 'amber'
-          ? 'bg-amber-500/10 text-amber-200 border-amber-500/30'
-          : 'bg-neutral-800/60 text-neutral-300 border-neutral-700';
+          ? 'bg-secondary/10 text-secondary-foreground border-secondary/30'
+          : 'bg-muted/60 text-foreground/80 border-border';
   return (
     <span className={cn('inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs tabular-nums', cls)}>
       <span className="font-bold">{value}</span>

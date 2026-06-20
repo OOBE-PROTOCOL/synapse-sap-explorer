@@ -2,7 +2,7 @@
 import { db } from '~/db';
 import { attestations } from '~/db/schema';
 import { findAllAttestations } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bnToDate, hashToHex, conflictUpdateSet } from './utils';
+import { log, logErr, withRetry, pk, bnToDate, hashToHex, conflictUpdateSet, conflictUpdateWhere } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncAttestations(): Promise<number> {
@@ -35,7 +35,8 @@ export async function syncAttestations(): Promise<number> {
     try {
       await db.insert(attestations).values(row).onConflictDoUpdate({
         target: attestations.pda,
-        set: conflictUpdateSet(attestations, ['pda']),
+        set: conflictUpdateSet(attestations, ['pda', 'createdAt']),
+        setWhere: conflictUpdateWhere(attestations, ['pda', 'createdAt', 'indexedAt']),
       });
       upserted++;
     } catch (e: unknown) {
@@ -47,4 +48,3 @@ export async function syncAttestations(): Promise<number> {
   log('attestations', `Done: ${upserted} attestations upserted`);
   return upserted;
 }
-

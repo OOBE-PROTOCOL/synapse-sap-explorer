@@ -1,54 +1,440 @@
 ---
-title: doctor
-description: Eight point diagnostic check covering Node, SDK, env vars, keypair, RPC latency, fallback RPC, SAP program, and disk. Run before deploys and after upgrades.
+title: Doctor Command
+description: Eight-point diagnostic check covering Node, SDK, env vars, keypair, RPC latency, fallback RPC, SAP program, and disk. Run before deploys and after upgrades. SDK v0.20.0 aligned.
 ---
 
 # `doctor`
 
-When something goes wrong, run `doctor` first.
+**CLI Version:** 0.9.3
+
+When something goes wrong, run `doctor` first. This command performs comprehensive diagnostics of your SAP environment.
+
+---
 
 ## `doctor run`
 
 ```bash
+# Full diagnostic
 synapse-sap doctor run
-synapse-sap doctor run --quick     # skip latency probes
+
+# Quick check (skip latency probes)
+synapse-sap doctor run --quick
+
+# Save results to file
 synapse-sap doctor run --save out/doctor.json
+
+# Machine output
+synapse-sap doctor run --json
 ```
 
-The check covers eight areas:
+| Flag | Description |
+|------|-------------|
+| `--quick` | Skip latency probes (faster, less thorough) |
+| `--save <path>` | Write results to file |
+| `--json` | Emit JSON to stdout |
+| `--verbose` | Show detailed timing for each check |
 
-| Check | What it verifies |
-|-------|------------------|
-| Node version | Matches the supported range (>= 18.17) |
-| SDK version | Compatible with the CLI (`@oobe-protocol-labs/synapse-sap-sdk` peer range) |
-| Environment | All required `.env` variables present and non empty |
-| Keypair | File exists, has 0600 permissions, parses to a valid 64 byte secret |
-| RPC reachability | Primary endpoint responds within timeout, with measured latency |
-| Fallback RPC | Secondary endpoint responds and returns the same slot |
-| SAP program | Program account exists at `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ` |
-| Disk space | At least 100 MB free for artifacts, cache, and logs |
+---
 
-## Exit codes
+## The Eight Checks
+
+The `doctor` command covers eight critical areas:
+
+### 1. Node Version
+
+**What it verifies:** Node.js version matches supported range (>= 18.17)
+
+```
+✅ Node version: v20.11.0 (supported: >= 18.17)
+```
+
+**Common failures:**
+
+```
+❌ Node version: v16.14.0 (unsupported)
+   Upgrade to Node.js >= 18.17
+   https://nodejs.org/en/download/
+```
+
+---
+
+### 2. SDK Version
+
+**What it verifies:** CLI and SDK versions are compatible
+
+```
+✅ SDK version: @oobe-protocol-labs/synapse-sap-sdk@0.20.0
+   Compatible with CLI v0.9.3
+```
+
+**Common failures:**
+
+```
+❌ SDK version mismatch
+   CLI requires SDK >= 0.20.0, found 0.18.0
+   Run: npm install @oobe-protocol-labs/synapse-sap-sdk@latest
+```
+
+---
+
+### 3. Environment Variables
+
+**What it verifies:** All required `.env` variables are present and non-empty
+
+```
+✅ Environment variables (5/5)
+   RPC_URL: set (https://us-1-mainnet.oobeprotocol.ai)
+   FALLBACK_RPC_URL: set
+   KEYPAIR_PATH: set (~/.config/synapse-sap/keys/agent.json)
+   CLUSTER: set (mainnet-beta)
+   COMMITMENT: set (confirmed)
+```
+
+**Common failures:**
+
+```
+❌ Environment variables (3/5)
+   ❌ RPC_URL: not set
+   ❌ KEYPAIR_PATH: not set
+   
+   Run: synapse-sap env init --template mainnet
+```
+
+---
+
+### 4. Keypair Validation
+
+**What it verifies:** Keypair file exists, has correct permissions, parses to valid 64-byte secret
+
+```
+✅ Keypair: ~/.config/synapse-sap/keys/agent.json
+   Permissions: 0600 (secure)
+   Format: valid (64 bytes)
+   Public key: 8xPjQvN3qZ5K7mR2wL4tY6uF9sH1cV3bD
+```
+
+**Common failures:**
+
+```
+❌ Keypair: ~/.config/synapse-sap/keys/agent.json
+   ❌ File not found
+   
+   Run: synapse-sap env keypair generate --out keys/agent.json
+```
+
+```
+❌ Keypair: ~/.config/synapse-sap/keys/agent.json
+   ❌ Permissions: 0644 (insecure)
+   ❌ Expected: 0600
+   
+   Run: chmod 600 ~/.config/synapse-sap/keys/agent.json
+```
+
+```
+❌ Keypair: ~/.config/synapse-sap/keys/agent.json
+   ❌ Invalid format (expected 64 bytes, got 32)
+   
+   Regenerate: synapse-sap env keypair generate
+```
+
+---
+
+### 5. RPC Reachability
+
+**What it verifies:** Primary RPC endpoint responds within timeout, with measured latency
+
+```
+✅ RPC reachability
+   Endpoint: https://us-1-mainnet.oobeprotocol.ai
+   Status: 200 OK
+   Latency: 42ms
+   Slot: 234567890
+```
+
+**Common failures:**
+
+```
+❌ RPC reachability
+   Endpoint: https://us-1-mainnet.oobeprotocol.ai
+   ❌ Timeout after 30000ms
+   
+   Check:
+   - API key is valid
+   - Network connection
+   - Endpoint URL is correct
+   
+   Fallback: Use --rpc-url to override
+```
+
+```
+❌ RPC reachability
+   Endpoint: https://us-1-mainnet.oobeprotocol.ai
+   ❌ HTTP 401 Unauthorized
+   ❌ Invalid API key
+   
+   Check your RPC_URL environment variable
+```
+
+---
+
+### 6. Fallback RPC
+
+**What it verifies:** Secondary endpoint responds and returns the same slot
+
+```
+✅ Fallback RPC
+   Endpoint: https://staging.oobeprotocol.ai
+   Status: 200 OK
+   Latency: 67ms
+   Slot: 234567890 (matches primary)
+```
+
+**Common failures:**
+
+```
+❌ Fallback RPC
+   Endpoint: https://staging.oobeprotocol.ai
+   ❌ Not configured
+   
+   Run: synapse-sap config set fallbackRpcUrl "https://..."
+```
+
+```
+❌ Fallback RPC
+   Endpoint: https://staging.oobeprotocol.ai
+   ❌ Slot mismatch (primary: 234567890, fallback: 234567850)
+   ❌ Fallback may be on different cluster
+   
+   Check CLUSTER configuration
+```
+
+---
+
+### 7. SAP Program
+
+**What it verifies:** Program account exists at expected address
+
+```
+✅ SAP program
+   Program ID: SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ
+   Status: deployed
+   Version: 0.20.0
+   Upgradeable: yes
+```
+
+**Common failures:**
+
+```
+❌ SAP program
+   Program ID: SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ
+   ❌ Account does not exist
+   ❌ Wrong cluster? (currently: mainnet-beta)
+   
+   Check: synapse-sap config list | grep cluster
+```
+
+---
+
+### 8. Disk Space
+
+**What it verifies:** At least 100 MB free for artifacts, cache, and logs
+
+```
+✅ Disk space
+   Free: 45.2 GB
+   Required: 100 MB
+   Status: ok
+```
+
+**Common failures:**
+
+```
+❌ Disk space
+   Free: 50 MB
+   Required: 100 MB
+   ❌ Insufficient space
+   
+   Clean up:
+   - synapse-sap discovery cache clear
+   - rm -rf ~/.config/synapse-sap/artifacts/
+```
+
+---
+
+## Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | All checks passed |
-| 1 | One or more warnings |
-| 2 | One or more failures (CI should treat as fatal) |
+| `0` | All checks passed |
+| `1` | One or more warnings (non-fatal) |
+| `2` | One or more failures (CI should treat as fatal) |
 
-## Output shapes
+---
 
-Human readable table by default. Machine output via `--json`:
+## Output Shapes
 
-```bash
-synapse-sap doctor run --json | jq '.checks[] | select(.status != "ok")'
+### Human-Readable (Default)
+
+```
+SAP Environment Diagnostic
+==========================
+
+✅ Node version: v20.11.0
+✅ SDK version: 0.20.0
+✅ Environment: 5/5 variables set
+✅ Keypair: valid (8xPj...)
+✅ RPC: 42ms latency
+✅ Fallback RPC: 67ms latency
+✅ SAP Program: deployed
+✅ Disk space: 45.2 GB free
+
+Status: All checks passed (0 warnings, 0 failures)
+Elapsed: 1.2s
 ```
 
-Each check is `{ id, label, status, detail, durationMs }`. Use this in CI to fail fast and surface the precise failure reason in the build log.
+### Machine Output (`--json`)
 
-## When to run
+```json
+{
+  "ok": true,
+  "timestamp": "2026-06-20T17:30:00Z",
+  "elapsedMs": 1234,
+  "checks": [
+    {
+      "id": "node-version",
+      "label": "Node version",
+      "status": "ok",
+      "detail": "v20.11.0 (supported: >= 18.17)",
+      "durationMs": 12
+    },
+    {
+      "id": "rpc-reachability",
+      "label": "RPC reachability",
+      "status": "ok",
+      "detail": "42ms latency",
+      "durationMs": 89
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "ok": 8,
+    "warnings": 0,
+    "failures": 0
+  }
+}
+```
 
-- Before the first command on a new machine.
-- After upgrading the CLI or the SDK.
-- As part of a CI pipeline before any state mutating step.
-- During incident response, before assuming the bug is in your code.
+### CI Integration
+
+```bash
+# Fail fast on any issue
+synapse-sap doctor run --json | jq -e '.summary.failures == 0'
+
+# Show only failed checks
+synapse-sap doctor run --json | jq '.checks[] | select(.status != "ok")'
+
+# Extract specific failure
+synapse-sap doctor run --json | jq -r '.checks[] | select(.status == "fail") | .detail'
+```
+
+---
+
+## When to Run
+
+| Scenario | Command |
+|----------|---------|
+| **New machine setup** | `synapse-sap doctor run` |
+| **After CLI upgrade** | `synapse-sap doctor run` |
+| **After SDK upgrade** | `synapse-sap doctor run` |
+| **Before deployment** | `synapse-sap doctor run --json` |
+| **CI pipeline** | `synapse-sap doctor run --json --save out/doctor.json` |
+| **Incident response** | `synapse-sap doctor run --verbose` |
+| **Quick check** | `synapse-sap doctor run --quick` |
+
+---
+
+## Example: CI Pipeline
+
+```yaml title=".github/workflows/test.yml"
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Environment check
+        run: synapse-sap doctor run --json --save out/doctor.json
+      
+      - name: Upload diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doctor-output
+          path: out/doctor.json
+```
+
+---
+
+## Troubleshooting
+
+### Multiple Failures
+
+If multiple checks fail, start with the first failure and work down:
+
+1. Fix Node version → re-run doctor
+2. Fix SDK version → re-run doctor
+3. Fix environment → re-run doctor
+4. Continue...
+
+Each fix may resolve downstream failures.
+
+### Intermittent RPC Failures
+
+```
+❌ RPC: timeout (attempt 1)
+✅ RPC: 42ms (attempt 2)
+```
+
+Run with `--quick` to skip latency probes, or increase timeout:
+
+```bash
+synapse-sap doctor run --timeout 60000
+```
+
+### Wrong Cluster
+
+```
+❌ SAP Program: not found on mainnet-beta
+```
+
+Check cluster configuration:
+
+```bash
+synapse-sap config list | grep cluster
+synapse-sap config set cluster devnet  # if testing on devnet
+```
+
+---
+
+## Next Steps
+
+- **[Installation](/docs/cli/installation)** — Fresh setup guide
+- **[Environment](/docs/cli/env)** — Environment management
+- **[Config](/docs/cli/config)** — Configuration reference
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3

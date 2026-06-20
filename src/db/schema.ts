@@ -86,6 +86,16 @@ export type TokenBalanceChange = {
     change: string;
 };
 
+export type AgentDirectorySource = {
+    rpc: 'verified' | 'stale' | 'unavailable';
+    db: 'snapshot' | 'live' | 'unavailable';
+    metaplex: 'verified' | 'cached' | 'none' | 'unavailable';
+    balances: 'verified' | 'cached' | 'none' | 'unavailable';
+    revenue: 'verified' | 'snapshot' | 'none' | 'unavailable';
+};
+
+export type AgentDirectoryPayload = Record<string, unknown>;
+
 /* ═══════════════════════════════════════════════
  * agents
  * ═══════════════════════════════════════════════ */
@@ -156,6 +166,31 @@ export const tools = sapExpSchema.table('tools', {
     updatedAt:        timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     indexedAt:        timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* ═══════════════════════════════════════════════
+ * tool_schemas (inscribed JSON schemas cache)
+ * ═══════════════════════════════════════════════ */
+
+export const toolSchemas = sapExpSchema.table('tool_schemas', {
+    id:              serial('id').primaryKey(),
+    toolPda:         text('tool_pda').notNull().references(() => tools.pda, { onDelete: 'cascade' }),
+    agentPda:        text('agent_pda').notNull(),
+    txSignature:     text('tx_signature').notNull(),
+    schemaType:      smallint('schema_type').notNull(),
+    schemaTypeLabel: text('schema_type_label').notNull(),
+    schemaData:      text('schema_data').notNull(),
+    schemaJson:      jsonb('schema_json'),
+    schemaHash:      text('schema_hash').notNull(),
+    computedHash:    text('computed_hash').notNull(),
+    verified:        boolean('verified').notNull().default(false),
+    compression:     smallint('compression').notNull().default(0),
+    version:         smallint('version').notNull().default(0),
+    toolName:        text('tool_name'),
+    blockTime:       timestamp('block_time', { withTimezone: true }),
+    indexedAt:       timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type ToolEventRow = typeof toolEvents.$inferSelect;
 
 /* ═══════════════════════════════════════════════
  * escrows
@@ -320,6 +355,30 @@ export const networkSnapshots = sapExpSchema.table('network_snapshots', {
 });
 
 /* ═══════════════════════════════════════════════
+ * agent_snapshots_v2 / tool_snapshots_v2
+ * Current account snapshots captured by the v2-style read model.
+ * These tables are append-only history for explorer charts.
+ * ═══════════════════════════════════════════════ */
+
+export const agentSnapshots = sapExpSchema.table('agent_snapshots_v2', {
+    id:          bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    agentPda:    text('agent_pda').notNull().references(() => agents.pda, { onDelete: 'cascade' }),
+    slot:        bigint('slot', { mode: 'number' }).notNull(),
+    capturedAt:  timestamp('captured_at', { withTimezone: true }).notNull(),
+    payload:     jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    indexedAt:   timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const toolSnapshots = sapExpSchema.table('tool_snapshots_v2', {
+    id:          bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    toolPda:     text('tool_pda').notNull().references(() => tools.pda, { onDelete: 'cascade' }),
+    slot:        bigint('slot', { mode: 'number' }).notNull(),
+    capturedAt:  timestamp('captured_at', { withTimezone: true }).notNull(),
+    payload:     jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    indexedAt:   timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
  * sync_cursors (gRPC indexer tracking)
  * ═══════════════════════════════════════════════ */
 
@@ -404,29 +463,6 @@ export const toolEvents = sapExpSchema.table('tool_events', {
     schemaType:        smallint('schema_type'),
     extra:             jsonb('extra'),
     indexedAt:         timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-/* ═══════════════════════════════════════════════
- * tool_schemas (cached decoded schemas from TX logs)
- * ═══════════════════════════════════════════════ */
-
-export const toolSchemas = sapExpSchema.table('tool_schemas', {
-    id:              serial('id').primaryKey(),
-    toolPda:         text('tool_pda').notNull().references(() => tools.pda, { onDelete: 'cascade' }),
-    agentPda:        text('agent_pda').notNull(),
-    txSignature:     text('tx_signature').notNull(),
-    schemaType:      smallint('schema_type').notNull(),
-    schemaTypeLabel: text('schema_type_label').notNull(),
-    schemaData:      text('schema_data').notNull(),
-    schemaJson:      jsonb('schema_json'),
-    schemaHash:      text('schema_hash').notNull(),
-    computedHash:    text('computed_hash').notNull(),
-    verified:        boolean('verified').notNull().default(false),
-    compression:     smallint('compression').notNull().default(0),
-    version:         smallint('version').notNull().default(0),
-    toolName:        text('tool_name'),
-    blockTime:       timestamp('block_time', { withTimezone: true }),
-    indexedAt:       timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /* ═══════════════════════════════════════════════
@@ -559,6 +595,55 @@ export const agentEnrichmentCache = sapExpSchema.table('agent_enrichment_cache',
 });
 
 /* ═══════════════════════════════════════════════
+ * Truth Layer — aliases, directory snapshots, data health
+ * Backed by drizzle/010_truth_layer.sql.
+ * ═══════════════════════════════════════════════ */
+
+export const entityAliases = sapExpSchema.table('entity_aliases', {
+    alias:       text('alias').primaryKey(),
+    entityType:  text('entity_type').notNull(),      // agent | tool | escrow | wallet | mpl_asset
+    canonical:   text('canonical').notNull(),
+    relation:    text('relation').notNull(),         // self | owner_wallet | sap_agent_pda | tool_owner | mpl_asset
+    source:      text('source').notNull().default('indexer'),
+    confidence:  smallint('confidence').notNull().default(100),
+    metadata:    jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt:  timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const agentDirectorySnapshots = sapExpSchema.table('agent_directory_snapshots', {
+    agentPda:              text('agent_pda').primaryKey(),
+    wallet:                text('wallet').notNull(),
+    name:                  text('name').notNull().default(''),
+    isActive:              boolean('is_active').notNull().default(false),
+    isMerchant:            boolean('is_merchant').notNull().default(false),
+    hasMetaplex:           boolean('has_metaplex').notNull().default(false),
+    toolCount:             integer('tool_count').notNull().default(0),
+    volume24hLamports:     numeric('volume_24h_lamports').notNull().default('0'),
+    volume7dLamports:      numeric('volume_7d_lamports').notNull().default('0'),
+    totalSettledLamports:  numeric('total_settled_lamports').notNull().default('0'),
+    calls7d:               numeric('calls_7d').notNull().default('0'),
+    totalCalls:            numeric('total_calls').notNull().default('0'),
+    healthScore:           smallint('health_score').notNull().default(0),
+    activityScore:         numeric('activity_score').notNull().default('0'),
+    payload:               jsonb('payload').$type<AgentDirectoryPayload>().notNull(),
+    sources:               jsonb('sources').$type<AgentDirectorySource>().notNull(),
+    verifiedAt:            timestamp('verified_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt:             timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const dataHealthChecks = sapExpSchema.table('data_health_checks', {
+    id:          serial('id').primaryKey(),
+    scope:       text('scope').notNull(),
+    checkName:   text('check_name').notNull(),
+    status:      text('status').notNull(),            // ok | warn | error
+    expected:    text('expected'),
+    actual:      text('actual'),
+    details:     jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+    checkedAt:   timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ═══════════════════════════════════════════════
  * api_keys / api_rate_windows — Public API auth + per-window rate limiting
  * Backed by drizzle/006_public_api_keys.sql (operator-applied migration).
  * ═══════════════════════════════════════════════ */
@@ -612,4 +697,3 @@ export const tokenTradeCursors = sapExpSchema.table('token_trade_cursors', {
     lastSlot:       bigint('last_slot', { mode: 'number' }).notNull(),
     scannedAt:      timestamp('scanned_at', { withTimezone: true }).notNull().defaultNow(),
 });
-

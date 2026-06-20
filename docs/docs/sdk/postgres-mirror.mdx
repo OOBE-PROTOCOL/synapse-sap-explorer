@@ -1,20 +1,26 @@
 ---
 title: PostgreSQL Mirror
-description: Mirror all 22 on-chain account types to PostgreSQL for off-chain querying, analytics, and dashboards.
+description: Mirror all 22 on-chain account types to PostgreSQL for off-chain querying, analytics, and dashboards. SDK v0.20.0 aligned.
 ---
 
 # PostgreSQL Mirror
 
+**SDK Version:** v0.20.0
+
 The SDK includes a built-in PostgreSQL adapter that mirrors all 22 on-chain SAP account types to relational tables. This enables SQL queries, analytics dashboards, and off-chain indexing without hitting the RPC for every read.
+
+---
 
 ## Why Off-Chain Mirroring?
 
 On-chain reads via `getAccountInfo` are fast but limited:
-- **No complex queries**: You cannot JOIN agents with their tools, or filter by reputation range.
-- **No aggregation**: Counting active agents requires fetching every account.
-- **Rate limits**: RPC nodes throttle frequent calls.
+- **No complex queries**: You cannot JOIN agents with their tools, or filter by reputation range
+- **No aggregation**: Counting active agents requires fetching every account
+- **Rate limits**: RPC nodes throttle frequent calls
 
 PostgreSQL mirroring gives you the full power of SQL while keeping the on-chain data as the source of truth.
+
+---
 
 ## Prerequisites
 
@@ -29,6 +35,8 @@ docker run -d --name sap-db -p 5432:5432 \
   postgres:16
 ```
 
+---
+
 ## Setup
 
 ```typescript
@@ -40,7 +48,6 @@ import { Pool } from "pg";
 const client = SapClient.from(AnchorProvider.env());
 
 // Create a connection pool.
-// DATABASE_URL format: postgresql://user:password@host:port/database
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
@@ -52,6 +59,8 @@ const pg = new SapPostgres(pool, client);
 // Creates 22 tables, indexes, views, and sync cursor tracking.
 await pg.migrate();
 ```
+
+---
 
 ## One-Shot Sync
 
@@ -72,6 +81,8 @@ console.log("  Total records:", result.totalRecords);
 console.log("  Duration:", result.durationMs, "ms");
 ```
 
+---
+
 ## Periodic Sync
 
 Use `SapSyncEngine` for automatic periodic syncing:
@@ -89,6 +100,8 @@ console.log("Running:", sync.isRunning()); // true
 await sync.stop();
 ```
 
+---
+
 ## Real-Time Event Streaming
 
 Subscribe to SAP program logs via WebSocket and insert events in real-time:
@@ -103,6 +116,8 @@ await sync.startEventStream();
 // Stop streaming
 await sync.stopEventStream();
 ```
+
+---
 
 ## Query Helpers
 
@@ -161,6 +176,8 @@ const { rows: tools } = await pg.query(`
 `);
 ```
 
+---
+
 ## Database Schema
 
 ### Tables (22)
@@ -198,6 +215,8 @@ const { rows: tools } = await pg.query(`
 | `sap_escrow_balances` | Escrow balances joined with agent info |
 | `sap_agent_tools` | Tools joined with owning agent name |
 
+---
+
 ## Best Practices
 
 1. **Use PostgreSQL for reads, on-chain for writes.** Never write to the database directly; it is a mirror.
@@ -205,3 +224,16 @@ const { rows: tools } = await pg.query(`
 3. **Event streaming**: Use for real-time dashboards. For batch analytics, periodic sync is cheaper.
 4. **Indexing**: The `migrate()` function creates indexes on common query columns. Add custom indexes for your specific query patterns.
 5. **Connection pooling**: Use `pg.Pool` with `max: 10` connections for typical workloads.
+
+---
+
+## Next Steps
+
+- **[Event System](/docs/sdk/event-system)** — On-chain event parsing
+- **[Account Structures](/docs/sdk/account-structures)** — Account field reference
+- **[API Routes](/docs/explorer/api-routes)** — Server-side querying
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

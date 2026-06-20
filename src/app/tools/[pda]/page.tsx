@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Wrench, Hash, FileJson, Clock, ExternalLink, Shield, Zap, BookOpen, CheckCircle2, AlertCircle, Loader2, Activity, Copy } from 'lucide-react';
@@ -16,10 +16,48 @@ import {
   SectionHeader,
   DetailPageShell,
 } from '~/components/ui/explorer';
-import { useTools, useAgents, useEscrows, useToolSchemas, useAddressEvents, useToolEvents } from '~/hooks/use-sap';
+import { useTools, useAgents, useEscrows, useToolSchemas, useAddressEvents, useToolEvents, useSapActivity } from '~/hooks/use-sap';
 import type { InscribedSchema, SapEvent, ToolEvent } from '~/hooks/use-sap';
 import type { SerializedToolDescriptor, SerializedDiscoveredAgent } from '~/types/sap';
-import { hashToHex, hashToFullHex, hashIsEmpty, parseAnchorEnum, formatTimestamp, isDefaultPubkey, formatLamports } from '~/lib/format';
+import { entityPath, hashToHex, hashToFullHex, hashIsEmpty, parseAnchorEnum, formatTimestamp, isDefaultPubkey, formatLamports, short } from '~/lib/format';
+import { SchemaValidator } from '~/components/tools/schema-validator';
+import { SchemaDocumentation } from '~/components/tools/schema-documentation';
+
+function declaredHashPresent(value: unknown): boolean {
+  if (!value) return false;
+  if (typeof value === 'string') return value.trim() !== '' && !/^0+$/.test(value.trim());
+  if (Array.isArray(value)) {
+    if (value.length === 0) return false;
+    if (value.length === 1 && typeof value[0] === 'string') {
+      return declaredHashPresent(value[0]);
+    }
+    return value.some((item) => Number(item) !== 0);
+  }
+  return !hashIsEmpty(value as Parameters<typeof hashIsEmpty>[0]);
+}
+
+// Inline EmptyState component (replaces shadcn Alert)
+function EmptyState({ message, description }: { message: string; description: string }) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/30 p-6 text-center">
+      <AlertCircle className="mx-auto h-8 w-8 text-muted-foreground/60 mb-3" />
+      <p className="text-sm font-medium text-foreground">{message}</p>
+      <p className="text-xs text-muted-foreground mt-1">{description}</p>
+    </div>
+  );
+}
+
+function formatSnapshotTime(raw: string | null | undefined): string {
+  if (!raw) return 'No tool snapshot yet';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return 'No tool snapshot yet';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export default function ToolDetailPage() {
   const { pda } = useParams<{ pda: string }>();
@@ -27,10 +65,14 @@ export default function ToolDetailPage() {
   const { data: toolsData, loading: tLoading } = useTools();
   const { data: agentsData, loading: aLoading } = useAgents({ limit: '100' });
   const { data: escrowsData } = useEscrows();
-  const { data: schemasData, loading: sLoading } = useToolSchemas(pda);
+  const [deepSchemaRepair, setDeepSchemaRepair] = useState(false);
+  const { data: schemasData, loading: sLoading } = useToolSchemas(pda, { deep: deepSchemaRepair });
   const { data: eventsData, loading: evLoading } = useAddressEvents(pda, { limit: 50 });
   const { data: toolEventsData, loading: teLoading } = useToolEvents(pda, 100);
+  const { data: toolActivityData } = useSapActivity('tool', pda ? [pda] : null, 200);
   const loading = tLoading || aLoading;
+  const [activeTab, setActiveTab] = useState<'validator' | 'docs' | 'raw'>('validator');
+  const [copied, setCopied] = useState<string | null>(null);
 
   const tool = useMemo(() => {
     if (!toolsData?.tools) return null;
@@ -41,6 +83,23 @@ export default function ToolDetailPage() {
     if (!tool?.descriptor?.agent || !agentsData?.agents) return null;
     return agentsData.agents.find((a) => a.pda === tool.descriptor!.agent) ?? null;
   }, [tool, agentsData]);
+
+  const descriptor = tool?.descriptor ?? null;
+  const hasInputSchema = declaredHashPresent(descriptor?.inputSchemaHash);
+  const hasOutputSchema = declaredHashPresent(descriptor?.outputSchemaHash);
+  const hasDescHash = declaredHashPresent(descriptor?.descriptionHash);
+  const expectedSchemaCount = [hasInputSchema, hasOutputSchema, hasDescHash].filter(Boolean).length;
+  const declaredSchemasMissing = expectedSchemaCount > 0 && !sLoading && (schemasData?.schemas?.length ?? 0) === 0;
+  const inputSchema =
+    schemasData?.schemas?.find((schema) => schema.schemaType === 'input' && schema.schemaJson)?.schemaJson ??
+    schemasData?.schemas?.find((schema) => schema.schemaJson)?.schemaJson ??
+    null;
+
+  useEffect(() => {
+    if (declaredSchemasMissing && !deepSchemaRepair) {
+      setDeepSchemaRepair(true);
+    }
+  }, [declaredSchemasMissing, deepSchemaRepair]);
 
   /* Escrow stats for THIS tool's agent PDA */
   const escrowStats = useMemo(() => {
@@ -66,7 +125,7 @@ export default function ToolDetailPage() {
     );
   }
 
-  if (!tool || !tool.descriptor) {
+  if (!tool || !descriptor) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
         <p className="text-sm text-muted-foreground">Tool not found: {pda}</p>
@@ -77,12 +136,20 @@ export default function ToolDetailPage() {
     );
   }
 
-  const d = tool.descriptor;
+  const d = descriptor;
   const method = typeof d.httpMethod === 'object' ? Object.keys(d.httpMethod)[0] ?? 'GET' : String(d.httpMethod);
   const category = typeof d.category === 'object' ? Object.keys(d.category)[0] ?? 'Custom' : String(d.category);
-  const hasInputSchema = !hashIsEmpty(d.inputSchemaHash);
-  const hasOutputSchema = !hashIsEmpty(d.outputSchemaHash);
-  const hasDescHash = !hashIsEmpty(d.descriptionHash);
+  const latestSnapshotInvocations = Math.max(
+    ...((toolActivityData?.points ?? []).map((point) => Number(point.totalInvocations ?? 0))),
+    Number(d.totalInvocations ?? 0),
+  );
+  const latestActivityPoint = (toolActivityData?.points ?? []).at(-1) ?? null;
+  const latestActivityAt = formatSnapshotTime(latestActivityPoint?.capturedAt);
+  const copyAddress = async (value: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopied(value);
+    window.setTimeout(() => setCopied(null), 1400);
+  };
 
   return (
     <DetailPageShell
@@ -108,8 +175,8 @@ export default function ToolDetailPage() {
       {/* Key Metrics */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <ExplorerMetric
-          label="Paid Calls Settled"
-          value={(escrowStats?.totalCallsSettled ?? 0).toLocaleString()}
+          label="Calls / Invocations"
+          value={Math.max(escrowStats?.totalCallsSettled ?? 0, latestSnapshotInvocations).toLocaleString()}
           icon={<Zap className="h-4 w-4" />}
           accent="primary"
         />
@@ -132,6 +199,91 @@ export default function ToolDetailPage() {
           accent="amber"
         />
       </div>
+
+      <section
+        aria-label="Tool execution summary"
+        className="grid gap-3 rounded-lg border border-border/30 bg-card/60 p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]"
+      >
+        <div className="rounded-md border border-border/40 bg-background/60 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Execution surface</p>
+              <div className="mt-2 flex items-center gap-2">
+                <HttpMethodBadge method={method} />
+                <span className="truncate font-mono text-sm text-foreground">{d.toolName}</span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {latestSnapshotInvocations.toLocaleString()} invocations from SAP snapshots · {latestActivityAt}
+              </p>
+            </div>
+            {ownerAgent?.identity ? (
+              <Link
+                href={entityPath('/agents', ownerAgent.identity.wallet)}
+                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border/40 bg-card px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <AgentAvatar name={ownerAgent.identity.name} endpoint={ownerAgent.identity.x402Endpoint} size={28} />
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-medium text-foreground">{ownerAgent.identity.name}</span>
+                  <span className="block truncate font-mono text-[11px] text-muted-foreground">{short(ownerAgent.identity.wallet, 5, 5)}</span>
+                </span>
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              </Link>
+            ) : null}
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-md bg-muted/30 p-2">
+              <p className="text-[11px] text-muted-foreground">Escrows</p>
+              <p className="font-mono text-sm font-semibold tabular-nums text-foreground">{escrowStats?.count ?? 0}</p>
+            </div>
+            <div className="rounded-md bg-muted/30 p-2">
+              <p className="text-[11px] text-muted-foreground">Settled</p>
+              <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                {escrowStats ? formatLamports(escrowStats.totalSettled) : '—'}
+              </p>
+            </div>
+            <div className="rounded-md bg-muted/30 p-2">
+              <p className="text-[11px] text-muted-foreground">Avg price</p>
+              <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                {escrowStats && escrowStats.avgPrice > 0 ? formatLamports(escrowStats.avgPrice) : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-border/40 bg-background/60 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Canonical addresses</p>
+          <div className="mt-2 space-y-1.5">
+            {[
+              { label: 'Tool PDA', value: tool.pda },
+              { label: 'Agent PDA', value: d.agent },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">{item.label}</span>
+                <span className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => copyAddress(item.value)}
+                    className="inline-flex min-h-7 items-center gap-1 rounded px-1.5 font-mono text-[11px] text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Copy ${item.label} ${item.value}`}
+                  >
+                    {short(item.value, 5, 5)}
+                    <Copy className={copied === item.value ? 'h-3 w-3 text-primary' : 'h-3 w-3 text-muted-foreground'} aria-hidden="true" />
+                  </button>
+                  <a
+                    href={`https://solscan.io/account/${item.value}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open ${item.label} on Solscan`}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Tool Identity */}
       <Card>
@@ -167,9 +319,9 @@ export default function ToolDetailPage() {
           </div>
           <div className="space-y-1">
             {[
-              { label: 'Input Schema', tag: 'IN', has: hasInputSchema, hash: d.inputSchemaHash, style: 'text-blue-400 bg-blue-500/8 ring-blue-500/15' },
-              { label: 'Output Schema', tag: 'OUT', has: hasOutputSchema, hash: d.outputSchemaHash, style: 'text-emerald-400 bg-emerald-500/8 ring-emerald-500/15' },
-              { label: 'Description', tag: 'DESC', has: hasDescHash, hash: d.descriptionHash, style: 'text-amber-400 bg-amber-500/8 ring-amber-500/15' },
+              { label: 'Input Schema', tag: 'IN', has: hasInputSchema, hash: d.inputSchemaHash, style: 'text-primary bg-primary/10 ring-primary/20' },
+              { label: 'Output Schema', tag: 'OUT', has: hasOutputSchema, hash: d.outputSchemaHash, style: 'text-primary bg-primary/10 ring-primary/20' },
+              { label: 'Description', tag: 'DESC', has: hasDescHash, hash: d.descriptionHash, style: 'text-primary bg-primary/10 ring-primary/20' },
               { label: 'Protocol', tag: 'PROTO', has: true, hash: d.protocolHash, style: 'text-muted-foreground bg-muted/30 ring-border/30' },
             ].map(({ label: hashLabel, tag, has, hash, style }) => (
               <div key={tag} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-muted/15 transition-colors group/hash">
@@ -182,8 +334,9 @@ export default function ToolDetailPage() {
                 </span>
                 {has && (
                   <button
+                    type="button"
                     onClick={() => navigator.clipboard.writeText(hashToFullHex(hash))}
-                    className="opacity-0 group-hover/hash:opacity-100 transition-opacity text-muted-foreground/40 hover:text-foreground"
+                    className="opacity-0 transition-opacity text-muted-foreground/40 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/hash:opacity-100"
                     title="Copy full hash"
                   >
                     <Copy className="h-3 w-3" />
@@ -201,7 +354,7 @@ export default function ToolDetailPage() {
         <CardContent className="mt-6">
           <SectionHeader title="Creator" />
           {ownerAgent?.identity ? (
-            <Link href={`/agents/${ownerAgent.identity.wallet}`} className="block rounded-xl p-4 -mx-2 hover:bg-muted/30 transition-all duration-200 group/creator">
+            <Link href={entityPath('/agents', ownerAgent.identity.wallet)} className="block rounded-xl p-4 -mx-2 hover:bg-muted/30 transition-all duration-200 group/creator">
               <div className="flex items-center gap-4">
                 <div className="relative shrink-0">
                   <AgentAvatar name={ownerAgent.identity.name} endpoint={ownerAgent.identity.x402Endpoint} size={52} />
@@ -235,7 +388,7 @@ export default function ToolDetailPage() {
             </Link>
           ) : (
             <>
-              <CopyableField label="Agent PDA" value={d.agent} href={`/address/${d.agent}`} />
+              <CopyableField label="Agent PDA" value={d.agent} href={entityPath('/address', d.agent)} />
             </>
           )}
         </CardContent>
@@ -273,7 +426,7 @@ export default function ToolDetailPage() {
         <Card>
           <CardContent className="mt-6">
             <SectionHeader title="Version History" />
-            <CopyableField label="Previous Version PDA" value={d.previousVersion} href={`/tools/${d.previousVersion}`} />
+            <CopyableField label="Previous Version PDA" value={d.previousVersion} href={entityPath('/tools', d.previousVersion)} />
           </CardContent>
         </Card>
       )}
@@ -302,7 +455,117 @@ export default function ToolDetailPage() {
       </Card>
 
       {/* Inscribed Schemas (from TX logs) */}
-      <InscribedSchemasSection schemas={schemasData?.schemas ?? []} loading={sLoading} descriptor={d} ownerAgent={ownerAgent} />
+      <Card className="mt-6">
+        <CardContent className="p-0">
+          {/* Tabs */}
+          <div className="flex items-center gap-1 border-b border-border/40 p-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('validator')}
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                activeTab === 'validator'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Validator
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('docs')}
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                activeTab === 'docs'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Documentation
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('raw')}
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                activeTab === 'raw'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+            >
+              <FileJson className="h-3.5 w-3.5" />
+              Raw JSON
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {activeTab === 'validator' && (
+              <div>
+                {inputSchema ? (
+                  <SchemaValidator
+                    schema={inputSchema}
+                    onSubmit={async (data) => {
+                      console.log('Tool executed with:', data);
+                    }}
+                    submitLabel="Execute Tool"
+                    title={`Execute ${d.toolName || 'Tool'}`}
+                  />
+                ) : (
+                  <EmptyState
+                    message="No schema available for validation"
+                    description={
+                      declaredSchemasMissing
+                        ? 'The descriptor declares schema hashes. A deep on-chain repair is running and will cache inscriptions when found.'
+                        : 'This tool does not have an input schema available. Execution parameters cannot be validated.'
+                    }
+                  />
+                )}
+              </div>
+            )}
+
+            {activeTab === 'docs' && (
+              <div>
+                {inputSchema ? (
+                  <SchemaDocumentation
+                    schema={inputSchema}
+                    toolName={d.toolName}
+                  />
+                ) : (
+                  <EmptyState
+                    message="No documentation available"
+                    description="Schema documentation is generated from inscribed on-chain schemas."
+                  />
+                )}
+              </div>
+            )}
+
+            {activeTab === 'raw' && (
+              <div>
+                {inputSchema ? (
+                  <pre className="text-xs font-mono text-foreground/60 bg-muted/20 rounded-lg p-4 overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed ring-1 ring-border/20">
+                    {JSON.stringify(inputSchema, null, 2)}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No schema JSON available
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Inscribed Schemas Section (existing) */}
+      <InscribedSchemasSection
+        schemas={schemasData?.schemas ?? []}
+        loading={sLoading}
+        descriptor={d}
+        ownerAgent={ownerAgent}
+        missingSchemaLabels={schemasData?.missingSchemaLabels ?? []}
+      />
 
       {/* Tool Lifecycle Events (from DB) */}
       <ToolLifecycleTimeline events={toolEventsData?.events ?? []} loading={teLoading} />
@@ -494,11 +757,13 @@ function InscribedSchemasSection({
   loading,
   descriptor,
   ownerAgent,
+  missingSchemaLabels,
 }: {
   schemas: InscribedSchema[];
   loading: boolean;
   descriptor: SerializedToolDescriptor;
   ownerAgent: SerializedDiscoveredAgent | null;
+  missingSchemaLabels?: string[];
 }) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
@@ -556,7 +821,7 @@ function InscribedSchemasSection({
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground/60 leading-none mb-0.5">Inscribed by</p>
               <Link
-                href={`/agents/${ownerAgent.identity?.wallet}`}
+                href={entityPath('/agents', ownerAgent.identity?.wallet)}
                 className="text-xs font-medium text-foreground hover:text-primary transition-colors truncate block"
               >
                 {agentName}
@@ -586,6 +851,13 @@ function InscribedSchemasSection({
           </div>
         ) : (
           <div className="space-y-3">
+            {missingSchemaLabels && missingSchemaLabels.length > 0 && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-500">
+                Descriptor declares {missingSchemaLabels.join(', ')} schema
+                {missingSchemaLabels.length === 1 ? '' : 's'} not present in the local cache yet.
+                A deep inscription repair is running; verified schemas already found are shown below.
+              </div>
+            )}
             {deduped.map((schema, idx) => {
               const isExpanded = expandedIdx === idx;
               const style = SCHEMA_TYPE_STYLES[schema.schemaType] ?? { bg: 'bg-muted/50', text: 'text-muted-foreground', ring: 'ring-border/50', icon: '•' };
@@ -701,7 +973,7 @@ function InscribedSchemasSection({
                         <span>{schema.schemaData.length.toLocaleString()} bytes</span>
                         <span className="text-muted-foreground/20">·</span>
                         <a
-                          href={`https://solscan.io/tx/${schema.txSignature}?cluster=devnet`}
+                          href={`https://solscan.io/tx/${schema.txSignature}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-primary/60 hover:text-primary transition-colors"
@@ -986,8 +1258,8 @@ function ToolLifecycleTimeline({
                           {evt.agentPda && (
                             <div className="flex items-start justify-between gap-4 px-3 py-1.5">
                               <span className="text-xs font-mono text-chart-2 shrink-0 min-w-[120px] pt-0.5">Agent</span>
-                              <Link href={`/agents/${evt.agentPda}`} className="text-xs font-mono text-primary hover:text-primary/80 transition-colors">
-                                {evt.agentPda.slice(0, 16)}… →
+                              <Link href={entityPath('/agents', evt.agentPda)} className="text-xs font-mono text-primary hover:text-primary/80 transition-colors">
+                                {short(evt.agentPda, 16, 4)} →
                               </Link>
                             </div>
                           )}
@@ -1118,7 +1390,7 @@ function SapEventTimeline({
                         <span className="font-mono font-semibold text-foreground/70">{evt.name}</span>
                         <span>·</span>
                         <a
-                          href={`/tx/${evt.txSignature}`}
+                          href={entityPath('/tx', evt.txSignature)}
                           className="text-primary hover:text-primary/80 font-mono transition-colors"
                         >
                           {evt.txSignature.slice(0, 20)}… →

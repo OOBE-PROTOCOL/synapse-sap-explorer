@@ -1,11 +1,16 @@
 ---
 title: API Routes
-description: Server-side API endpoints that bridge the SAP SDK to the explorer frontend.
+description: Server-side API endpoints that bridge the SAP SDK to the explorer frontend. SDK v0.20.0 aligned.
 ---
 
 # API Routes
 
+**Explorer Version:** 1.0.0  
+**SDK Version:** v0.20.0
+
 The explorer exposes server-side API routes under `src/app/api/` that bridge the SAP SDK to client components. All SDK interactions happen server-side; the frontend only receives serialized JSON.
+
+---
 
 ## Route Structure
 
@@ -38,22 +43,39 @@ src/app/api/
     └── simulate/     POST  Simulate payment
 ```
 
+---
+
 ## Design Principles
 
-**Server-only SDK.** The `SapClient` singleton is instantiated in API routes, never exposed to the browser.
+### Server-Only SDK
 
-**Error handling.** Every route wraps SDK calls in try/catch and returns proper JSON error responses with appropriate HTTP status codes.
+The `SapClient` singleton is instantiated in API routes, never exposed to the browser. This protects RPC credentials and private keys.
 
-**Caching.** Routes use Next.js revalidation with 5-minute TTLs to reduce RPC load. Critical data uses shorter intervals.
+```typescript
+// src/lib/sap/client.ts
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
 
-**Type safety.** Request and response types are defined in TypeScript. API routes validate inputs before passing them to the SDK.
+let _client: SapClient | null = null;
 
-## Example Route Pattern
+export function getSapClient(): SapClient {
+  if (!_client) {
+    const provider = AnchorProvider.env();
+    _client = SapClient.from(provider);
+  }
+  return _client;
+}
+```
+
+### Error Handling
+
+Every route wraps SDK calls in try/catch and returns proper JSON error responses with appropriate HTTP status codes:
 
 ```typescript
 // src/app/api/gateway/agents/route.ts
 import { NextResponse } from "next/server";
 import { getSapClient } from "@/lib/sap/discovery";
+import { SapError, SapRpcError } from "@oobe-protocol-labs/synapse-sap-sdk";
 
 export async function GET() {
   try {
@@ -65,13 +87,354 @@ export async function GET() {
         pda: a.pda.toBase58(),
         name: a.identity?.name,
         active: a.identity?.isActive,
+        reputation: a.computed?.reputationScore,
       })),
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    if (error instanceof SapRpcError) {
+      return NextResponse.json(
+        { error: "RPC unavailable", code: "RPC_ERROR" },
+        { status: 503 }
+      );
+    }
+    
+    if (error instanceof SapError) {
+      return NextResponse.json(
+        { error: error.message, code: error.constructor.name },
+        { status: 400 }
+      );
+    }
+
+    console.error("[API] Gateway agents failed:", error);
     return NextResponse.json(
-      { error: "Failed to fetch agents" },
-      { status: 500 },
+      { error: "Internal server error", code: "INTERNAL" },
+      { status: 500 }
     );
   }
 }
 ```
+
+### Caching
+
+Routes use Next.js revalidation with configurable TTLs to reduce RPC load:
+
+```typescript
+// src/app/api/cluster/route.ts
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || "mainnet-beta";
+  const rpcUrl = process.env.RPC_URL || "";
+
+  // Cache for 5 minutes
+  return NextResponse.json(
+    {
+      cluster,
+      rpcUrl: rpcUrl.replace(/\?api_key=.+/, "?api_key=***"),
+      timestamp: Date.now(),
+    },
+    {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
+      },
+    }
+  );
+}
+```
+
+### Type Safety
+
+Request and response types are defined in TypeScript. API routes validate inputs before passing them to the SDK:
+
+```typescript
+// src/app/api/defi/swap/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+const SwapRequestSchema = z.object({
+  inputMint: z.string(),
+  outputMint: z.string(),
+  amount: z.number().positive(),
+  slippageBps: z.number().min(0).max(1000).optional(),
+});
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const validation = SwapRequestSchema.safeParse(body);
+
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: "Invalid request", details: validation.error.errors },
+      { status: 400 }
+    );
+  }
+
+  const { inputMint, outputMint, amount, slippageBps } = validation.data;
+  // ... proceed with validated input
+}
+```
+
+---
+
+## Example Route Patterns
+
+### Agent Discovery
+
+```typescript
+// src/app/api/gateway/agents/route.ts
+import { NextResponse } from "next/server";
+import { getSapClient } from "@/lib/sap/discovery";
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const protocol = searchParams.get("protocol") || "A2A";
+    const limit = parseInt(searchParams.get("limit") || "50");
+
+    const client = getSapClient();
+    const agents = await client.discovery.findAgentsByProtocol(protocol);
+
+    return NextResponse.json({
+      agents: agents.slice(0, limit).map((a) => ({
+        pda: a.pda.toBase58(),
+        name: a.identity?.name,
+        active: a.identity?.isActive,
+        reputation: a.computed?.reputationScore,
+        totalCalls: a.stats?.totalCallsServed.toString(),
+      })),
+      total: agents.length,
+      protocol,
+    });
+  } catch (error) {
+    console.error("[API] Agent discovery failed:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch agents" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### Wallet Details
+
+```typescript
+// src/app/api/wallet/[address]/route.ts
+import { NextResponse } from "next/server";
+import { PublicKey } from "@solana/web3.js";
+import { getSapClient } from "@/lib/sap/client";
+
+export async function GET(
+  request: Request,
+  { params }: { params: { address: string } }
+) {
+  try {
+    const address = new PublicKey(params.address);
+    const client = getSapClient();
+
+    // Check if wallet has a registered agent
+    const agent = await client.agent.fetchNullable(address);
+
+    // Get escrow balances
+    const escrows = await client.escrow.listByDepositor(address);
+
+    return NextResponse.json({
+      address: address.toBase58(),
+      hasAgent: agent !== null,
+      agent: agent
+        ? {
+            name: agent.name,
+            active: agent.isActive,
+            reputation: agent.reputationScore,
+          }
+        : null,
+      escrows: escrows.length,
+      totalEscrowBalance: escrows.reduce(
+        (sum, e) => sum.add(e.balance),
+        new BN(0)
+      ).toString(),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("invalid")) {
+      return NextResponse.json(
+        { error: "Invalid wallet address" },
+        { status: 400 }
+      );
+    }
+
+    console.error("[API] Wallet details failed:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch wallet details" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### x402 Payment Simulation
+
+```typescript
+// src/app/api/x402/simulate/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { getSapClient } from "@/lib/sap/client";
+import { BN } from "@coral-xyz/anchor";
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { agentWallet, calls, pricePerCall } = body;
+
+    const client = getSapClient();
+
+    // Estimate cost with volume curve
+    const estimate = await client.x402.estimateCost(
+      new PublicKey(agentWallet),
+      calls
+    );
+
+    // Simulate escrow creation
+    const simulation = await client.x402.preparePayment(
+      new PublicKey(agentWallet),
+      {
+        pricePerCall: new BN(pricePerCall),
+        maxCalls: calls,
+        deposit: estimate.totalCost,
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      },
+      { simulate: true }
+    );
+
+    return NextResponse.json({
+      estimatedCost: estimate.totalCost.toString(),
+      effectivePricePerCall: estimate.effectivePricePerCall.toString(),
+      hasVolumeCurve: estimate.hasVolumeCurve,
+      simulation: {
+        success: simulation.success,
+        computeUnits: simulation.computeUnits,
+        logs: simulation.logs,
+      },
+    });
+  } catch (error) {
+    console.error("[API] x402 simulation failed:", error);
+    return NextResponse.json(
+      { error: "Simulation failed", details: String(error) },
+      { status: 400 }
+    );
+  }
+}
+```
+
+---
+
+## Rate Limiting
+
+Implement rate limiting to protect RPC endpoints:
+
+```typescript
+// src/middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+const rateLimit = new Map<string, { count: number; resetAt: number }>();
+
+export function middleware(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for") || "unknown";
+  const now = Date.now();
+  const windowMs = 60000; // 1 minute
+  const maxRequests = 100;
+
+  const record = rateLimit.get(ip) || { count: 0, resetAt: now + windowMs };
+
+  if (now > record.resetAt) {
+    record.count = 0;
+    record.resetAt = now + windowMs;
+  }
+
+  record.count++;
+  rateLimit.set(ip, record);
+
+  if (record.count > maxRequests) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded", retryAfter: record.resetAt - now },
+      { status: 429 }
+    );
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: "/api/:path*",
+};
+```
+
+---
+
+## RPC Connection Management
+
+Use connection pooling and fallback strategies:
+
+```typescript
+// src/lib/sap/connection.ts
+import { Connection, clusterApiUrl } from "@solana/web3.js";
+import { createDualConnection } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || "mainnet-beta";
+const primaryRpc = process.env.RPC_URL || clusterApiUrl(cluster);
+const fallbackRpc = process.env.FALLBACK_RPC_URL;
+
+export const connection = createDualConnection({
+  primaryUrl: primaryRpc,
+  fallbackUrl: fallbackRpc,
+  cluster,
+});
+```
+
+---
+
+## Monitoring and Logging
+
+Implement structured logging for debugging:
+
+```typescript
+// src/lib/logger.ts
+export function logApiCall(
+  route: string,
+  method: string,
+  duration: number,
+  status: number,
+  error?: string
+) {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    route,
+    method,
+    duration,
+    status,
+    error,
+  }));
+}
+
+// Usage in API route
+const start = Date.now();
+try {
+  // ... handler logic
+  logApiCall("/api/gateway/agents", "GET", Date.now() - start, 200);
+} catch (error) {
+  logApiCall("/api/gateway/agents", "GET", Date.now() - start, 500, String(error));
+  throw error;
+}
+```
+
+---
+
+## Next Steps
+
+- **[Explorer Pages](/docs/explorer/pages)** — Frontend page reference
+- **[Transaction Parsing](/docs/explorer/transaction-parsing)** — Decode SAP transactions
+- **[SDK Overview](/docs/sdk/overview)** — Programmatic API
+
+---
+
+**Last Updated:** June 2026  
+**Explorer Version:** 1.0.0  
+**SDK Version:** 0.20.0

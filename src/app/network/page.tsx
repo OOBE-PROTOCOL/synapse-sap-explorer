@@ -15,7 +15,7 @@ import type { SimNode } from '~/components/network/force-graph';
 import { Button } from '~/components/ui/button';
 import { Separator } from '~/components/ui/separator';
 import { X, Radio, ArrowLeftRight, Activity, ExternalLink, Copy, PanelRightOpen } from 'lucide-react';
-import { short } from '~/lib/format';
+import { entityPath, short } from '~/lib/format';
 import { cn } from '~/lib/utils';
 import type { ApiEscrowEvent } from '~/types/api';
 
@@ -547,7 +547,7 @@ function NodeDetailCard({ node, onClear }: { node: SimNode; onClear: () => void 
             )}
             <Separator className="my-2" />
             <a
-              href={`/agents/${node.id}`}
+              href={entityPath('/agents', node.id)}
               className="flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
             >
               View full agent profile

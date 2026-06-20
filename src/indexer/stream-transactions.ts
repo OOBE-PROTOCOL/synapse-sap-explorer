@@ -6,7 +6,7 @@ import {
   SynapseNetwork,
   SynapseRegion,
 } from '@oobe-protocol-labs/synapse-client-sdk';
-import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
+import { SAP_PROGRAM_ADDRESS } from '~/lib/sap/sdk-compat';
 import { env } from '~/lib/env';
 import { hydrateTx, upsertHydratedTx, type SignatureLike } from './tx-pipeline';
 import { inferTouchedEntities } from './entity-impact';

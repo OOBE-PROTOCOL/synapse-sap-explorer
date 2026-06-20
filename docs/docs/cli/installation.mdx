@@ -5,20 +5,40 @@ description: Install synapse-sap globally, from source, or pinned per project. V
 
 # Installation
 
-## Global install (recommended)
+**Current Version:** v0.9.3  
+**SDK Version:** v0.20.0  
+**Node.js:** 18.17 or newer
+
+---
+
+## Quick Install
 
 ```bash
+# Global install (recommended)
 npm install -g @oobe-protocol-labs/synapse-sap-cli
+
+# Or using yarn
+yarn global add @oobe-protocol-labs/synapse-sap-cli
+
+# Or using pnpm
+pnpm add -g @oobe-protocol-labs/synapse-sap-cli
 ```
 
 After install, the `synapse-sap` binary is on your `PATH`.
 
 ```bash
+# Verify installation
 synapse-sap --version
 synapse-sap --help
 ```
 
-## From source
+---
+
+## Alternative Installation Methods
+
+### From Source
+
+Use this when you need to test patches, contribute fixes, or run a fork.
 
 ```bash
 git clone https://github.com/OOBE-PROTOCOL/synapse-sap-cli.git
@@ -28,40 +48,210 @@ npm run build
 npm link
 ```
 
-Use this when you need to test patches, contribute fixes, or run a fork.
+### Per Project Install
 
-## Per project install
+Pin the CLI as a dev dependency to guarantee that scripts in CI and local dev use the same version.
 
 ```bash
 npm install --save-dev @oobe-protocol-labs/synapse-sap-cli
 npx synapse-sap --version
 ```
 
-Pinning the CLI as a dev dependency guarantees that scripts in CI and local dev use the same version.
+### Using npx (No Install)
 
-## System requirements
-
-| Requirement | Minimum |
-|-------------|---------|
-| Node.js | 18.17 or newer |
-| Network | Outbound HTTPS to your RPC endpoint |
-| Filesystem | Write access to `~/.config/synapse-sap` and your `keys/` folder |
-
-## First time configuration
+Run the CLI without installing it globally:
 
 ```bash
+npx @oobe-protocol-labs/synapse-sap-cli --version
+npx @oobe-protocol-labs/synapse-sap-cli doctor run
+```
+
+---
+
+## System Requirements
+
+| Requirement | Minimum | Notes |
+|-------------|---------|-------|
+| **Node.js** | 18.17+ | LTS recommended |
+| **npm** | 9.0+ | Or yarn 1.22+, pnpm 8.0+ |
+| **Network** | Outbound HTTPS | To your RPC endpoint |
+| **Filesystem** | Write access | `~/.config/synapse-sap` and `keys/` folder |
+| **Disk Space** | 100 MB | For CLI + dependencies |
+
+---
+
+## First Time Configuration
+
+### Step 1: Initialize Environment
+
+```bash
+# Choose your network template
+synapse-sap env init --template mainnet
+# or
 synapse-sap env init --template devnet
+# or
+synapse-sap env init --template localnet
+```
+
+This creates:
+- `~/.config/synapse-sap/config.json` — Configuration file
+- `~/.config/synapse-sap/keys/` — Keypair directory
+
+### Step 2: Configure RPC
+
+```bash
+# Set your RPC endpoint
 synapse-sap config set rpcUrl "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
+
+# Optional: Set fallback RPC
+synapse-sap config set fallbackRpcUrl "https://api.mainnet-beta.solana.com"
+
+# Optional: Set commitment level
+synapse-sap config set commitment "confirmed"
+```
+
+### Step 3: Generate Keypair
+
+```bash
+# Generate a new keypair
 synapse-sap env keypair generate --out keys/agent.json
+
+# Or import an existing keypair
+synapse-sap env keypair import --from ~/.config/solana/id.json --out keys/agent.json
+```
+
+### Step 4: Run Doctor
+
+```bash
 synapse-sap doctor run
 ```
 
-`doctor run` performs an eight point check covering Node version, SDK version, env vars, keypair file permissions, RPC reachability and latency, fallback RPC, SAP program deployment, and free disk space. If it returns a non zero exit code, fix the reported issue before continuing.
+The doctor performs an **eight point check**:
 
-## Verify
+1. ✅ Node.js version
+2. ✅ CLI version
+3. ✅ SDK version
+4. ✅ Environment variables
+5. ✅ Keypair file permissions
+6. ✅ RPC reachability and latency
+7. ✅ Fallback RPC availability
+8. ✅ SAP program deployment
+9. ✅ Free disk space
+
+If it returns a non-zero exit code, fix the reported issue before continuing.
+
+---
+
+## Verify Installation
 
 ```bash
+# Full diagnostic
 synapse-sap doctor run --json | jq '.checks[] | select(.status != "ok")'
 ```
 
 Empty output means the environment is ready.
+
+### Quick Verification Commands
+
+```bash
+# Check version
+synapse-sap --version
+
+# Check help
+synapse-sap --help
+
+# List all commands
+synapse-sap --help --all
+
+# Check config
+synapse-sap config list
+```
+
+---
+
+## Configuration Files
+
+### Location
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/synapse-sap/config.json` |
+| Linux | `~/.config/synapse-sap/config.json` |
+| Windows | `%APPDATA%\synapse-sap\config.json` |
+
+### Example Configuration
+
+```json
+{
+  "rpcUrl": "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY",
+  "fallbackRpcUrl": "https://api.mainnet-beta.solana.com",
+  "commitment": "confirmed",
+  "keypairPath": "~/.config/synapse-sap/keys/agent.json",
+  "cluster": "mainnet-beta",
+  "autoSimulate": true,
+  "jsonOutput": false
+}
+```
+
+---
+
+## Troubleshooting
+
+### Command Not Found
+
+```bash
+# npm global install
+npm install -g @oobe-protocol-labs/synapse-sap-cli
+
+# Verify PATH includes npm global bin
+npm bin -g
+```
+
+### Permission Denied
+
+```bash
+# macOS/Linux: Fix permissions
+sudo chown -R $(whoami) ~/.config/synapse-sap
+
+# Or reinstall without sudo
+npm config set prefix ~/.npm-global
+npm install -g @oobe-protocol-labs/synapse-sap-cli
+```
+
+### RPC Connection Failed
+
+```bash
+# Test RPC connectivity
+curl -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
+  "https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=YOUR_KEY"
+
+# Expected: {"jsonrpc":"2.0","result":"ok","id":1}
+```
+
+### Version Mismatch
+
+```bash
+# Check installed version
+synapse-sap --version
+
+# Update to latest
+npm install -g @oobe-protocol-labs/synapse-sap-cli@latest
+
+# Or pin to specific version
+npm install -g @oobe-protocol-labs/synapse-sap-cli@0.9.3
+```
+
+---
+
+## Next Steps
+
+- **[Quickstart](/docs/cli/quickstart)** — Register your first agent
+- **[Agent Commands](/docs/cli/agent)** — Full agent lifecycle reference
+- **[Global Flags](/docs/cli/global-flags)** — Flags available on all commands
+- **[Doctor](/docs/cli/doctor)** — Detailed diagnostic reference
+
+---
+
+**Last Updated:** June 2026  
+**CLI Version:** 0.9.3

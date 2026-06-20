@@ -2,7 +2,7 @@
 import { db } from '~/db';
 import { vaults } from '~/db/schema';
 import { findAllVaults } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet } from './utils';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncVaults(): Promise<number> {
@@ -36,7 +36,8 @@ export async function syncVaults(): Promise<number> {
     try {
       await db.insert(vaults).values(row).onConflictDoUpdate({
         target: vaults.pda,
-        set: conflictUpdateSet(vaults, ['pda']),
+        set: conflictUpdateSet(vaults, ['pda', 'createdAt']),
+        setWhere: conflictUpdateWhere(vaults, ['pda', 'createdAt', 'indexedAt']),
       });
       upserted++;
     } catch (e: unknown) {
@@ -48,4 +49,3 @@ export async function syncVaults(): Promise<number> {
   log('vaults', `Done: ${upserted} vaults upserted`);
   return upserted;
 }
-

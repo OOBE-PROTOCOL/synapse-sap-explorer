@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
  *
  * Query params:
  *   ?session=<pda>      — filter to a specific session (optional)
- *   ?limit=100          — max TXs to scan per session (default: 200)
- *   ?rpc=true           — enable RPC fallback (default: true)
+ *   ?limit=3000         — max TXs/events to scan per session (default: 3000)
+ *   ?rpc=true           — enable direct RPC fallback (default: false)
  * ────────────────────────────────────────────────────────── */
 
 import { NextRequest } from 'next/server';
@@ -38,8 +38,9 @@ export const GET = withSynapseError(async (req: NextRequest) => {
   }
 
   const sessionPda = req.nextUrl.searchParams.get('session');
-  const limit = Math.min(Number(req.nextUrl.searchParams.get('limit') ?? 200), 1000);
-  const rpcFallback = req.nextUrl.searchParams.get('rpc') !== 'false';
+  const requestedLimit = Number(req.nextUrl.searchParams.get('limit') ?? 3000);
+  const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 3000, 1), 5000);
+  const rpcFallback = req.nextUrl.searchParams.get('rpc') === 'true';
 
   if (sessionPda) {
     try { new PublicKey(sessionPda); } catch {
@@ -47,7 +48,7 @@ export const GET = withSynapseError(async (req: NextRequest) => {
     }
   }
 
-  const cacheKey = `inscriptions:${pda}:${sessionPda ?? 'all'}:${limit}`;
+  const cacheKey = `inscriptions:${pda}:${sessionPda ?? 'all'}:${limit}:${rpcFallback ? 'rpc' : 'db'}`;
 
   const data = await swr<SessionInscriptionResult>(
     cacheKey,

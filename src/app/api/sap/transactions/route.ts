@@ -1,18 +1,18 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
 import { utils } from '@coral-xyz/anchor';
 import type { BorshInstructionCoder } from '@coral-xyz/anchor';
-import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
-import { getSynapseConnection, getSapClient, getRpcConfig } from '~/lib/sap/discovery';
-import { swr } from '~/lib/cache';
+import { SAP_PROGRAM_ADDRESS } from '~/lib/sap/sdk-compat';
+import { getSapClient, getRpcConfig } from '~/lib/sap/discovery';
+import { peek, put, swr } from '~/lib/cache';
 import { selectTransactions, countTransactions, upsertTransactions } from '~/lib/db/queries';
 import { isDbDown, markDbDown } from '~/db';
 import { dbTxToApi, apiTxToDb } from '~/lib/db/mappers';
-import { rawGetTransaction } from '~/lib/rpc';
+import { rawGetSignaturesForAddress, rawGetTransaction } from '~/lib/rpc';
+import { withTimeout } from '~/lib/async-timeout';
 import type { ApiTransaction, ParsedAnchorEvent } from '~/types';
-import type { RpcTransaction, RpcTransactionMeta, RpcTransactionMessage, RpcTokenBalance, RpcSignatureInfo, TransactionError } from '~/types/indexer';
+import type { RpcTransaction, RpcTransactionMeta, RpcTransactionMessage, RpcTokenBalance, RpcSignatureInfo } from '~/types/indexer';
 
 /* ── Program map ─────────────────────────────── */
 const PROGRAMS: Record<string, string> = {
@@ -35,6 +35,13 @@ function identifyProgram(pubkey: string): string | null {
 /* ── Retry with exponential backoff ──────────────────── */
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 300;
+const DB_PAGE_TIMEOUT_MS = 5_000;
+const DB_COUNT_TIMEOUT_MS = 2_000;
+const LIVE_HEAD_TIMEOUT_MS = 4_000;
+const LIVE_HEAD_LIMIT_MAX = 1_000;
+const LIVE_HEAD_CHUNK_SIZE = 500;
+const BACKGROUND_HYDRATE_LIMIT = 50;
+const FALLBACK_HYDRATE_LIMIT = 25;
 
 async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   let lastErr: unknown;
@@ -71,7 +78,7 @@ function hydrateTx(sig: RpcSignatureInfo, tx: RpcTransaction | null): HydratedTr
     signature: sig.signature,
     slot: sig.slot,
     blockTime: sig.blockTime ?? null,
-    err: sig.err !== null,
+    err: sig.err != null,
     memo: sig.memo ?? null,
     signer: null,
     fee: 0, feeSol: 0,
@@ -273,6 +280,94 @@ function hydrateTx(sig: RpcSignatureInfo, tx: RpcTransaction | null): HydratedTr
 
 /* ── Parallel batch helper ── */
 const BATCH_SIZE = 5;
+type TransactionSource = 'db' | 'cache' | 'rpc' | 'empty';
+type TransactionDiagnostics = {
+  dbAttempted: boolean;
+  dbRows: number;
+  dbTotal: number | null;
+  dbError: string | null;
+  rpcAttempted: boolean;
+  rpcRows: number;
+  rpcError: string | null;
+};
+
+type TransactionsPageSnapshot = {
+  transactions: HydratedTransaction[];
+  total: number;
+  page: number;
+  perPage: number;
+  source: TransactionSource;
+  diagnostics: TransactionDiagnostics;
+};
+
+function signatureToLightTx(sig: RpcSignatureInfo): HydratedTransaction {
+  const cached = _txCache.get(sig.signature);
+  if (cached && Date.now() - cached.ts < TX_CACHE_TTL) return cached.data;
+
+  return {
+    signature: sig.signature,
+    slot: sig.slot,
+    blockTime: sig.blockTime ?? null,
+    err: sig.err != null,
+    memo: sig.memo ?? null,
+    signer: null,
+    fee: 0,
+    feeSol: 0,
+    programs: [{ id: SAP_PROGRAM_ADDRESS, name: 'SAP Program' }],
+    sapInstructions: ['SAP Tx'],
+    sapEvents: [],
+    accountKeys: [SAP_PROGRAM_ADDRESS],
+    instructionCount: 0,
+    innerInstructionCount: 0,
+    computeUnitsConsumed: null,
+    signerBalanceChange: 0,
+    version: 'unknown',
+    value: null,
+  };
+}
+
+async function fetchLiveSignatureRows(limit: number): Promise<HydratedTransaction[]> {
+  const signatures = await fetchLiveSignatures(limit);
+  return signatures.map(signatureToLightTx);
+}
+
+async function fetchLiveSignatures(limit: number): Promise<RpcSignatureInfo[]> {
+  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+  const safeLimit = Math.min(Math.max(1, limit), LIVE_HEAD_LIMIT_MAX);
+  const signatures: RpcSignatureInfo[] = [];
+  let before: string | undefined;
+  let remaining = safeLimit;
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, LIVE_HEAD_CHUNK_SIZE);
+    let page: RpcSignatureInfo[];
+    try {
+      page = await rawGetSignaturesForAddress(
+        SAP_PROGRAM_ADDRESS,
+        { limit: chunk, ...(before ? { before } : {}) },
+        rpcUrl,
+        rpcHeaders,
+      );
+    } catch (error) {
+      if (signatures.length > 0) {
+        console.warn('[transactions] live head partial page:', (error as Error).message);
+        break;
+      }
+      throw error;
+    }
+    if (page.length === 0) break;
+    signatures.push(...page);
+    remaining -= page.length;
+    if (page.length < chunk) break;
+    before = page[page.length - 1]?.signature;
+  }
+  return signatures;
+}
+
+async function fetchHydratedLiveRows(limit: number): Promise<HydratedTransaction[]> {
+  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+  const signatures = await fetchLiveSignatures(limit);
+  return fetchTxBatch(signatures, rpcUrl, rpcHeaders);
+}
 
 async function fetchTxBatch(
   sigs: RpcSignatureInfo[],
@@ -325,11 +420,9 @@ async function fetchTxBatch(
  * This is called in the background so it never blocks the response.
  */
 async function backgroundRpcRefresh(limit: number): Promise<HydratedTransaction[]> {
-  const conn = getSynapseConnection();
   const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
 
-  const signatures: Awaited<ReturnType<typeof conn.getSignaturesForAddress>> = [];
-  const programPk = new PublicKey(SAP_PROGRAM_ADDRESS);
+  const signatures: RpcSignatureInfo[] = [];
   let before: string | undefined;
   let remaining = Math.max(1, limit);
 
@@ -337,7 +430,12 @@ async function backgroundRpcRefresh(limit: number): Promise<HydratedTransaction[
   while (remaining > 0) {
     const chunk = Math.min(remaining, 1000);
     const page = await withRetry(
-      () => conn.getSignaturesForAddress(programPk, { limit: chunk, ...(before ? { before } : {}) }),
+      () => rawGetSignaturesForAddress(
+        SAP_PROGRAM_ADDRESS,
+        { limit: chunk, ...(before ? { before } : {}) },
+        rpcUrl,
+        rpcHeaders,
+      ),
       'getSignaturesForAddress',
     );
     if (!page.length) break;
@@ -347,20 +445,14 @@ async function backgroundRpcRefresh(limit: number): Promise<HydratedTransaction[
     before = page[page.length - 1]?.signature;
   }
 
-  const sigs: RpcSignatureInfo[] = signatures.map((s) => ({
-    signature: s.signature,
-    slot: s.slot,
-    blockTime: s.blockTime ?? null,
-    err: s.err as TransactionError,
-    memo: s.memo ?? null,
-  }));
+  const hydrated = await fetchTxBatch(signatures, rpcUrl, rpcHeaders);
 
-  const hydrated = await fetchTxBatch(sigs, rpcUrl, rpcHeaders);
-
-  // Write to DB (non-blocking)
-  upsertTransactions(hydrated.map(apiTxToDb)).catch((e) =>
-    console.warn('[transactions] DB write failed:', (e as Error).message),
-  );
+  const completeRows = hydrated.filter((tx) => tx.instructionCount > 0 || tx.programs.length > 0);
+  if (completeRows.length > 0) {
+    upsertTransactions(completeRows.map(apiTxToDb)).catch((e) =>
+      console.warn('[transactions] DB write failed:', (e as Error).message),
+    );
+  }
 
   return hydrated;
 }
@@ -375,56 +467,221 @@ export async function GET(req: Request) {
     const limit = perPage;
     const offset = (page - 1) * perPage;
 
-    const fetchLimit = Math.max(offset + limit, 50);
-    const cacheKey = `transactions:${fetchLimit}`;
+    const requestedFetchLimit = offset + limit;
+    const refreshFetchLimit = Math.max(requestedFetchLimit, 50);
+    const liveFetchLimit = afterSlot !== null ? 50 : Math.min(refreshFetchLimit, LIVE_HEAD_LIMIT_MAX);
+    const cacheKey = `transactions:${refreshFetchLimit}`;
+    const pageCacheKey = `transactions:page:${page}:${limit}:${offset}`;
+    const liveCacheKey = `transactions:live:${liveFetchLimit}`;
+    const diagnostics: TransactionDiagnostics = {
+      dbAttempted: true,
+      dbRows: 0,
+      dbTotal: null,
+      dbError: null,
+      rpcAttempted: false,
+      rpcRows: 0,
+      rpcError: null,
+    };
+
+    if (afterSlot === null) {
+      const cachedPage = peek<TransactionsPageSnapshot>(pageCacheKey);
+      if (cachedPage?.transactions?.length) {
+        const res = NextResponse.json({
+          ...cachedPage,
+          source: 'cache' satisfies TransactionSource,
+        });
+        res.headers.set('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=60');
+        res.headers.set('x-sap-data-source', 'transactions-page-cache');
+        return res;
+      }
+    }
+
+    let liveRowsForPageOne: HydratedTransaction[] = [];
+    if (afterSlot !== null) {
+      diagnostics.rpcAttempted = true;
+      try {
+        let liveRows = await withTimeout(
+          swr(
+            `${liveCacheKey}:hydrated:${FALLBACK_HYDRATE_LIMIT}`,
+            () => fetchHydratedLiveRows(FALLBACK_HYDRATE_LIMIT),
+            { ttl: 8_000, swr: 60_000 },
+          ),
+          LIVE_HEAD_TIMEOUT_MS,
+          'transactions live head rpc',
+        );
+        diagnostics.rpcRows = liveRows.length;
+        if (afterSlot !== null) liveRows = liveRows.filter((tx) => tx.slot > afterSlot);
+
+        const result = liveRows.slice(0, limit);
+        const res = NextResponse.json({
+          transactions: result,
+          total: result.length,
+          page: 1,
+          perPage: limit,
+          source: result.length > 0 ? 'rpc' : 'empty',
+          diagnostics,
+        });
+        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        return res;
+      } catch (e) {
+        diagnostics.rpcError = (e as Error).message;
+        console.warn('[transactions] live head failed, falling back:', diagnostics.rpcError);
+        if (afterSlot !== null) {
+          const res = NextResponse.json({
+            transactions: [],
+            total: 0,
+            page: 1,
+            perPage: limit,
+            source: 'empty' satisfies TransactionSource,
+            diagnostics,
+          });
+          res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+          return res;
+        }
+      }
+    }
 
     // ── Step 1: DB read (~10ms) — always primary source ──
     let dbRows: HydratedTransaction[] = [];
     let total = 0;
-    if (!isDbDown()) {
-      try {
-        const rows = await selectTransactions(limit, offset);
-        dbRows = rows.map(dbTxToApi);
-      } catch (e) {
-        console.warn('[transactions] DB page read failed:', (e as Error).message);
-        markDbDown();
+    try {
+      const rows = await withTimeout(
+        selectTransactions(limit, offset, { includeDetails: true }),
+        DB_PAGE_TIMEOUT_MS,
+        'transactions db page read',
+      );
+      dbRows = rows.map(dbTxToApi);
+      diagnostics.dbRows = dbRows.length;
+    } catch (e) {
+      diagnostics.dbError = (e as Error).message;
+      markDbDown();
+      const cachedPage = peek<TransactionsPageSnapshot>(pageCacheKey);
+      if (cachedPage?.transactions?.length) {
+        const res = NextResponse.json({
+          ...cachedPage,
+          source: 'cache' satisfies TransactionSource,
+          diagnostics: {
+            ...cachedPage.diagnostics,
+            ...diagnostics,
+            dbRows: cachedPage.transactions.length,
+            dbTotal: cachedPage.total,
+          },
+        });
+        res.headers.set('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=60');
+        res.headers.set('x-sap-data-source', 'transactions-page-cache');
+        res.headers.set('x-sap-warning', diagnostics.dbError);
+        return res;
       }
+      console.warn('[transactions] DB page read unavailable:', diagnostics.dbError);
+    }
 
-      if (dbRows.length > 0) {
-        try {
-          total = await countTransactions();
-        } catch (e) {
-          // Do not fail pagination if only count query fails.
-          console.warn('[transactions] DB count failed, using fallback total:', (e as Error).message);
-          total = Math.max(offset + dbRows.length, dbRows.length);
-        }
+    if (!diagnostics.dbError) {
+      try {
+        total = await withTimeout(
+          countTransactions(),
+          DB_COUNT_TIMEOUT_MS,
+          'transactions db count',
+        );
+        diagnostics.dbTotal = total;
+      } catch (e) {
+        // Do not fail pagination if only count query fails.
+        diagnostics.dbError = (e as Error).message;
+        console.warn('[transactions] DB count failed, using fallback total:', diagnostics.dbError);
+        total = Math.max(offset + dbRows.length, dbRows.length);
+        diagnostics.dbTotal = total;
       }
     }
 
     if (dbRows.length > 0) {
       let result = dbRows;
-      if (afterSlot !== null) result = result.filter((tx) => (tx.slot as number) > afterSlot);
       // Fire-and-forget refresh only for first page without incremental filter.
-      if (page === 1 && afterSlot === null) {
-        swr(cacheKey, () => backgroundRpcRefresh(fetchLimit), { ttl: 30_000, swr: 300_000 }).catch(() => {});
+      if (page === 1) {
+        const liveRows = await withTimeout(
+          swr(liveCacheKey, () => fetchLiveSignatureRows(liveFetchLimit), { ttl: 8_000, swr: 60_000 }),
+          750,
+          'transactions live merge',
+        ).catch((error) => {
+          diagnostics.rpcError = (error as Error).message;
+          return [] as HydratedTransaction[];
+        });
+        liveRowsForPageOne = liveRows;
+        diagnostics.rpcAttempted = true;
+        diagnostics.rpcRows = liveRows.length;
+        swr(cacheKey, () => backgroundRpcRefresh(refreshFetchLimit), { ttl: 30_000, swr: 300_000 }).catch(() => {});
       }
-      const res = NextResponse.json({ transactions: result, total, page, perPage: limit, source: 'db' });
+      if (page === 1 && liveRowsForPageOne.length > 0) {
+        const seen = new Set(dbRows.map((tx) => tx.signature));
+        result = [
+          ...liveRowsForPageOne.filter((tx) => !seen.has(tx.signature)),
+          ...dbRows,
+        ]
+          .sort((a, b) => b.slot - a.slot)
+          .slice(0, limit);
+      }
+      const payload: TransactionsPageSnapshot = {
+        transactions: result,
+        total: Math.max(total, result.length),
+        page,
+        perPage: limit,
+        source: 'db' satisfies TransactionSource,
+        diagnostics,
+      };
+      put(pageCacheKey, payload);
+      const res = NextResponse.json(payload);
       res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       return res;
     }
 
     // True cold start — no DB data. Must await RPC.
-    let result: HydratedTransaction[] = [];
-    try {
-      result = await swr(cacheKey, () => backgroundRpcRefresh(fetchLimit), { ttl: 30_000, swr: 300_000 });
-    } catch (e) {
-      console.error('[transactions] RPC cold start failed:', (e as Error).message);
+    let result: HydratedTransaction[] = liveRowsForPageOne;
+    diagnostics.rpcAttempted = true;
+    if (result.length === 0) {
+      try {
+        result = await swr(
+          `${liveCacheKey}:hydrated:${FALLBACK_HYDRATE_LIMIT}`,
+          () => fetchHydratedLiveRows(FALLBACK_HYDRATE_LIMIT),
+          { ttl: 8_000, swr: 60_000 },
+        );
+        diagnostics.rpcRows = result.length;
+      } catch (e) {
+        diagnostics.rpcError = (e as Error).message;
+        console.error('[transactions] RPC cold start failed:', diagnostics.rpcError);
+      }
+    }
+
+    if (
+      result.length === 0 &&
+      diagnostics.rpcError &&
+      diagnostics.dbRows === 0 &&
+      (diagnostics.dbTotal === null || offset < diagnostics.dbTotal)
+    ) {
+      const res = NextResponse.json(
+        {
+          error: 'No transaction source is currently available',
+          transactions: [],
+          total: 0,
+          page,
+          perPage: limit,
+          source: 'empty' satisfies TransactionSource,
+          diagnostics,
+        },
+        { status: 503 },
+      );
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
     }
 
     if (afterSlot !== null) {
       result = result.filter((tx) => (tx.slot as number) > afterSlot);
       result = result.slice(0, limit);
-      const res = NextResponse.json({ transactions: result, total: result.length, page: 1, perPage: limit, source: 'rpc' });
+      const res = NextResponse.json({
+        transactions: result,
+        total: result.length,
+        page: 1,
+        perPage: limit,
+        source: result.length > 0 ? 'rpc' : 'empty',
+        diagnostics,
+      });
       res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       return res;
     }
@@ -432,7 +689,14 @@ export async function GET(req: Request) {
     const totalRpc = result.length;
     const paged = result.slice(offset, offset + limit);
 
-    const res = NextResponse.json({ transactions: paged, total: totalRpc, page, perPage: limit, source: 'rpc' });
+    const res = NextResponse.json({
+      transactions: paged,
+      total: totalRpc,
+      page,
+      perPage: limit,
+      source: paged.length > 0 ? 'rpc' : 'empty',
+      diagnostics,
+    });
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return res;
   } catch (err: unknown) {

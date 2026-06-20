@@ -35,20 +35,21 @@ import { Button } from "~/components/ui/button";
 import { useGraph, useAgents } from "~/hooks/use-sap";
 import type { GraphNode } from "~/lib/sap/discovery";
 import type { SerializedDiscoveredAgent } from "~/types/sap";
+import { asText, entityPath, short } from "~/lib/format";
 
 type SortKey = "agents" | "name" | "caps";
 type SortDir = "asc" | "desc";
 
-function normalizeProtocolId(value: string | null | undefined): string {
-  return String(value ?? "")
+function normalizeProtocolId(value: unknown): string {
+  return asText(value)
     .trim()
     .toLowerCase();
 }
 
-function shortAddress(value: string, lead = 6, tail = 4): string {
-  if (!value) return "unknown";
-  if (value.length <= lead + tail + 3) return value;
-  return `${value.slice(0, lead)}...${value.slice(-tail)}`;
+function shortAddress(value: unknown, lead = 6, tail = 4): string {
+  const text = asText(value);
+  if (!text) return "unknown";
+  return short(text, lead, tail);
 }
 
 export default function ProtocolsPage() {
@@ -90,13 +91,13 @@ export default function ProtocolsPage() {
     );
 
     for (const node of capabilityNodes) {
-      const protocolId = String(node.meta?.protocolId ?? "").trim();
+      const protocolId = asText(node.meta?.protocolId).trim();
       if (!protocolId) continue;
       const key = normalizeProtocolId(protocolId);
 
       if (!map.has(key)) map.set(key, []);
       map.get(key)?.push({
-        id: String(node.meta?.capabilityId ?? node.name),
+        id: asText(node.meta?.capabilityId ?? node.name),
         description: node.meta?.description
           ? String(node.meta.description)
           : null,
@@ -109,8 +110,8 @@ export default function ProtocolsPage() {
 
   const protocols = useMemo(() => {
     const protocolDisplayByNorm = new Map<string, string>();
-    const addProtocol = (raw: string | null | undefined) => {
-      const display = String(raw ?? "").trim();
+    const addProtocol = (raw: unknown) => {
+      const display = asText(raw).trim();
       if (!display) return;
       const norm = normalizeProtocolId(display);
       if (!protocolDisplayByNorm.has(norm))
@@ -119,9 +120,9 @@ export default function ProtocolsPage() {
 
     for (const node of graphData?.nodes ?? []) {
       if (node.type === "protocol")
-        addProtocol(String(node.meta?.protocolId ?? node.name));
+        addProtocol(node.meta?.protocolId ?? node.name);
       if (node.type === "capability")
-        addProtocol(String(node.meta?.protocolId ?? ""));
+        addProtocol(node.meta?.protocolId);
     }
 
     for (const a of agentsData?.agents ?? []) {
@@ -145,8 +146,8 @@ export default function ProtocolsPage() {
             return inProtocols || inCapabilities;
           })
           .map((agent: SerializedDiscoveredAgent) => ({
-            pda: agent.pda,
-            wallet: agent.identity?.wallet ?? null,
+            pda: asText(agent.pda),
+            wallet: asText(agent.identity?.wallet) || null,
             name: agent.identity?.name ?? null,
             isActive: agent.identity?.isActive ?? false,
             reputationScore: agent.identity?.reputationScore ?? 0,
@@ -177,10 +178,10 @@ export default function ProtocolsPage() {
     const uniq = new Map<string, string>();
     for (const p of protocols) {
       for (const a of p.agents) {
-        if (!uniq.has(a.pda)) {
+        if (a.pda && !uniq.has(a.pda)) {
           uniq.set(
             a.pda,
-            a.name ?? `${a.pda.slice(0, 6)}...${a.pda.slice(-4)}`,
+            a.name ?? shortAddress(a.pda),
           );
         }
       }
@@ -473,7 +474,7 @@ export default function ProtocolsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((proto) => (
-            <ProtocolCard key={proto.id} protocol={proto} />
+            <ProtocolCard key={proto.normId} protocol={proto} />
           ))}
         </div>
       )}
@@ -483,6 +484,7 @@ export default function ProtocolsPage() {
 
 type ProtocolInfo = {
   id: string;
+  normId: string;
   agentCount: number;
   agents: Array<{
     pda: string;
@@ -571,7 +573,7 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
               <StatusBadge active={protocol.topAgent.isActive} size="xs" />
             </div>
             <Link
-              href={`/agents/${protocol.topAgent.wallet ?? protocol.topAgent.pda}`}
+              href={entityPath('/agents', protocol.topAgent.wallet ?? protocol.topAgent.pda)}
               className="mt-1 flex items-center gap-2 text-xs text-neutral-200 hover:text-primary transition-colors min-w-0"
             >
               <Bot className="h-3 w-3 text-primary shrink-0" />
@@ -594,8 +596,8 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
             <div className="flex flex-wrap gap-1.5">
               {visibleAgents.map((agent) => (
                 <Link
-                  key={agent.pda}
-                  href={`/agents/${agent.wallet ?? agent.pda}`}
+                  key={agent.pda || agent.wallet || agent.name}
+                  href={entityPath('/agents', agent.wallet ?? agent.pda)}
                   className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800/70 px-2 py-1 text-[11px] text-neutral-700 dark:text-neutral-300 transition-colors hover:border-primary/40 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-primary"
                   title={agent.name ?? agent.pda}
                 >
@@ -623,7 +625,7 @@ function ProtocolCard({ protocol }: { protocol: ProtocolInfo }) {
             <div className="flex flex-wrap gap-1">
               {protocol.capabilities.slice(0, 6).map((cap) => (
                 <Badge
-                  key={cap.id}
+                  key={`${protocol.normId}-${cap.id}`}
                   variant="outline"
                   className="text-[10px] border-neutral-700 text-neutral-300"
                 >

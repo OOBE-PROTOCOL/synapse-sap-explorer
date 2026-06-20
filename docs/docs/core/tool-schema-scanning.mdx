@@ -1,0 +1,325 @@
+# Tool Schema Scanning — Intelligent RPC Routing
+
+## Panoramica
+
+Il sistema di scanning degli schema per i tool SAP usa una strategia intelligente di **retry con exponential backoff** e **round-robin** tra diversi endpoint RPC per evitare rate limiting e massimizzare l'affidabilità.
+
+## Architettura RPC
+
+### 1. Primary: OOBEP Protocol (con API Key)
+```
+https://us-1-mainnet.oobeprotocol.ai?api_key=<OOBEP_API_KEY>
+```
+- **Priorità**: Prima scelta per tutte le chiamate
+- **Configurazione**: Variabile d'ambiente `OOBEP_RPC_URL` + `OOBEP_API_KEY`
+- **Vantaggi**: Endpoint dedicato, maggiore affidabilità, rate limit più alti
+
+### 2. Secondary: Solana Mainnet RPC
+```
+https://api.mainnet-beta.solana.com
+```
+- **Priorità**: Fallback primario
+- **Configurazione**: Variabile d'ambiente `NEXT_PUBLIC_RPC_URL` (default)
+- **Vantaggi**: Ufficiale Solana Foundation, buona disponibilità
+
+### 3. Tertiary: Free RPC Round-Robin
+```
+- https://api.mainnet-beta.solana.com
+- https://rpc.ankr.com/solana
+- https://solana-api.projectserum.com
+```
+- **Priorità**: Ultima risorsa
+- **Configurazione**: Array hardcoded in `route.ts`
+- **Vantaggi**: Ridondanza, distribuzione del carico
+
+## Flusso di Routing
+
+```
+┌─────────────────┐
+│   Tool Scan     │
+│   Request       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 1. OOBEP RPC    │ ◄── Primary (with API key)
+│    (us-1-mainnet)│
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │ Success │──► Return Schema
+    └─────────┘
+         │
+    ┌────┴────┐
+    │ Failure │
+    └────┬────┘
+         │
+         ▼
+┌─────────────────┐
+│ 2. Mainnet RPC  │ ◄── Secondary
+│    (public)     │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │ Success │──► Return Schema
+    └─────────┘
+         │
+    ┌────┴────┐
+    │ Failure │
+    └────┬────┘
+         │
+         ▼
+┌─────────────────┐
+│ 3. Free RPC     │ ◄── Tertiary (round-robin)
+│    Round-Robin  │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │ Success │──► Return Schema
+    └─────────┘
+         │
+    ┌────┴────┐
+    │ Failure │──► Throw Error
+    └─────────┘
+```
+
+## Retry Logic con Exponential Backoff
+
+### Configurazione
+
+```typescript
+// Backend (/api/sap/tools/schemas/route.ts)
+const MAX_RETRIES = 3;
+const RPC_TIMEOUT_MS = 15000; // 15 secondi
+const BATCH_SIZE = 3; // Tools per batch
+const BATCH_DELAY_MS = 3000; // 3 secondi tra i batch
+
+// Client (scan-tool-schemas.ts)
+const MAX_RETRIES = 5;
+const INITIAL_DELAY_MS = 1000; // 1 secondo
+const MAX_DELAY_MS = 10000; // 10 secondi
+```
+
+### Algoritmo di Backoff
+
+```
+Attempt 1: Fallisce → attende 1.0s + jitter
+Attempt 2: Fallisce → attende 2.0s + jitter
+Attempt 3: Fallisce → attende 4.0s + jitter
+Attempt 4: Fallisce → attende 8.0s + jitter (cap)
+Attempt 5: Fallisce → Throw Error
+```
+
+**Jitter**: Randomizzazione di ±500ms per prevenire il "thundering herd problem"
+
+### Gestione Errori
+
+| HTTP Status | Azione | Note |
+|-------------|--------|------|
+| 429 Too Many Requests | Retry con backoff | Legge header `Retry-After` se presente |
+| 504 Gateway Timeout | Retry con backoff | Comune con RPC sovraccarichi |
+| 500-503 Server Error | Retry con backoff | Errore temporaneo server |
+| 400-499 (tranne 429) | Nessun retry | Errore client, non ritentare |
+
+## Batch Processing
+
+### Strategia
+
+Per evitare di sovraccaricare gli endpoint RPC, i tool vengono processati in batch piccoli:
+
+```typescript
+for (let i = 0; i < tools.length; i += BATCH_SIZE) {
+  const batch = tools.slice(i, i + BATCH_SIZE);
+  
+  // Processa batch in parallelo
+  await Promise.all(batch.map(scanTool));
+  
+  // Attende tra i batch per rate limiting
+  await sleep(BATCH_DELAY_MS);
+}
+```
+
+### Esempio con 100 Tool
+
+```
+Batch 1/34:  Tools 0-2   (3 tools)
+  ├─ Tool 1: OOBEP ✓
+  ├─ Tool 2: OOBEP ✓
+  └─ Tool 3: Mainnet ✓ (OOBEP fallito)
+  
+  Rate limit: 3000ms
+
+Batch 2/34:  Tools 3-5   (3 tools)
+  ├─ Tool 4: OOBEP ✓
+  ├─ Tool 5: Free RPC ✓ (OOBEP + Mainnet falliti)
+  └─ Tool 6: OOBEP ✓
+  
+  Rate limit: 3000ms
+
+... continua per tutti i batch
+```
+
+## Configurazione Ambiente
+
+### Variabili Richieste
+
+```bash
+# .env file
+
+# OOBEP Protocol (primary)
+OOBEP_RPC_URL=https://us-1-mainnet.oobeprotocol.ai
+OOBEP_API_KEY=sk_live_your-api-key-here
+
+# Fallback RPC (secondary)
+NEXT_PUBLIC_RPC_URL=https://api.mainnet-beta.solana.com
+
+# Opzionale: Free RPC custom (tertiary)
+SOLANA_FREE_RPC_1=https://rpc.ankr.com/solana
+SOLANA_FREE_RPC_2=https://solana-api.projectserum.com
+SOLANA_FREE_RPC_3=https://api.mainnet-beta.solana.com
+```
+
+### Setup
+
+1. Copia `.env.example` a `.env`
+2. Inserisci la tua API key OOBEP
+3. Riavvia il server Next.js
+4. Verifica i log: `[tool-schemas] Using OOBEP RPC with API key`
+
+## Esecuzione Scan
+
+### Manuale (CLI)
+
+```bash
+# Scan standard (usa cache se esiste)
+pnpm schemas:scan
+
+# Force scan (ignora cache, scansiona tutto)
+pnpm schemas:scan:force
+```
+
+### Automatico (Cron)
+
+GitHub Actions esegue ogni 24 ore alle 02:00 UTC:
+
+```yaml
+# .github/workflows/tool-schema-scan.yml
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force full rescan'
+        required: false
+        default: 'false'
+```
+
+## Monitoraggio
+
+### Log di Produzione
+
+```log
+[tool-schemas] Starting scan (force=false)
+Found 47 active tools to scan
+Processing batch 1/16 (3 tools)...
+[fetchWithFallback] Primary failed, trying fallback...
+[fetchWithFallback] Fallback failed, trying tertiary...
+Rate limiting: waiting 3000ms before next batch...
+Processing batch 2/16 (3 tools)...
+[RPC] Rate limited (429). Retrying after 1234ms... (attempt 2/3)
+[RPC] Timeout (504). Retrying after 2456ms... (attempt 3/3)
+Scan complete: 47 tools, 42 with schemas, 5 errors
+```
+
+### Metriche Chiave
+
+- **Total Tools**: Numero di tool attivi nel DB
+- **Scanned**: Tool processati con successo
+- **With Schema**: Tool con schema inscribed trovato
+- **Errors**: Tool falliti (vedi log per dettagli)
+
+## Risoluzione Problemi
+
+### Errore: "column 'name' does not exist"
+
+**Causa**: La query SQL usa `name` invece di `tool_name`
+
+**Fix**: Verifica che la query sia:
+```sql
+SELECT pda, tool_name FROM sap_exp.tools WHERE is_active = true
+```
+
+### Errore: "429 Too Many Requests"
+
+**Causa**: Rate limit dall'endpoint RPC
+
+**Soluzioni**:
+1. Aumenta `BATCH_DELAY_MS` da 3000 a 5000
+2. Riduci `BATCH_SIZE` da 3 a 2
+3. Verifica che `OOBEP_API_KEY` sia configurata correttamente
+
+### Errore: "504 Gateway Timeout"
+
+**Causa**: RPC endpoint non risponde entro 15 secondi
+
+**Soluzioni**:
+1. Aumenta `RPC_TIMEOUT_MS` da 15000 a 30000
+2. Aumenta `MAX_RETRIES` da 3 a 5
+3. Controlla se l'endpoint OOBEP è down
+
+### Errore: "Database unavailable"
+
+**Causa**: Circuit breaker del DB è attivo
+
+**Soluzioni**:
+1. Verifica che PostgreSQL sia in esecuzione
+2. Controlla `DATABASE_URL` in `.env`
+3. Esegui `pnpm drizzle-kit migrate` per creare le tabelle
+
+## Performance
+
+### Tempi di Scansione
+
+| Tool Count | Batch Size | Delay | Tempo Stimato |
+|------------|-----------|-------|---------------|
+| 10         | 3         | 3000ms | ~12 secondi |
+| 50         | 3         | 3000ms | ~54 secondi |
+| 100        | 3         | 3000ms | ~102 secondi |
+| 100        | 5         | 2000ms | ~42 secondi |
+
+### Ottimizzazione
+
+Per scansioni veloci su molti tool:
+
+```typescript
+// Aumenta batch size (più parallelo, più carico RPC)
+const BATCH_SIZE = 5;
+
+// Riduci delay (meno attesa, più rischio 429)
+const BATCH_DELAY_MS = 2000;
+
+// Solo per test/devnet, non production!
+```
+
+## Best Practices
+
+1. **Usa sempre API key OOBEP**: Massimizza l'affidabilità del primary endpoint
+2. **Monitora i log**: Cerca pattern di errori ripetuti
+3. **Ajusta i parametri**: In base al numero di tool da scansionare
+4. **Cache-first**: Lo scan controlla la cache prima di chiamare RPC
+5. **Force scan solo quando necessario**: Usa `--force` solo per aggiornamenti critici
+
+## Sicurezza
+
+- **API Key**: Mai committare `.env` su Git
+- **Rate Limiting**: Rispetta i limit degli endpoint free
+- **Timeout**: Previene hang su RPC non responsive
+- **Circuit Breaker**: Il DB ha protezione contro overload
+
+## Riferimenti
+
+- **File Backend**: `/src/app/api/sap/tools/schemas/route.ts`
+- **File CLI**: `/scripts/scan-tool-schemas.ts`
+- **Workflow**: `.github/workflows/tool-schema-scan.yml`
+- **Config Env**: `.env.example`

@@ -2,7 +2,7 @@
 import { db } from '~/db';
 import { escrows } from '~/db/schema';
 import { findAllEscrows } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet } from './utils';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere, formatError } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncEscrows(): Promise<number> {
@@ -48,11 +48,12 @@ export async function syncEscrows(): Promise<number> {
     try {
       await db.insert(escrows).values(row).onConflictDoUpdate({
         target: escrows.pda,
-        set: conflictUpdateSet(escrows, ['pda']),
+        set: conflictUpdateSet(escrows, ['pda', 'createdAt']),
+        setWhere: conflictUpdateWhere(escrows, ['pda', 'createdAt', 'indexedAt']),
       });
       upserted++;
     } catch (e2: unknown) {
-      logErr('escrows', `Failed pda=${row.pda.slice(0, 8)}: ${(e2 as Error).message}`);
+      logErr('escrows', `Failed pda=${row.pda.slice(0, 8)}: ${formatError(e2)}`);
     }
   }
 
@@ -60,4 +61,3 @@ export async function syncEscrows(): Promise<number> {
   log('escrows', `Done: ${upserted} escrows upserted`);
   return upserted;
 }
-

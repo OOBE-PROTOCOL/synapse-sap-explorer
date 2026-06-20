@@ -73,8 +73,8 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
       ok: stakeOk,
       detail: (
         <>
-          <span className="tabular-nums text-neutral-300">{stake.toFixed(4)}</span>
-          <span className="text-neutral-600"> / {MIN_STAKE_SOL} SOL</span>
+          <span className="tabular-nums text-foreground">{stake.toFixed(4)}</span>
+          <span className="text-muted-foreground"> / {MIN_STAKE_SOL} SOL</span>
         </>
       ),
       hint: `Agents must lock at least ${MIN_STAKE_SOL} SOL at PDA ["sap_stake", agent]. Acts as the slashable floor for dispute resolution.`,
@@ -84,8 +84,8 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
       ok: hasTool,
       detail: (
         <>
-          <span className="tabular-nums text-neutral-300">{tools.length}</span>
-          <span className="text-neutral-600"> published</span>
+          <span className="tabular-nums text-foreground">{tools.length}</span>
+          <span className="text-muted-foreground"> published</span>
         </>
       ),
       hint: 'Zero-tool agents are unrouteable. At least one ToolAccount must exist at PDA ["sap_tool", agent, tool_id].',
@@ -95,10 +95,10 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
       ok: allSchemas,
       detail: (
         <>
-          <span className="tabular-nums text-neutral-300">
+          <span className="tabular-nums text-foreground">
             {toolsWithSchema}/{tools.length || 0}
           </span>
-          <span className="text-neutral-600"> inscribed</span>
+          <span className="text-muted-foreground"> inscribed</span>
         </>
       ),
       hint: 'Every tool needs a JSON-Schema (inscribed or hashed) so LLM routers can call it without manual integration.',
@@ -108,8 +108,8 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
       ok: true,
       info: true,
       detail: (
-        <span className="text-neutral-500">
-          SOL <span className="text-neutral-700">·</span> USDC
+        <span className="text-muted-foreground">
+          SOL <span className="text-muted-foreground/70">·</span> USDC
         </span>
       ),
       hint: 'Payment token allowlist is protocol-enforced. Only SOL and the canonical USDC mint are accepted by validate_payment_token.',
@@ -131,8 +131,8 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
                 className={cn(
                   'cursor-help rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider tabular-nums',
                   fullyReady
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
                 )}
               >
                 {passed}/{total} {fullyReady ? 'routable' : 'ready'}
@@ -154,16 +154,16 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
               <Tooltip>
                 <TooltipTrigger
                   className={cn(
-                    'flex h-full w-full cursor-help items-center gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors',
+                    'flex min-h-16 w-full cursor-help items-center gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     c.info
-                      ? 'border-neutral-800/70 bg-neutral-950/40 hover:border-neutral-700'
+                      ? 'bg-background hover:border-primary/30'
                       : c.ok
-                        ? 'border-emerald-900/50 bg-emerald-950/15 hover:border-emerald-800/70'
-                        : 'border-amber-900/50 bg-amber-950/15 hover:border-amber-800/70',
+                        ? 'border-emerald-500/30 bg-emerald-500/10 hover:border-emerald-500/50'
+                        : 'border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50',
                   )}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-medium leading-tight text-neutral-100">
+                    <span className="block text-xs font-medium leading-tight text-foreground">
                       {c.label}
                     </span>
                     <span className="mt-0.5 block truncate text-xs leading-tight">
@@ -174,10 +174,10 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
                     className={cn(
                       'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
                       c.info
-                        ? 'bg-neutral-800 text-neutral-400'
+                        ? 'bg-muted text-muted-foreground'
                         : c.ok
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : 'bg-amber-500/20 text-amber-400',
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
                     )}
                     aria-hidden
                   >
@@ -201,12 +201,12 @@ export function MerchantReadiness({ stakedSol, tools, className }: MerchantReadi
         {!fullyReady && (
           <div
             role="status"
-            className="flex items-start gap-2 rounded-md border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-300/90"
+            className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
           >
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
               Agent does not meet the{' '}
-              <span className="font-mono text-amber-200">v0.2.0</span>{' '}
+              <span className="font-mono text-amber-900 dark:text-amber-200">v0.2.0</span>{' '}
               merchant minimum and is not callable by automated routers
               (LLMs, x402 clients).
             </span>

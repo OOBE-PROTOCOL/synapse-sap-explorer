@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import { synapseResponse } from '~/lib/synapse/client';
-import { getRpcConfig, getSapClient } from '~/lib/sap/discovery';
+import { findAllAgents, getRpcConfig, getSapClient } from '~/lib/sap/discovery';
+import { selectAgentByPda, selectAgentByWallet } from '~/lib/db/queries';
+import { asPublicKeyText } from '~/lib/format';
 
 /**
  * GET /api/sap/agents/resolve/[id]
@@ -15,7 +17,39 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
+    const id = asPublicKeyText(rawId) || rawId;
+
+    try {
+      const dbRow = await selectAgentByWallet(id) ?? await selectAgentByPda(id);
+      if (dbRow) {
+        return synapseResponse({
+          input: id,
+          kind: dbRow.pda === id ? 'sap-pda' : 'wallet',
+          wallet: asPublicKeyText(dbRow.wallet),
+          sapAgentPda: asPublicKeyText(dbRow.pda),
+          asset: null,
+          resolved: true,
+        });
+      }
+    } catch (e) {
+      console.warn('[agents/resolve] DB lookup failed:', (e as Error).message);
+    }
+
+    const discovered = await findAllAgents()
+      .then((agents) => agents.find((agent) => asPublicKeyText(agent.pda) === id))
+      .catch(() => null);
+    if (discovered?.identity) {
+      return synapseResponse({
+        input: id,
+        kind: 'sap-pda',
+        wallet: asPublicKeyText(discovered.identity.wallet),
+        sapAgentPda: asPublicKeyText(discovered.pda),
+        asset: null,
+        resolved: true,
+      });
+    }
+
     const { url } = getRpcConfig();
     const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
       identifier: id,

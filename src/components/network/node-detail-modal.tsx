@@ -17,6 +17,7 @@ import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Separator } from '~/components/ui/separator';
+import { entityPath } from '~/lib/format';
 
 /* ── Color palette (mirrors force-graph) ──────────────── */
 const TYPE_COLORS: Record<string, { dot: string; label: string }> = {
@@ -30,7 +31,7 @@ const TYPE_COLORS: Record<string, { dot: string; label: string }> = {
 function nodeHref(node: SimNode): string | null {
   switch (node.type) {
     case 'agent':
-      return node.meta?.wallet ? `/agents/${node.meta.wallet}` : `/agents`;
+      return node.meta?.wallet ? entityPath('/agents', node.meta.wallet) : `/agents`;
     case 'tool':
       return `/tools`;
     case 'protocol':

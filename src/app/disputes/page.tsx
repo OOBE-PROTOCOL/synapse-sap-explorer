@@ -30,7 +30,7 @@ import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { useDisputes } from '~/hooks/use-sap';
 import { AgentTag } from '~/components/ui/agent-tag';
-import { formatLamports, timeAgo } from '~/lib/format';
+import { entityPath, formatLamports, timeAgo } from '~/lib/format';
 
 /* ── Dispute status styling ──────────────────── */
 
@@ -329,7 +329,7 @@ export default function DisputesPage() {
                     <div>
                       <span className="text-muted-foreground block mb-0.5">Escrow</span>
                       <Link
-                        href={`/escrows/${d.escrowPda}`}
+                        href={entityPath('/escrows', d.escrowPda)}
                         className="text-primary hover:underline"
                       >
                         <Address value={d.escrowPda} className="text-xs" />

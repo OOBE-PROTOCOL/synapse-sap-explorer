@@ -1,11 +1,16 @@
 ---
 title: SDK Overview
-description: The official TypeScript client for building on the Synapse Agent Protocol. Package structure, requirements, and module map.
+description: The official TypeScript client for building on the Synapse Agent Protocol. Package structure, requirements, and module map for v0.20.0.
 ---
 
 # SDK Overview
 
 The `@oobe-protocol-labs/synapse-sap-sdk` is the official TypeScript SDK for interacting with the Synapse Agent Protocol on Solana. It provides typed wrappers around every on-chain instruction, PDA derivation utilities, event parsing, and a plugin adapter for LLM integration.
+
+**Current Version:** v0.20.0  
+**Program ID:** `SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ`
+
+---
 
 ## What the SDK Does For You
 
@@ -14,6 +19,8 @@ Interacting with a Solana program directly requires constructing binary instruct
 For example, registering an agent on the raw program requires: computing the agent PDA from seeds, computing the stats PDA, computing the global registry PDA, constructing the instruction data buffer with the correct Anchor discriminator, building the accounts array in the exact order the program expects, signing and sending the transaction, and deserializing the response. With the SDK, this becomes a single method call: `client.agent.register({ name, description, ... })`.
 
 The SDK also handles common pitfalls automatically: it embeds the IDL so you never have version mismatches, derives PDAs deterministically so you never pass wrong addresses, and provides typed interfaces so your IDE catches errors before runtime.
+
+---
 
 ## Requirements
 
@@ -24,6 +31,8 @@ The SDK also handles common pitfalls automatically: it embeds the IDL so you nev
 | `zod` | 3.20.0 | No | Only for plugin schemas (AI agent tooling) |
 | TypeScript | 5.7+ | Yes | Strict mode recommended |
 
+---
+
 ## Installation
 
 ```bash
@@ -33,9 +42,30 @@ pnpm add @oobe-protocol-labs/synapse-sap-sdk @coral-xyz/anchor @solana/web3.js
 # Using yarn
 yarn add @oobe-protocol-labs/synapse-sap-sdk @coral-xyz/anchor @solana/web3.js
 
+# Using npm
+npm install @oobe-protocol-labs/synapse-sap-sdk @coral-xyz/anchor @solana/web3.js
+
 # Optional: only needed for the plugin adapter (LangChain tools)
 pnpm add zod
 ```
+
+### Version Compatibility
+
+<Callout type="warning">
+**Always use `^0.20.0`** in your `package.json`. Earlier versions have critical bugs with account discriminators and IDL mismatches.
+</Callout>
+
+| SDK Version | Status | Notes |
+|-------------|--------|-------|
+| **0.20.0** | ✅ Latest | Current stable release |
+| 0.19.x | ✅ Stable | Compatible |
+| 0.18.x | ✅ Stable | Compatible |
+| 0.17.1 | ✅ Works | pricing_menu restored |
+| 0.17.0 | ❌ Broken | Missing pricing_menu |
+| 0.16.x | ❌ Broken | IDL mismatch |
+| 0.14–0.15 | ❌ Broken | Wrong discriminators |
+
+---
 
 ## Package Structure
 
@@ -53,7 +83,7 @@ synapse-sap-sdk/src/
 │   ├── vault.ts           VaultModule
 │   ├── escrow.ts          EscrowModule
 │   ├── attestation.ts     AttestationModule
-│   └── ledger.ts          LedgerModule
+│   └── ledger.ts          LedgerModule (renamed from staking in v0.20.0)
 ├── registries/
 │   ├── discovery.ts       DiscoveryRegistry
 │   ├── x402.ts            X402Registry
@@ -68,13 +98,13 @@ synapse-sap-sdk/src/
 │   ├── seeds.ts           PDA seed prefixes
 │   └── limits.ts          On-chain size/count limits
 ├── pda/
-│   └── index.ts           All PDA derivation functions
+│   └── index.ts           All PDA derivation functions (17 total)
 ├── events/
-│   └── index.ts           EventParser
+│   └── index.ts           EventParser (38 events decoded)
 ├── errors/
-│   └── index.ts           Typed error handling
+│   └── index.ts           Typed error handling (SapError, SapRpcError, etc.)
 ├── types/
-│   ├── accounts.ts        Deserialized account interfaces
+│   ├── accounts.ts        Deserialized account interfaces (17 parsers)
 │   ├── instructions.ts    Instruction argument DTOs
 │   ├── common.ts          Shared structs
 │   └── enums.ts           Anchor-style enum kinds
@@ -85,6 +115,8 @@ synapse-sap-sdk/src/
 └── idl/
     └── synapse_agent_sap.json  Embedded IDL
 ```
+
+---
 
 ## Module Map
 
@@ -99,7 +131,7 @@ synapse-sap-sdk/src/
 | `VaultModule` | `client.vault` | Encrypted memory |
 | `EscrowModule` | `client.escrow` | Payment escrow |
 | `AttestationModule` | `client.attestation` | Web of trust |
-| `LedgerModule` | `client.ledger` | Ring-buffer memory |
+| `LedgerModule` | `client.ledger` | Ring-buffer memory (renamed from `client.staking` in v0.20.0) |
 
 ### High-Level Registries (Workflow Orchestration)
 
@@ -109,6 +141,44 @@ synapse-sap-sdk/src/
 | `X402Registry` | `client.x402` | Escrow + Agent |
 | `SessionManager` | `client.session` | Vault + Ledger |
 | `AgentBuilder` | `client.builder` | Agent + Indexing + Tools |
+
+### Plugin Adapter
+
+| Component | Access | Description |
+|-----------|--------|-------------|
+| `SynapseAgentKit` | `new SynapseAgentKit(client)` | LangChain adapter with 52 tools |
+| Protocol Handlers | `client.plugin.protocols` | Built-in handlers for Jupiter, Kamino, etc. |
+| Zod Schemas | `client.plugin.schemas` | Input/output validation schemas |
+
+---
+
+## Architecture Overview (v0.20.0)
+
+The SDK is organized into three layers:
+
+```
+@oobe-protocol-labs/synapse-sap-sdk@0.20.0
+├── Domain Modules (8)     # Low-level instruction builders
+│   ├── agent              # Register, update, close agents
+│   ├── escrow             # V2 escrow lifecycle
+│   ├── vault              # Memory vault operations
+│   ├── tools              # Tool publishing + schemas
+│   ├── attestation        # Web-of-trust attestations
+│   ├── dispute            # Dispute filing + resolution
+│   ├── indexing           # Capability/protocol indexes
+│   └── ledger             # Ring buffer memory writes
+│
+├── High-Level Registries (4)  # Abstracted workflows
+│   ├── discovery          # Agent discovery + enrichment
+│   ├── x402               # Payment headers + calls
+│   ├── sessionManager     # Session lifecycle
+│   └── agentBuilder       # Fluent agent registration
+│
+└── Plugin Adapter         # SynapseAgentKit integration
+    └── plugin             # 52 tools for LangChain/ACP
+```
+
+---
 
 ## Conventions
 
@@ -120,3 +190,53 @@ The SDK follows a set of consistent design conventions that make it predictable 
 - **Registries compose, modules dispatch.** If you need fine-grained control, use modules directly. If you want convenience, use registries.
 
 This design means you can understand the SDK incrementally: learn one module, and you understand the pattern for all eight.
+
+---
+
+## Quick Example
+
+```typescript
+import { SapClient } from "@oobe-protocol-labs/synapse-sap-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+
+// Initialize client
+const client = SapClient.from(AnchorProvider.env());
+
+// Register an agent
+const agent = await client.agent.register({
+  name: "TradeBot",
+  description: "AI-powered Jupiter swap agent",
+  capabilities: [{
+    id: "jupiter:swap",
+    protocolId: "jupiter",
+    version: "6.0",
+  }],
+  pricing: [],
+  protocols: ["jupiter", "A2A"],
+});
+
+// Start a session
+const session = await client.session.start("conv-001");
+await client.session.write(session, "User requested SOL to USDC swap");
+
+// Write to ledger
+await client.ledger.write(session, {
+  tool: "jupiter:swap",
+  input: { inputMint: "So11111111111111111111111111111111111111112" },
+});
+```
+
+---
+
+## Next Steps
+
+- **[Quickstart](/docs/sdk/quickstart)** — Build your first agent
+- **[Client Setup](/docs/sdk/client-setup)** — Configure RPC, wallet, clusters
+- **[Agent Builder](/docs/sdk/agent-builder)** — Fluent agent registration API
+- **[PDA Reference](/docs/sdk/pda-reference)** — All 17 PDA derivations
+- **[Plugin Adapter](/docs/sdk/plugin-adapter)** — LangChain integration
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

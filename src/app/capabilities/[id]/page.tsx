@@ -11,6 +11,7 @@ import { Button } from '~/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
 import { CopyableField, SectionHeader, DetailPageShell } from '~/components/ui/explorer';
 import { useGraph, useAgents, useEscrows } from '~/hooks/use-sap';
+import { asText, entityPath } from '~/lib/format';
 
 export default function CapabilityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,25 +25,25 @@ export default function CapabilityDetailPage() {
   const capability = useMemo(() => {
     if (!graphData) return null;
     return graphData.nodes.find(
-      (n) => n.type === 'capability' && (String(n.meta?.capabilityId ?? n.name) === decodedId),
+      (n) => n.type === 'capability' && (asText(n.meta?.capabilityId ?? n.name) === decodedId),
     ) ?? null;
   }, [graphData, decodedId]);
 
   const agents = useMemo(() => {
     if (!capability || !agentsData?.agents) return [];
-    const ownerPdas = capability.meta?.owners ? String(capability.meta.owners).split(', ').filter(Boolean) : [];
+    const ownerPdas = capability.meta?.owners ? asText(capability.meta.owners).split(', ').filter(Boolean) : [];
     return ownerPdas.map((pda) => {
-      const agent = agentsData.agents.find((a) => a.pda === pda);
-      const wallet = agent?.identity?.wallet;
+      const agent = agentsData.agents.find((a) => asText(a.pda) === pda);
+      const wallet = asText(agent?.identity?.wallet);
       /* Escrow data for this agent */
       const agentEscrows = wallet && escrowsData?.escrows
-        ? escrowsData.escrows.filter((e) => e.agentWallet === wallet)
+        ? escrowsData.escrows.filter((e) => asText(e.agentWallet) === wallet)
         : [];
       const totalSettled = agentEscrows.reduce((s, e) => s + Number(e.totalSettled), 0);
       return {
         pda,
         name: agent?.identity?.name ?? null,
-        wallet: wallet ?? null,
+        wallet: wallet || null,
         reputationScore: agent?.identity?.reputationScore ?? 0,
         isActive: agent?.identity?.isActive ?? false,
         totalCallsServed: Number(agent?.identity?.totalCallsServed ?? 0),
@@ -54,7 +55,7 @@ export default function CapabilityDetailPage() {
     }).sort((a, b) => b.totalCallsServed - a.totalCallsServed);
   }, [capability, agentsData, escrowsData]);
 
-  const protocolId = capability?.meta?.protocolId ? String(capability.meta.protocolId) : null;
+  const protocolId = capability?.meta?.protocolId ? asText(capability.meta.protocolId) : null;
   const description = capability?.meta?.description ? String(capability.meta.description) : null;
   const version = capability?.meta?.version ? String(capability.meta.version) : null;
 
@@ -166,9 +167,9 @@ export default function CapabilityDetailPage() {
                 <TableBody>
                   {agents.map((a, i) => (
                     <TableRow
-                      key={a.pda}
+                      key={a.pda || a.wallet || i}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => a.wallet && router.push(`/agents/${a.wallet}`)}
+                      onClick={() => a.wallet && router.push(entityPath('/agents', a.wallet))}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">

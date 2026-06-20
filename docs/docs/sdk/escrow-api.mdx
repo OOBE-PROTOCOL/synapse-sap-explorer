@@ -1,13 +1,11 @@
 ---
 title: Escrow API
-description: V2 escrow system with dispute resolution, settlement security, staking, and subscriptions. Includes deprecated V1 reference.
+description: V2 escrow system with dispute resolution, settlement security, staking, and subscriptions. SDK v0.20.0 aligned.
 ---
 
 # Escrow API
 
-<Callout type="warn">
-**v0.7.0 Breaking Change:** The V1 `EscrowModule` (`client.escrow`) is deprecated. Use `client.escrowV2` for all new integrations. V1 escrows lack settlement security, dispute resolution, and staking support.
-</Callout>
+**SDK Version:** v0.20.0
 
 The SDK provides three escrow-related modules:
 
@@ -17,7 +15,9 @@ The SDK provides three escrow-related modules:
 | `X402Registry` | `client.x402` | **Current** | High-level payment flow (cost estimation, headers, settlement) |
 | `EscrowModule` | `client.escrow` | **Deprecated** | V1 escrow without disputes - use V2 instead |
 
-## EscrowV2Module (v0.7.0)
+---
+
+## EscrowV2Module (v0.20.0)
 
 Access via `client.escrowV2`. Supports settlement security modes, dispute resolution, and pending settlements.
 
@@ -112,36 +112,15 @@ await client.escrowV2.closePendingSettlement(pendingSettlementPda);
 | `DisputeOutcome.AgentWins` | `2` | Agent receives the disputed amount |
 | `DisputeOutcome.AutoReleased` | `3` | Window expired - auto-released to agent |
 
-### V1 to V2 Migration
-
-```typescript
-// Migrate an existing V1 escrow to V2 format
-await client.escrowV2.migrateFromV1(agentWallet);
-```
-
-### Fetch V2 Escrow Data
-
-```typescript
-const escrow = await client.escrowV2.fetch(agentPda, depositor, nonce);
-const escrowOrNull = await client.escrowV2.fetchNullable(escrowPda);
-const pending = await client.escrowV2.fetchPendingSettlement(pendingPda);
-const dispute = await client.escrowV2.fetchDispute(disputePda);
-```
+---
 
 ## X402Registry (High-Level)
-
-<Callout type="info">
-`X402Registry` still works with both V1 and V2 escrows. In v0.7.0, `getBalance()` auto-detects V2 escrows first via `deriveEscrowV2`, falling back to V1.
-</Callout>
 
 Access via `client.x402`. Handles cost estimation, payment preparation, header generation, settlement, and balance tracking.
 
 ### Estimate Cost
 
 ```typescript
-// estimateCost reads the agent's on-chain pricing tiers and volume curve
-// to calculate the total cost for a given number of calls.
-// Returns: { totalCost, effectivePricePerCall, hasVolumeCurve, tiers }
 const estimate = await client.x402.estimateCost(
   agentWallet,  // PublicKey: the agent you want to pay
   100,          // number of calls you plan to make
@@ -157,8 +136,6 @@ console.log(estimate.hasVolumeCurve);                 // has tiered pricing?
 Creates escrow and deposits funds in a single transaction:
 
 ```typescript
-// preparePayment sends one Solana TX: creates escrow PDA + deposits lamports.
-// Returns a PaymentContext with all the derived PDAs needed for headers.
 const ctx = await client.x402.preparePayment(agentWallet, {
   pricePerCall: 1_000,           // lamports per call (number, string, or BN)
   maxCalls: 500,                 // max calls allowed (0 = unlimited)
@@ -170,22 +147,11 @@ const ctx = await client.x402.preparePayment(agentWallet, {
 });
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `pricePerCall` | `number or string or BN` | Required | Base price per call |
-| `maxCalls` | `number or string or BN` | 0 | Max calls (0 = unlimited) |
-| `deposit` | `number or string or BN` | Required | Initial deposit amount |
-| `expiresAt` | `number or string or BN` | 0 | Unix timestamp (0 = never) |
-| `volumeCurve` | `Array` | Empty | Volume discount breakpoints |
-| `tokenMint` | `PublicKey or null` | null | SPL token mint |
-| `tokenDecimals` | `number` | 9 | Token decimal places |
-
 ### Build Headers
 
 ```typescript
 // From a PaymentContext (returned by preparePayment)
 const headers = client.x402.buildPaymentHeaders(ctx);
-// Returns: { "X-Payment-Protocol", "X-Payment-Escrow", "X-Payment-Depositor", ... }
 
 // From an existing escrow (looks up the PDA on-chain)
 const headers = await client.x402.buildPaymentHeadersFromEscrow(agentWallet);
@@ -194,20 +160,15 @@ const headers = await client.x402.buildPaymentHeadersFromEscrow(agentWallet);
 ### Settle
 
 ```typescript
-// Agent calls settle() to claim payment for calls served.
-// depositorWallet: the client who funded the escrow (identifies which escrow)
-// 5: number of calls to settle
-// "service-data-v1": service data string (auto-hashed to SHA-256)
 const receipt = await client.x402.settle(depositorWallet, 5, "service-data-v1");
 ```
 
 ### Batch Settle
 
 ```typescript
-// settleBatch combines multiple settlements in one TX. Max 10 entries.
 const batch = await client.x402.settleBatch(depositorWallet, [
-  { calls: 3, serviceData: "batch-1" },  // settle 3 calls
-  { calls: 7, serviceData: "batch-2" },  // settle 7 calls
+  { calls: 3, serviceData: "batch-1" },
+  { calls: 7, serviceData: "batch-2" },
 ]);
 ```
 
@@ -226,96 +187,9 @@ const balance = await client.x402.getBalance(agentWallet);
 | `isExpired` | `boolean` | Expiry check |
 | `affordableCalls` | `number` | Calls the budget allows |
 
-### Additional Methods
+---
 
-```typescript
-// Add more funds to an existing escrow (in lamports).
-await client.x402.addFunds(agentWallet, 50_000);
-
-// Withdraw funds from an escrow you own (must be the depositor).
-await client.x402.withdrawFunds(agentWallet, 25_000);
-
-// Close the escrow PDA. Balance must be 0. Reclaims ~0.004 SOL rent.
-await client.x402.closeEscrow(agentWallet);
-
-// Check if an escrow exists for this agent (returns boolean).
-const exists = await client.x402.hasEscrow(agentWallet);
-
-// Fetch the raw escrow account data (or null if not found).
-const escrow = await client.x402.fetchEscrow(agentWallet);
-
-// Verify a settlement TX by parsing its events.
-const events = await client.x402.verifySettlement(txSignature);
-```
-
-## EscrowModule (Low-Level) - Deprecated
-
-<Callout type="error">
-**Deprecated in v0.7.0.** Use `client.escrowV2` for all new integrations. The V1 `EscrowModule` lacks settlement security modes, dispute resolution, and staking support. Existing V1 escrows can be migrated using `client.escrowV2.migrateFromV1()`.
-</Callout>
-
-Access via `client.escrow`. Direct Anchor instruction wrappers for V1 escrows.
-
-### Create
-
-```typescript
-import { BN } from "@coral-xyz/anchor";
-
-// Low-level: all values must be BN. No automatic type conversion.
-// Use the X402Registry (client.x402) for automatic conversions.
-await client.escrow.create(agentWallet, {
-  pricePerCall: new BN(1_000_000),     // 1,000,000 lamports per call
-  maxCalls: new BN(100),               // max 100 calls (BN(0) = unlimited)
-  initialDeposit: new BN(100_000_000), // deposit 0.1 SOL
-  expiresAt: null,                     // null = never expires
-  volumeCurve: null,                   // null = flat pricing
-  tokenMint: null,                     // null = native SOL
-  tokenDecimals: null,                 // null = defaults to 9 (SOL)
-});
-```
-
-### Deposit
-
-```typescript
-await client.escrow.deposit(agentWallet, new BN(50_000_000));
-```
-
-### Settle
-
-```typescript
-import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
-
-// Low-level settle: requires BN for calls and pre-hashed service data.
-const serviceHash = hashToArray(sha256("service-record-001")); // number[32]
-await client.escrow.settle(
-  depositorWallet,  // PublicKey: the client's wallet
-  new BN(5),        // number of calls to settle
-  serviceHash,      // 32-byte SHA-256 hash
-);
-```
-
-### Batch Settle
-
-```typescript
-// Low-level batch settle: each entry must use BN and pre-hashed service data.
-// Max 10 entries per batch (LIMITS.MAX_BATCH_SETTLEMENTS).
-await client.escrow.settleBatch(depositorWallet, [
-  { callsToSettle: new BN(3), serviceHash: hashToArray(sha256("batch-1")) },
-  { callsToSettle: new BN(7), serviceHash: hashToArray(sha256("batch-2")) },
-]);
-```
-
-### Withdraw and Close
-
-```typescript
-// Withdraw partial funds (must be the depositor).
-await client.escrow.withdraw(agentWallet, new BN(25_000_000));
-
-// Close escrow PDA. Balance must be 0. Reclaims rent to payer.
-await client.escrow.close(agentWallet);
-```
-
-## StakingModule (v0.7.0)
+## StakingModule (v0.20.0)
 
 Access via `client.staking`. Agent collateral staking - not yield, but a trust signal and slashing mechanism.
 
@@ -343,15 +217,9 @@ await client.staking.requestUnstake(agentWallet, new BN(500_000_000));
 await client.staking.completeUnstake(agentWallet);
 ```
 
-### Fetch Stake Data
+---
 
-```typescript
-const stake = await client.staking.fetch(agentPda);
-const stakeOrNull = await client.staking.fetchNullable(agentPda);
-const stakeByPda = await client.staking.fetchByPda(stakePda);
-```
-
-## SubscriptionModule (v0.7.0)
+## SubscriptionModule (v0.20.0)
 
 Access via `client.subscription`. Recurring payment subscriptions with configurable billing intervals.
 
@@ -385,9 +253,15 @@ await client.subscription.cancel(agentWallet, 1);
 await client.subscription.close(agentWallet, 1);
 ```
 
-### Fetch Subscription Data
+---
 
-```typescript
-const sub = await client.subscription.fetch(agentPda, subscriber, subId);
-const subOrNull = await client.subscription.fetchNullable(subscriptionPda);
-```
+## Next Steps
+
+- **[x402 Payments](/docs/core/payments)** — Payment flow diagrams
+- **[Security](/docs/best-practices/security)** — Escrow safety patterns
+- **[Troubleshooting](/docs/best-practices/troubleshooting)** — Common errors
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

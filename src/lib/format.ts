@@ -1,7 +1,122 @@
 
-/** Truncate any address/PDA/signature with ellipsis */
-export function short(s: string, left = 4, right = 4): string {
-  if (!s || s.length <= left + right + 3) return s ?? '';
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function decimalPublicKeyToBase58(decimal: unknown): string | null {
+  const raw = typeof decimal === 'string' || typeof decimal === 'number' || typeof decimal === 'bigint'
+    ? String(decimal)
+    : typeof (decimal as { toString?: unknown })?.toString === 'function'
+      ? (decimal as { toString: () => string }).toString()
+      : '';
+  if (!/^\d+$/.test(raw)) return null;
+
+  let n: bigint;
+  try {
+    n = BigInt(raw);
+  } catch {
+    return null;
+  }
+
+  const bytes = new Array<number>(32).fill(0);
+  for (let i = 31; i >= 0 && n > 0n; i--) {
+    bytes[i] = Number(n & 0xffn);
+    n >>= 8n;
+  }
+  if (n > 0n) return null;
+
+  let value = 0n;
+  for (const byte of bytes) value = (value << 8n) + BigInt(byte);
+
+  let encoded = '';
+  while (value > 0n) {
+    encoded = BASE58_ALPHABET[Number(value % 58n)] + encoded;
+    value /= 58n;
+  }
+
+  for (const byte of bytes) {
+    if (byte === 0) encoded = BASE58_ALPHABET[0] + encoded;
+    else break;
+  }
+
+  return encoded || BASE58_ALPHABET[0];
+}
+
+export function asPublicKeyText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('{') && trimmed.includes('"_bn"')) {
+      try {
+        return asPublicKeyText(JSON.parse(trimmed));
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  if (typeof (value as { toBase58?: unknown }).toBase58 === 'function') {
+    return (value as { toBase58: () => string }).toBase58();
+  }
+  if (typeof (value as { toString?: unknown }).toString === 'function') {
+    const text = (value as { toString: () => string }).toString();
+    if (text && text !== '[object Object]') return text;
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if ('_bn' in obj) {
+      const pubkey = decimalPublicKeyToBase58(obj._bn);
+      if (pubkey) return pubkey;
+    }
+    for (const key of ['address', 'pubkey', 'publicKey', 'pda', 'wallet', 'owner', 'mint', 'agent', 'depositor', 'signature', 'txSignature', 'id']) {
+      const nested = asPublicKeyText(obj[key]);
+      if (nested && nested !== '[object Object]') return nested;
+    }
+  }
+  return '';
+}
+
+/** Convert an arbitrary display value to text without assuming BN objects are addresses. */
+export function asText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  if (typeof (value as { toBase58?: unknown }).toBase58 === 'function') {
+    return (value as { toBase58: () => string }).toBase58();
+  }
+  if (typeof (value as { toString?: unknown }).toString === 'function') {
+    const text = (value as { toString: () => string }).toString();
+    if (text && text !== '[object Object]') return text;
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    for (const key of ['address', 'pubkey', 'publicKey', 'pda', 'wallet', 'owner', 'mint', 'agent', 'depositor', 'signature', 'txSignature', 'id']) {
+      const nested = asPublicKeyText(obj[key]) || asText(obj[key]);
+      if (nested && nested !== '[object Object]') return nested;
+    }
+    try {
+      const json = JSON.stringify(value);
+      return json && json !== '{}' ? json : '';
+    } catch {
+      return '';
+    }
+  }
+  return String(value);
+}
+
+/** URL-safe dynamic route segment from any chain value. */
+export function pathSegment(value: unknown): string {
+  const text = asPublicKeyText(value) || asText(value);
+  return text ? encodeURIComponent(text) : '';
+}
+
+/** Build an internal entity path without leaking [object Object] into hrefs. */
+export function entityPath(base: string, value: unknown): string {
+  const segment = pathSegment(value);
+  return segment ? `${base}/${segment}` : base;
+}
+
+export function short(value: unknown, left = 4, right = 4): string {
+  const s = asPublicKeyText(value) || asText(value);
+  if (!s || s.length <= left + right + 3) return s;
   return `${s.slice(0, left)}…${s.slice(-right)}`;
 }
 
@@ -115,7 +230,8 @@ export function formatTimestamp(ts: string | number | undefined): string {
 }
 
 /** Capitalize first letter */
-export function cap(s: string): string {
+export function cap(value: unknown): string {
+  const s = asText(value);
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -145,19 +261,64 @@ export function parseAnchorEnum(obj: unknown): string {
   return String(obj);
 }
 
+type HashLike =
+  | string
+  | number[]
+  | Uint8Array
+  | ArrayBuffer
+  | { type?: unknown; data?: unknown }
+  | null
+  | undefined;
+
+function hashBytes(input: HashLike): number[] {
+  if (!input) return [];
+  if (typeof input === 'string') {
+    const hex = input.startsWith('0x') ? input.slice(2) : input;
+    if (/^[0-9a-fA-F]+$/.test(hex) && hex.length % 2 === 0) {
+      return Array.from({ length: hex.length / 2 }, (_, i) => parseInt(hex.slice(i * 2, i * 2 + 2), 16));
+    }
+    return [];
+  }
+  if (Array.isArray(input)) return input;
+  if (input instanceof Uint8Array) return Array.from(input);
+  if (input instanceof ArrayBuffer) return Array.from(new Uint8Array(input));
+  if (typeof input === 'object') {
+    const data = (input as { data?: unknown }).data;
+    if (Array.isArray(data)) return data.filter((byte): byte is number => typeof byte === 'number');
+    const nested = hashBytes(data as HashLike);
+    if (nested.length > 0) return nested;
+  }
+  return [];
+}
+
+function hashToHexString(input: HashLike): string {
+  if (typeof input === 'string') {
+    const hex = input.startsWith('0x') ? input.slice(2) : input;
+    return /^[0-9a-fA-F]+$/.test(hex) ? hex.toLowerCase() : '';
+  }
+  const bytes = hashBytes(input);
+  if (bytes.length === 0) return '';
+  const ascii = String.fromCharCode(...bytes);
+  if (/^[0-9a-fA-F]+$/.test(ascii) && ascii.length % 2 === 0) {
+    return ascii.toLowerCase();
+  }
+  return bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** Byte array → short hex preview (first 16 chars + …) */
-export function hashToHex(arr: number[]): string {
-  if (!arr || arr.length === 0) return '—';
-  return arr.map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16) + '…';
+export function hashToHex(arr: HashLike): string {
+  const hex = hashToHexString(arr);
+  if (!hex) return '—';
+  return hex.slice(0, 16) + '…';
 }
 
 /** Byte array → full hex string */
-export function hashToFullHex(arr: number[] | undefined): string {
-  if (!arr || arr.length === 0) return '—';
-  return arr.map((b) => b.toString(16).padStart(2, '0')).join('');
+export function hashToFullHex(arr: HashLike): string {
+  return hashToHexString(arr) || '—';
 }
 
 /** Check if a hash byte array is all zeros */
-export function hashIsEmpty(arr: number[]): boolean {
-  return !arr || arr.every((b: number) => b === 0);
+export function hashIsEmpty(arr: HashLike): boolean {
+  const hex = hashToHexString(arr);
+  return !hex || /^0+$/.test(hex);
 }

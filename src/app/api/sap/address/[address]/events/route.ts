@@ -26,6 +26,7 @@ import { getSapClient, getRpcConfig } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
 import { rawGetTransaction, serializeEventData } from '~/lib/rpc';
 import type { SapEvent, ParsedAnchorEvent } from '~/types/api';
+import { asPublicKeyText } from '~/lib/format';
 
 export type { SapEvent as SapEventRecord };
 
@@ -124,7 +125,8 @@ export async function GET(
   { params }: { params: Promise<{ address: string }> },
 ) {
   try {
-    const { address: addr } = await params;
+    const { address } = await params;
+    const addr = asPublicKeyText(address) || address;
 
     // Validate address
     try {

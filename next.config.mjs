@@ -7,6 +7,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Next 15: serverComponentsExternalPackages moved out of experimental
   serverExternalPackages: [
     '@oobe-protocol-labs/synapse-client-sdk',
@@ -15,6 +18,8 @@ const nextConfig = {
     '@langchain/openai',
     '@langchain/core',
     'langchain',
+    'uuid',
+    'rpc-websockets',
   ],
   // Cache prefetched RSC payloads aggressively so transitions between the app
   // shell and the /docs segment feel instantaneous on repeat hovers/clicks.
@@ -33,6 +38,61 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       '~': resolve(__dirname, 'src'),
+    };
+
+    // Silence webpack warnings from ox/viem/walletconnect dynamic imports
+    if (!isServer) {
+      const originalIgnoreWarnings = config.ignoreWarnings ?? [];
+      config.ignoreWarnings = [
+        ...originalIgnoreWarnings,
+        /Critical dependency: the request of a dependency is an expression/,
+        /ox\/_esm\/tempo/,
+      ];
+    }
+
+    config.watchOptions = {
+      ...(config.watchOptions ?? {}),
+      ignored: [
+        '**/.git/**',
+        '**/.next/**',
+        '**/.pnpm-store/**',
+        '**/node_modules/**',
+        '**/.adal/**',
+        '**/.agents/**',
+        '**/.augment/**',
+        '**/.bob/**',
+        '**/.claude/**',
+        '**/.codebuddy/**',
+        '**/.commandcode/**',
+        '**/.continue/**',
+        '**/.cortex/**',
+        '**/.crush/**',
+        '**/.factory/**',
+        '**/.goose/**',
+        '**/.history/**',
+        '**/.iflow/**',
+        '**/.junie/**',
+        '**/.kilocode/**',
+        '**/.kiro/**',
+        '**/.kode/**',
+        '**/.mcpjam/**',
+        '**/.mux/**',
+        '**/.neovate/**',
+        '**/.openhands/**',
+        '**/.pi/**',
+        '**/.pochi/**',
+        '**/.qoder/**',
+        '**/.qwen/**',
+        '**/.roo/**',
+        '**/.source/**',
+        '**/.superstack/**',
+        '**/.trae/**',
+        '**/.vibe/**',
+        '**/.windsurf/**',
+        '**/.zencoder/**',
+        '**/skills/**',
+        '**/team_docs/**',
+      ],
     };
 
     // @solana/web3.js needs Node builtins disabled in browser

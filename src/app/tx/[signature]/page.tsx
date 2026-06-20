@@ -17,7 +17,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '~/lib/utils';
-import { short, timeAgo } from '~/lib/format';
+import { asText, entityPath, short, timeAgo } from '~/lib/format';
 import { useAgentMapCtx } from '~/providers/sap-data-provider';
 import { Card, CardContent } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
@@ -76,6 +76,27 @@ interface TokenBalanceChange {
 
 interface SapEvent { name: string; data: Record<string, unknown> }
 
+interface SapParsedInstruction {
+  name: string;
+  args: Record<string, unknown> | null;
+  accounts: string[];
+}
+
+interface SapParsedInnerInstruction extends SapParsedInstruction {
+  outerIndex: number;
+  innerIndex: number;
+  programId: string;
+}
+
+interface SapParsedSummary {
+  source: 'sdk' | 'db';
+  signature: string | null;
+  success: boolean | null;
+  instructions: SapParsedInstruction[];
+  innerInstructions: SapParsedInnerInstruction[];
+  events: SapEvent[];
+}
+
 interface TxDetail {
   signature: string;
   slot: number | null;
@@ -90,6 +111,7 @@ interface TxDetail {
   instructions: TxInstruction[];
   logs: string[];
   events: SapEvent[];
+  sapParsed: SapParsedSummary | null;
   balanceChanges: BalanceChange[];
   tokenBalanceChanges: TokenBalanceChange[];
   computeUnitsConsumed: number | null;
@@ -222,7 +244,7 @@ function Row({ label, tip, children }: {
 /* ── Agent label (shown when address matches a known agent) ── */
 function AgentTag({ label, wallet }: { label: string; wallet: string }) {
   return (
-    <Link href={`/agents/${wallet}`}
+    <Link href={entityPath('/agents', wallet)}
           className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors">
       {label}
     </Link>
@@ -233,16 +255,17 @@ function AgentTag({ label, wallet }: { label: string; wallet: string }) {
 function Addr({ pubkey, labels, link = true }: {
   pubkey: string; labels: AddressLabels; link?: boolean;
 }) {
-  const agentLabel = labels[pubkey];
-  const progLabel = PROGRAMS[pubkey];
+  const normalizedPubkey = asText(pubkey);
+  const agentLabel = labels[normalizedPubkey];
+  const progLabel = PROGRAMS[normalizedPubkey];
   return (
     <span className="inline-flex items-center gap-1.5 min-w-0 flex-wrap">
-      <Cp text={pubkey} className="text-xs" />
-      {link && <SolLink path={`/account/${pubkey}`} />}
+      <Cp text={normalizedPubkey} className="text-xs" />
+      {link && <SolLink path={`/account/${encodeURIComponent(normalizedPubkey)}`} />}
       {progLabel && (
         <span className="text-xs text-muted-foreground/60">({progLabel})</span>
       )}
-      {agentLabel && <AgentTag label={agentLabel} wallet={pubkey} />}
+      {agentLabel && <AgentTag label={agentLabel} wallet={normalizedPubkey} />}
     </span>
   );
 }
@@ -563,6 +586,74 @@ function AccountList({ accounts, labels }: { accounts: string[]; labels: Address
   );
 }
 
+function SdkDecodePanel({ sap, labels }: { sap: SapParsedSummary; labels: AddressLabels }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-lg border bg-muted/20 p-3">
+          <p className="text-[11px] text-muted-foreground">Source</p>
+          <p className="mt-1 text-sm font-semibold uppercase text-foreground">{sap.source}</p>
+        </div>
+        <div className="rounded-lg border bg-muted/20 p-3">
+          <p className="text-[11px] text-muted-foreground">SAP Instructions</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-foreground">{sap.instructions.length}</p>
+        </div>
+        <div className="rounded-lg border bg-muted/20 p-3">
+          <p className="text-[11px] text-muted-foreground">Inner SAP CPI</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-foreground">{sap.innerInstructions.length}</p>
+        </div>
+        <div className="rounded-lg border bg-muted/20 p-3">
+          <p className="text-[11px] text-muted-foreground">SDK Events</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-foreground">{sap.events.length}</p>
+        </div>
+      </div>
+
+      {sap.instructions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Canonical Instructions</p>
+          {sap.instructions.map((ix, i) => (
+            <div key={`${ix.name}:${i}`} className="rounded-lg border bg-background p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="font-mono text-xs text-muted-foreground">#{i + 1}</span>
+                <Badge className="bg-primary/15 text-primary border-primary/20">{ix.name}</Badge>
+              </div>
+              {ix.args && Object.keys(ix.args).length > 0 && (
+                <pre className="mb-2 max-h-40 overflow-auto rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+                  {JSON.stringify(ix.args, null, 2)}
+                </pre>
+              )}
+              {ix.accounts.length > 0 && <AccountList accounts={ix.accounts} labels={labels} />}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sap.innerInstructions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Canonical Inner Instructions</p>
+          {sap.innerInstructions.map((ix, i) => (
+            <div key={`${ix.outerIndex}:${ix.innerIndex}:${i}`} className="rounded-lg border bg-background p-3">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-muted-foreground">
+                  outer #{ix.outerIndex + 1} / inner #{ix.innerIndex + 1}
+                </span>
+                <Badge className="bg-primary/15 text-primary border-primary/20">{ix.name}</Badge>
+                <Addr pubkey={ix.programId} labels={labels} />
+              </div>
+              {ix.args && Object.keys(ix.args).length > 0 && (
+                <pre className="mb-2 max-h-40 overflow-auto rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+                  {JSON.stringify(ix.args, null, 2)}
+                </pre>
+              )}
+              {ix.accounts.length > 0 && <AccountList accounts={ix.accounts} labels={labels} />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ════════════════════════════════════════════════════
  *  Log coloring
  * ════════════════════════════════════════════════════ */
@@ -651,6 +742,7 @@ export default function TransactionDetailPage() {
   const cuPerIx   = parsePerIxCU(tx.logs ?? []);
   const solDeltas = (tx.balanceChanges ?? []).filter(b => b.change !== 0);
   const events    = tx.events ?? [];
+  const sapParsed = tx.sapParsed ?? null;
   const logs      = tx.logs ?? [];
   const instructions = tx.instructions ?? [];
   const accountKeys  = tx.accountKeys ?? [];
@@ -793,6 +885,12 @@ export default function TransactionDetailPage() {
           </div>
         </div>
       </Section>
+
+      {sapParsed && (
+        <Section title="SDK Decode" count={sapParsed.instructions.length + sapParsed.innerInstructions.length + sapParsed.events.length} open={true}>
+          <SdkDecodePanel sap={sapParsed} labels={labels} />
+        </Section>
+      )}
 
       {/* ═══ SAP EVENTS ═══ */}
       {events.length > 0 && (

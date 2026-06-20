@@ -1,0 +1,56 @@
+name: Tool Schema Auto-Scanner
+
+on:
+  schedule:
+    # Run every 24 hours at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force re-scan all schemas'
+        required: false
+        default: 'false'
+
+jobs:
+  scan-schemas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: explorer-v1
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: explorer-v1/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run schema scan
+        env:
+          API_URL: ${{ secrets.API_URL || 'http://localhost:3001' }}
+          NEXT_PUBLIC_RPC_URL: ${{ secrets.NEXT_PUBLIC_RPC_URL }}
+          OOBEP_RPC_URL: ${{ secrets.OOBEP_RPC_URL }}
+        run: |
+          pnpm tsx scripts/scan-tool-schemas.ts ${{ github.event.inputs.force == 'true' && '--force' || '' }}
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schema-scan-results-${{ github.run_id }}
+          path: |
+            explorer-v1/*.log
+          retention-days: 7

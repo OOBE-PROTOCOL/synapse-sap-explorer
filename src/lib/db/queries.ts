@@ -1,5 +1,7 @@
-import { eq, desc, sql, and, count, inArray } from 'drizzle-orm';
+import { eq, desc, sql, and, count, inArray, or } from 'drizzle-orm';
 import { db } from '~/db';
+import { conflictUpdateSet, conflictUpdateWhere } from '~/lib/db/upsert';
+import { asPublicKeyText } from '~/lib/format';
 import {
   agents,
   agentStats,
@@ -14,12 +16,17 @@ import {
   transactions,
   txDetails,
   networkSnapshots,
+  agentSnapshots,
+  toolSnapshots,
   syncCursors,
   settlementLedger,
   x402DirectPayments,
   agentMetaplex,
   agentLogos,
   agentEnrichmentCache,
+  entityAliases,
+  agentDirectorySnapshots,
+  dataHealthChecks,
   apiKeys,
   apiRateWindows,
 } from '~/db/schema';
@@ -31,12 +38,24 @@ export async function selectAllAgents() {
 }
 
 export async function selectAgentByWallet(wallet: string) {
-  const rows = await db.select().from(agents).where(eq(agents.wallet, wallet)).limit(1);
+  const normalized = asPublicKeyText(wallet) || wallet;
+  const rows = await db.select().from(agents).where(eq(agents.wallet, normalized)).limit(1);
+  if (rows[0]) return rows[0];
+  if (normalized !== wallet) {
+    const legacyRows = await db.select().from(agents).where(eq(agents.wallet, wallet)).limit(1);
+    return legacyRows[0] ?? null;
+  }
   return rows[0] ?? null;
 }
 
 export async function selectAgentByPda(pda: string) {
-  const rows = await db.select().from(agents).where(eq(agents.pda, pda)).limit(1);
+  const normalized = asPublicKeyText(pda) || pda;
+  const rows = await db.select().from(agents).where(eq(agents.pda, normalized)).limit(1);
+  if (rows[0]) return rows[0];
+  if (normalized !== pda) {
+    const legacyRows = await db.select().from(agents).where(eq(agents.pda, pda)).limit(1);
+    return legacyRows[0] ?? null;
+  }
   return rows[0] ?? null;
 }
 
@@ -46,29 +65,8 @@ export async function upsertAgent(data: typeof agents.$inferInsert) {
     .values(data)
     .onConflictDoUpdate({
       target: agents.pda,
-      set: {
-        wallet: data.wallet,
-        name: data.name,
-        description: data.description,
-        agentId: data.agentId,
-        agentUri: data.agentUri,
-        x402Endpoint: data.x402Endpoint,
-        isActive: data.isActive,
-        bump: data.bump,
-        version: data.version,
-        reputationScore: data.reputationScore,
-        reputationSum: data.reputationSum,
-        totalFeedbacks: data.totalFeedbacks,
-        totalCallsServed: data.totalCallsServed,
-        avgLatencyMs: data.avgLatencyMs,
-        uptimePercent: data.uptimePercent,
-        capabilities: data.capabilities,
-        pricing: data.pricing,
-        protocols: data.protocols,
-        activePlugins: data.activePlugins,
-        updatedAt: new Date(),
-        indexedAt: new Date(),
-      },
+      set: conflictUpdateSet(agents, ['pda', 'createdAt']),
+      setWhere: conflictUpdateWhere(agents, ['pda', 'createdAt', 'indexedAt']),
     });
 }
 
@@ -91,13 +89,8 @@ export async function upsertAgentStats(data: typeof agentStats.$inferInsert) {
     .values(data)
     .onConflictDoUpdate({
       target: agentStats.agentPda,
-      set: {
-        wallet: data.wallet,
-        totalCallsServed: data.totalCallsServed,
-        isActive: data.isActive,
-        bump: data.bump,
-        updatedAt: new Date(),
-      },
+      set: conflictUpdateSet(agentStats, ['agentPda']),
+      setWhere: conflictUpdateWhere(agentStats, ['agentPda']),
     });
 }
 
@@ -112,33 +105,83 @@ export async function selectToolByPda(pda: string) {
   return rows[0] ?? null;
 }
 
+export async function selectAddressEntities(address: string) {
+  const normalized = asPublicKeyText(address) || address;
+
+  const agentRows = await db
+    .select()
+    .from(agents)
+    .where(or(eq(agents.pda, normalized), eq(agents.wallet, normalized)))
+    .limit(4);
+
+  const agentPdas = Array.from(new Set([
+    normalized,
+    ...agentRows.map((agent) => agent.pda).filter(Boolean),
+  ]));
+
+  const [toolRows, escrowRows, attestationRows, feedbackRows, vaultRows] = await Promise.all([
+    db
+      .select()
+      .from(tools)
+      .where(or(eq(tools.pda, normalized), inArray(tools.agentPda, agentPdas)))
+      .limit(250),
+    db
+      .select()
+      .from(escrows)
+      .where(or(
+        eq(escrows.pda, normalized),
+        inArray(escrows.agentPda, agentPdas),
+        eq(escrows.depositor, normalized),
+        eq(escrows.agentWallet, normalized),
+      ))
+      .orderBy(desc(escrows.indexedAt))
+      .limit(250),
+    db
+      .select()
+      .from(attestations)
+      .where(or(
+        eq(attestations.pda, normalized),
+        inArray(attestations.agentPda, agentPdas),
+        eq(attestations.attester, normalized),
+      ))
+      .orderBy(desc(attestations.indexedAt))
+      .limit(250),
+    db
+      .select()
+      .from(feedbacks)
+      .where(or(
+        eq(feedbacks.pda, normalized),
+        inArray(feedbacks.agentPda, agentPdas),
+        eq(feedbacks.reviewer, normalized),
+      ))
+      .orderBy(desc(feedbacks.indexedAt))
+      .limit(250),
+    db
+      .select()
+      .from(vaults)
+      .where(or(eq(vaults.pda, normalized), inArray(vaults.agentPda, agentPdas)))
+      .orderBy(desc(vaults.indexedAt))
+      .limit(250),
+  ]);
+
+  return {
+    agents: agentRows,
+    tools: toolRows,
+    escrows: escrowRows,
+    attestations: attestationRows,
+    feedbacks: feedbackRows,
+    vaults: vaultRows,
+  };
+}
+
 export async function upsertTool(data: typeof tools.$inferInsert) {
   return db
     .insert(tools)
     .values(data)
     .onConflictDoUpdate({
       target: tools.pda,
-      set: {
-        agentPda: data.agentPda,
-        toolName: data.toolName,
-        toolNameHash: data.toolNameHash,
-        protocolHash: data.protocolHash,
-        descriptionHash: data.descriptionHash,
-        inputSchemaHash: data.inputSchemaHash,
-        outputSchemaHash: data.outputSchemaHash,
-        httpMethod: data.httpMethod,
-        category: data.category,
-        paramsCount: data.paramsCount,
-        requiredParams: data.requiredParams,
-        isCompound: data.isCompound,
-        isActive: data.isActive,
-        totalInvocations: data.totalInvocations,
-        version: data.version,
-        previousVersion: data.previousVersion,
-        bump: data.bump,
-        updatedAt: new Date(),
-        indexedAt: new Date(),
-      },
+      set: conflictUpdateSet(tools, ['pda', 'createdAt']),
+      setWhere: conflictUpdateWhere(tools, ['pda', 'createdAt', 'indexedAt']),
     });
 }
 
@@ -164,25 +207,8 @@ export async function upsertEscrow(data: typeof escrows.$inferInsert) {
     .values(data)
     .onConflictDoUpdate({
       target: escrows.pda,
-      set: {
-        agentPda: data.agentPda,
-        depositor: data.depositor,
-        agentWallet: data.agentWallet,
-        balance: data.balance,
-        totalDeposited: data.totalDeposited,
-        totalSettled: data.totalSettled,
-        totalCallsSettled: data.totalCallsSettled,
-        pricePerCall: data.pricePerCall,
-        maxCalls: data.maxCalls,
-        tokenMint: data.tokenMint,
-        tokenDecimals: data.tokenDecimals,
-        volumeCurve: data.volumeCurve,
-        status: data.status,
-        closedAt: data.closedAt,
-        lastSettledAt: data.lastSettledAt,
-        expiresAt: data.expiresAt,
-        indexedAt: new Date(),
-      },
+      set: conflictUpdateSet(escrows, ['pda', 'createdAt']),
+      setWhere: conflictUpdateWhere(escrows, ['pda', 'createdAt', 'indexedAt']),
     });
 }
 
@@ -251,15 +277,8 @@ export async function upsertAttestation(data: typeof attestations.$inferInsert) 
     .values(data)
     .onConflictDoUpdate({
       target: attestations.pda,
-      set: {
-        agentPda: data.agentPda,
-        attester: data.attester,
-        attestationType: data.attestationType,
-        isActive: data.isActive,
-        metadataHash: data.metadataHash,
-        expiresAt: data.expiresAt,
-        indexedAt: new Date(),
-      },
+      set: conflictUpdateSet(attestations, ['pda', 'createdAt']),
+      setWhere: conflictUpdateWhere(attestations, ['pda', 'createdAt', 'indexedAt']),
     });
 }
 
@@ -280,16 +299,8 @@ export async function upsertFeedback(data: typeof feedbacks.$inferInsert) {
     .values(data)
     .onConflictDoUpdate({
       target: feedbacks.pda,
-      set: {
-        agentPda: data.agentPda,
-        reviewer: data.reviewer,
-        score: data.score,
-        tag: data.tag,
-        isRevoked: data.isRevoked,
-        commentHash: data.commentHash,
-        updatedAt: new Date(),
-        indexedAt: new Date(),
-      },
+      set: conflictUpdateSet(feedbacks, ['pda', 'createdAt']),
+      setWhere: conflictUpdateWhere(feedbacks, ['pda', 'createdAt', 'indexedAt']),
     });
 }
 
@@ -310,16 +321,8 @@ export async function upsertVault(data: typeof vaults.$inferInsert) {
     .values(data)
     .onConflictDoUpdate({
       target: vaults.pda,
-      set: {
-        agentPda: data.agentPda,
-        wallet: data.wallet,
-        totalSessions: data.totalSessions,
-        totalInscriptions: data.totalInscriptions,
-        totalBytesInscribed: data.totalBytesInscribed,
-        nonceVersion: data.nonceVersion,
-        protocolVersion: data.protocolVersion,
-        indexedAt: new Date(),
-      },
+      set: conflictUpdateSet(vaults, ['pda', 'createdAt']),
+      setWhere: conflictUpdateWhere(vaults, ['pda', 'createdAt', 'indexedAt']),
     });
 }
 
@@ -330,8 +333,12 @@ export async function upsertVaults(dataArr: (typeof vaults.$inferInsert)[]) {
 
 /* ── Transactions ─────────────────────────────── */
 
-export async function selectTransactions(limit = 50, offset = 0) {
-  return db
+export async function selectTransactions(
+  limit = 50,
+  offset = 0,
+  opts: { includeDetails?: boolean } = {},
+) {
+  const rows = await db
     .select({
       signature: transactions.signature,
       slot: transactions.slot,
@@ -349,15 +356,39 @@ export async function selectTransactions(limit = 50, offset = 0) {
       signerBalanceChange: transactions.signerBalanceChange,
       version: transactions.version,
       indexedAt: transactions.indexedAt,
+      accountKeys: sql<null>`NULL`,
+      tokenBalanceChanges: sql<null>`NULL`,
+      balanceChanges: sql<null>`NULL`,
+    })
+    .from(transactions)
+    .orderBy(desc(transactions.slot))
+    .limit(limit)
+    .offset(offset);
+
+  if (rows.length === 0 || opts.includeDetails === false) return rows;
+
+  const signatures = rows.map((row) => row.signature);
+  const detailRows = await db
+    .select({
+      signature: txDetails.signature,
       accountKeys: txDetails.accountKeys,
       tokenBalanceChanges: txDetails.tokenBalanceChanges,
       balanceChanges: txDetails.balanceChanges,
     })
-    .from(transactions)
-    .leftJoin(txDetails, eq(transactions.signature, txDetails.signature))
-    .orderBy(desc(transactions.slot))
-    .limit(limit)
-    .offset(offset);
+    .from(txDetails)
+    .where(inArray(txDetails.signature, signatures));
+
+  const detailsBySignature = new Map(detailRows.map((row) => [row.signature, row]));
+  return rows.map((row) => {
+    const details = detailsBySignature.get(row.signature);
+    if (!details) return row;
+    return {
+      ...row,
+      accountKeys: details.accountKeys,
+      tokenBalanceChanges: details.tokenBalanceChanges,
+      balanceChanges: details.balanceChanges,
+    };
+  });
 }
 
 export async function countTransactions() {
@@ -397,6 +428,11 @@ export async function upsertTransaction(data: typeof transactions.$inferInsert) 
         version: data.version,
         indexedAt: new Date(),
       },
+      setWhere: sql`${transactions.instructionCount} = 0
+        OR ${transactions.signer} IS NULL
+        OR ${transactions.computeUnits} IS NULL
+        OR ${transactions.programs}::text = '[]'
+        OR array_length(${transactions.sapInstructions}, 1) IS NULL`,
     });
 }
 
@@ -449,6 +485,9 @@ export async function upsertTxDetail(data: typeof txDetails.$inferInsert) {
         computeUnits: data.computeUnits,
         indexedAt: new Date(),
       },
+      setWhere: sql`array_length(${txDetails.logs}, 1) IS NULL
+        OR jsonb_array_length(${txDetails.instructions}) = 0
+        OR jsonb_array_length(${txDetails.accountKeys}) = 0`,
     });
 }
 
@@ -706,6 +745,179 @@ export async function getAgentRevenueSeries(agentPda: string, days = 30) {
     .orderBy(sql`DATE_TRUNC('day', ${settlementLedger.blockTime}) ASC`);
 }
 
+export type AgentRevenueSnapshot = {
+  agentPda: string;
+  volume24hLamports: string;
+  volume7dLamports: string;
+  totalSettledLamports: string;
+  totalDepositedLamports: string;
+  calls24h: string;
+  calls7d: string;
+  totalCalls: string;
+  tx24h: number;
+  tx7d: number;
+  escrowCount: number;
+  activeEscrows: number;
+  daily: Array<{
+    day: string;
+    totalLamports: string;
+    totalCalls: string;
+    txCount: number;
+  }>;
+};
+
+/**
+ * Batched settlement/revenue snapshots for agent directory cards.
+ * Immutable settlement rows are aggregated once per API response so the UI
+ * can rank merchants and draw sparklines without N+1 per-card requests.
+ */
+export async function getAgentRevenueSnapshots(days = 14) {
+  const lookbackDays = Math.max(1, Math.min(days, 90));
+  const [summaryRes, dailyRes, escrowDailyRes, rankingRes] = await Promise.allSettled([
+    db.select({
+      agentPda: settlementLedger.agentPda,
+      volume24hLamports: sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}) FILTER (WHERE ${settlementLedger.blockTime} >= NOW() - INTERVAL '24 hours'), '0')`,
+      volume7dLamports: sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}) FILTER (WHERE ${settlementLedger.blockTime} >= NOW() - INTERVAL '7 days'), '0')`,
+      calls24h: sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}) FILTER (WHERE ${settlementLedger.blockTime} >= NOW() - INTERVAL '24 hours'), '0')`,
+      calls7d: sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}) FILTER (WHERE ${settlementLedger.blockTime} >= NOW() - INTERVAL '7 days'), '0')`,
+      tx24h: sql<number>`COUNT(DISTINCT ${settlementLedger.signature}) FILTER (WHERE ${settlementLedger.blockTime} >= NOW() - INTERVAL '24 hours')::int`,
+      tx7d: sql<number>`COUNT(DISTINCT ${settlementLedger.signature}) FILTER (WHERE ${settlementLedger.blockTime} >= NOW() - INTERVAL '7 days')::int`,
+    })
+      .from(settlementLedger)
+      .where(sql`${settlementLedger.blockTime} >= NOW() - INTERVAL '7 days'`)
+      .groupBy(settlementLedger.agentPda),
+    db.select({
+      agentPda: settlementLedger.agentPda,
+      day: sql<string>`DATE_TRUNC('day', ${settlementLedger.blockTime}) AT TIME ZONE 'UTC'`,
+      totalLamports: sql<string>`COALESCE(SUM(${settlementLedger.amountLamports}), '0')`,
+      totalCalls: sql<string>`COALESCE(SUM(${settlementLedger.callsSettled}), '0')`,
+      txCount: sql<number>`COUNT(DISTINCT ${settlementLedger.signature})::int`,
+    })
+      .from(settlementLedger)
+      .where(sql`${settlementLedger.blockTime} >= NOW() - INTERVAL '${sql.raw(String(lookbackDays))} days'`)
+      .groupBy(settlementLedger.agentPda, sql`DATE_TRUNC('day', ${settlementLedger.blockTime})`)
+      .orderBy(settlementLedger.agentPda, sql`DATE_TRUNC('day', ${settlementLedger.blockTime}) ASC`),
+    db.select({
+      agentPda: escrows.agentPda,
+      day: sql<string>`DATE_TRUNC('day', COALESCE(${escrows.lastSettledAt}, ${escrows.createdAt}, ${escrows.indexedAt})) AT TIME ZONE 'UTC'`,
+      totalLamports: sql<string>`COALESCE(SUM(${escrows.totalSettled}), '0')`,
+      totalCalls: sql<string>`COALESCE(SUM(${escrows.totalCallsSettled}), '0')`,
+      txCount: sql<number>`COUNT(*)::int`,
+    })
+      .from(escrows)
+      .where(and(
+        sql`${escrows.totalSettled}::numeric > 0`,
+        sql`COALESCE(${escrows.lastSettledAt}, ${escrows.createdAt}, ${escrows.indexedAt}) >= NOW() - INTERVAL '${sql.raw(String(lookbackDays))} days'`,
+      ))
+      .groupBy(escrows.agentPda, sql`DATE_TRUNC('day', COALESCE(${escrows.lastSettledAt}, ${escrows.createdAt}, ${escrows.indexedAt}))`)
+      .orderBy(escrows.agentPda, sql`DATE_TRUNC('day', COALESCE(${escrows.lastSettledAt}, ${escrows.createdAt}, ${escrows.indexedAt})) ASC`),
+    getAgentRevenueRanking(500),
+  ]);
+  const summaryRows = summaryRes.status === 'fulfilled' ? summaryRes.value : [];
+  const dailyRows = dailyRes.status === 'fulfilled' ? dailyRes.value : [];
+  const escrowDailyRows = escrowDailyRes.status === 'fulfilled' ? escrowDailyRes.value : [];
+  const revenueRanking = rankingRes.status === 'fulfilled' ? rankingRes.value : [];
+
+  const map = new Map<string, AgentRevenueSnapshot>();
+  for (const stats of revenueRanking) {
+    const normalized = asPublicKeyText(stats.agentPda);
+    if (!normalized) continue;
+    map.set(normalized, {
+      agentPda: normalized,
+      volume24hLamports: '0',
+      volume7dLamports: stats.totalSettled,
+      totalSettledLamports: stats.totalSettled,
+      totalDepositedLamports: '0',
+      calls24h: '0',
+      calls7d: stats.totalCalls,
+      totalCalls: stats.totalCalls,
+      tx24h: 0,
+      tx7d: 0,
+      escrowCount: stats.escrowCount,
+      activeEscrows: 0,
+      daily: [],
+    });
+  }
+
+  for (const row of summaryRows) {
+    const agentPda = asPublicKeyText(row.agentPda);
+    if (!agentPda) continue;
+    const current = map.get(agentPda);
+    map.set(agentPda, {
+      agentPda,
+      volume24hLamports: row.volume24hLamports ?? '0',
+      volume7dLamports: row.volume7dLamports ?? '0',
+      totalSettledLamports: current?.totalSettledLamports ?? row.volume7dLamports ?? '0',
+      totalDepositedLamports: current?.totalDepositedLamports ?? '0',
+      calls24h: row.calls24h ?? '0',
+      calls7d: row.calls7d ?? '0',
+      totalCalls: current?.totalCalls ?? row.calls7d ?? '0',
+      tx24h: Number(row.tx24h ?? 0),
+      tx7d: Number(row.tx7d ?? 0),
+      escrowCount: current?.escrowCount ?? 0,
+      activeEscrows: current?.activeEscrows ?? 0,
+      daily: current?.daily ?? [],
+    });
+  }
+
+  for (const row of dailyRows) {
+    const agentPda = asPublicKeyText(row.agentPda);
+    if (!agentPda) continue;
+    const current = map.get(agentPda) ?? {
+      agentPda,
+      volume24hLamports: '0',
+      volume7dLamports: '0',
+      totalSettledLamports: '0',
+      totalDepositedLamports: '0',
+      calls24h: '0',
+      calls7d: '0',
+      totalCalls: '0',
+      tx24h: 0,
+      tx7d: 0,
+      escrowCount: 0,
+      activeEscrows: 0,
+      daily: [],
+    };
+    current.daily.push({
+      day: String(row.day),
+      totalLamports: row.totalLamports ?? '0',
+      totalCalls: row.totalCalls ?? '0',
+      txCount: Number(row.txCount ?? 0),
+    });
+    map.set(agentPda, current);
+  }
+
+  const agentsWithLedgerDaily = new Set(dailyRows.map((row) => asPublicKeyText(row.agentPda)).filter(Boolean));
+  for (const row of escrowDailyRows) {
+    const agentPda = asPublicKeyText(row.agentPda);
+    if (!agentPda || agentsWithLedgerDaily.has(agentPda)) continue;
+    const current = map.get(agentPda) ?? {
+      agentPda,
+      volume24hLamports: '0',
+      volume7dLamports: '0',
+      totalSettledLamports: '0',
+      totalDepositedLamports: '0',
+      calls24h: '0',
+      calls7d: '0',
+      totalCalls: '0',
+      tx24h: 0,
+      tx7d: 0,
+      escrowCount: 0,
+      activeEscrows: 0,
+      daily: [],
+    };
+    current.daily.push({
+      day: String(row.day),
+      totalLamports: row.totalLamports ?? '0',
+      totalCalls: row.totalCalls ?? '0',
+      txCount: Number(row.txCount ?? 0),
+    });
+    map.set(agentPda, current);
+  }
+
+  return map;
+}
+
 /* ── Network Health ───────────────────────────── */
 
 /**
@@ -898,6 +1110,139 @@ export async function selectSnapshotHistory(days = 30) {
     .orderBy(networkSnapshots.capturedAt);
 }
 
+/* ── Account Snapshot Activity ────────────────── */
+
+export type AgentActivityPoint = {
+  agentPda: string;
+  capturedAt: Date;
+  totalCallsServed: string;
+  avgLatencyMs: number;
+  uptimePercent: number;
+};
+
+export type ToolActivityPoint = {
+  toolPda: string;
+  capturedAt: Date;
+  totalInvocations: string;
+};
+
+export type NetworkActivityPoint = {
+  capturedAt: Date;
+  agents: number;
+  activeAgents: number;
+  tools: number;
+  totalCallsServed: string;
+  totalInvocations: string;
+  transactions: number;
+  feeLamports: string;
+};
+
+export async function selectAgentActivity(agentPdas: readonly string[], limit = 200): Promise<AgentActivityPoint[]> {
+  const normalized = agentPdas.map((item) => asPublicKeyText(item)).filter((item): item is string => Boolean(item));
+  if (normalized.length === 0) return [];
+  const rows = await db.select({
+    agentPda: agentSnapshots.agentPda,
+    capturedAt: agentSnapshots.capturedAt,
+    totalCallsServed: sql<string>`COALESCE(NULLIF(${agentSnapshots.payload}->>'totalCallsServed', ''), '0')`,
+    avgLatencyMs: sql<number>`COALESCE(NULLIF(${agentSnapshots.payload}->>'avgLatencyMs', '')::numeric, 0)::float`,
+    uptimePercent: sql<number>`COALESCE(NULLIF(${agentSnapshots.payload}->>'uptimePercent', '')::numeric, 0)::float`,
+  })
+    .from(agentSnapshots)
+    .where(inArray(agentSnapshots.agentPda, normalized))
+    .orderBy(desc(agentSnapshots.capturedAt))
+    .limit(limit);
+
+  return rows.map((row) => ({ ...row, capturedAt: dateValue(row.capturedAt) }));
+}
+
+export async function selectToolActivity(toolPdas: readonly string[], limit = 200): Promise<ToolActivityPoint[]> {
+  const normalized = toolPdas.map((item) => asPublicKeyText(item)).filter((item): item is string => Boolean(item));
+  if (normalized.length === 0) return [];
+  const rows = await db.select({
+    toolPda: toolSnapshots.toolPda,
+    capturedAt: toolSnapshots.capturedAt,
+    totalInvocations: sql<string>`COALESCE(NULLIF(${toolSnapshots.payload}->>'totalInvocations', ''), '0')`,
+  })
+    .from(toolSnapshots)
+    .where(inArray(toolSnapshots.toolPda, normalized))
+    .orderBy(desc(toolSnapshots.capturedAt))
+    .limit(limit);
+
+  return rows.map((row) => ({ ...row, capturedAt: dateValue(row.capturedAt) }));
+}
+
+export async function selectNetworkActivity(limit = 96): Promise<NetworkActivityPoint[]> {
+  const [snapshotRows, toolRows, txRows] = await Promise.all([
+    db.select({
+      capturedAt: sql<Date>`date_trunc('minute', ${agentSnapshots.capturedAt})`,
+      agents: sql<number>`COUNT(*)::int`,
+      activeAgents: sql<number>`COUNT(*) FILTER (WHERE (${agentSnapshots.payload}->>'isActive')::boolean = true)::int`,
+      totalCallsServed: sql<string>`COALESCE(SUM(NULLIF(${agentSnapshots.payload}->>'totalCallsServed', '')::numeric), 0)::text`,
+    })
+      .from(agentSnapshots)
+      .groupBy(sql`date_trunc('minute', ${agentSnapshots.capturedAt})`)
+      .orderBy(desc(sql`date_trunc('minute', ${agentSnapshots.capturedAt})`))
+      .limit(limit),
+    db.select({
+      capturedAt: sql<Date>`date_trunc('minute', ${toolSnapshots.capturedAt})`,
+      tools: sql<number>`COUNT(*)::int`,
+      totalInvocations: sql<string>`COALESCE(SUM(NULLIF(${toolSnapshots.payload}->>'totalInvocations', '')::numeric), 0)::text`,
+    })
+      .from(toolSnapshots)
+      .groupBy(sql`date_trunc('minute', ${toolSnapshots.capturedAt})`)
+      .orderBy(desc(sql`date_trunc('minute', ${toolSnapshots.capturedAt})`))
+      .limit(limit),
+    db.select({
+      capturedAt: sql<Date>`date_trunc('minute', COALESCE(${transactions.blockTime}, ${transactions.indexedAt}))`,
+      transactions: sql<number>`COUNT(*)::int`,
+      feeLamports: sql<string>`COALESCE(SUM(${transactions.fee}), 0)::text`,
+    })
+      .from(transactions)
+      .groupBy(sql`date_trunc('minute', COALESCE(${transactions.blockTime}, ${transactions.indexedAt}))`)
+      .orderBy(desc(sql`date_trunc('minute', COALESCE(${transactions.blockTime}, ${transactions.indexedAt}))`))
+      .limit(limit),
+  ]);
+
+  const byTime = new Map<string, NetworkActivityPoint>();
+  for (const row of snapshotRows) {
+    const capturedAt = dateValue(row.capturedAt);
+    byTime.set(capturedAt.toISOString(), {
+      capturedAt,
+      agents: Number(row.agents ?? 0),
+      activeAgents: Number(row.activeAgents ?? 0),
+      tools: 0,
+      totalCallsServed: row.totalCallsServed ?? '0',
+      totalInvocations: '0',
+      transactions: 0,
+      feeLamports: '0',
+    });
+  }
+  for (const row of toolRows) {
+    const capturedAt = dateValue(row.capturedAt);
+    const key = capturedAt.toISOString();
+    const current = byTime.get(key) ?? emptyNetworkActivity(capturedAt);
+    byTime.set(key, {
+      ...current,
+      tools: Number(row.tools ?? 0),
+      totalInvocations: row.totalInvocations ?? '0',
+    });
+  }
+  for (const row of txRows) {
+    const capturedAt = dateValue(row.capturedAt);
+    const key = capturedAt.toISOString();
+    const current = byTime.get(key) ?? emptyNetworkActivity(capturedAt);
+    byTime.set(key, {
+      ...current,
+      transactions: Number(row.transactions ?? 0),
+      feeLamports: row.feeLamports ?? '0',
+    });
+  }
+
+  return [...byTime.values()]
+    .sort((a, b) => a.capturedAt.getTime() - b.capturedAt.getTime())
+    .slice(-limit);
+}
+
 /* ── Depositor Profile ────────────────────────── */
 
 /** Get full depositor portfolio — all escrows for a given depositor */
@@ -1009,6 +1354,60 @@ export async function selectToolSchemaCounts() {
     .groupBy(toolSchemas.toolPda);
 }
 
+export async function selectToolStatsByAgent() {
+  const schemaRows = await db
+    .select({
+      agentPda: toolSchemas.agentPda,
+      distinctTools: sql<number>`COUNT(DISTINCT ${toolSchemas.toolPda})::int`,
+      schemaCount: sql<number>`COUNT(*)::int`,
+    })
+    .from(toolSchemas)
+    .groupBy(toolSchemas.agentPda);
+
+  const eventRows = await db
+    .select({
+      agentPda: toolEvents.agentPda,
+      distinctTools: sql<number>`COUNT(DISTINCT ${toolEvents.toolPda})::int`,
+      eventCount: sql<number>`COUNT(*)::int`,
+    })
+    .from(toolEvents)
+    .groupBy(toolEvents.agentPda);
+
+  const byAgent = new Map<string, {
+    agentPda: string;
+    distinctTools: number;
+    schemaCount: number;
+    eventCount: number;
+  }>();
+
+  for (const row of schemaRows) {
+    const agentPda = asPublicKeyText(row.agentPda);
+    if (!agentPda) continue;
+    byAgent.set(agentPda, {
+      agentPda,
+      distinctTools: Number(row.distinctTools ?? 0),
+      schemaCount: Number(row.schemaCount ?? 0),
+      eventCount: 0,
+    });
+  }
+
+  for (const row of eventRows) {
+    const agentPda = asPublicKeyText(row.agentPda);
+    if (!agentPda) continue;
+    const current = byAgent.get(agentPda) ?? {
+      agentPda,
+      distinctTools: 0,
+      schemaCount: 0,
+      eventCount: 0,
+    };
+    current.distinctTools = Math.max(current.distinctTools, Number(row.distinctTools ?? 0));
+    current.eventCount = Number(row.eventCount ?? 0);
+    byAgent.set(agentPda, current);
+  }
+
+  return Array.from(byAgent.values());
+}
+
 export async function upsertToolSchema(data: typeof toolSchemas.$inferInsert) {
   // Unique on (tool_pda, schema_type, version)
   try {
@@ -1079,32 +1478,157 @@ export async function selectAgentMetaplex(wallet: string) {
   return rows[0] ?? null;
 }
 
+export async function selectAgentMetaplexBatch(wallets: string[]) {
+  if (wallets.length === 0) return [] as Array<typeof agentMetaplex.$inferSelect>;
+  return db
+    .select()
+    .from(agentMetaplex)
+    .where(inArray(agentMetaplex.wallet, wallets));
+}
+
 export async function selectAllAgentMetaplex() {
   return db.select().from(agentMetaplex);
 }
 
 export async function upsertAgentMetaplex(data: typeof agentMetaplex.$inferInsert) {
   const now = new Date();
+  const hasIncomingSignal = Boolean(
+    data.linked ||
+    data.asset ||
+    (data.pluginCount ?? 0) > 0 ||
+    (data.registryCount ?? 0) > 0,
+  );
+  const keepExistingSignal = sql<boolean>`
+    ${agentMetaplex.linked}
+    OR ${agentMetaplex.asset} IS NOT NULL
+    OR ${agentMetaplex.pluginCount} > 0
+    OR ${agentMetaplex.registryCount} > 0
+  `;
   return db
     .insert(agentMetaplex)
     .values({ ...data, refreshedAt: now, updatedAt: now })
     .onConflictDoUpdate({
       target: agentMetaplex.wallet,
       set: {
-        sapAgentPda: data.sapAgentPda ?? null,
-        asset: data.asset ?? null,
-        linked: data.linked ?? false,
-        pluginCount: data.pluginCount ?? 0,
-        registryCount: data.registryCount ?? 0,
-        agentIdentityUri: data.agentIdentityUri ?? null,
-        registration: data.registration ?? null,
-        registryAgents: data.registryAgents ?? [],
+        sapAgentPda: hasIncomingSignal
+          ? (data.sapAgentPda ?? null)
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.sapAgentPda} ELSE ${data.sapAgentPda ?? null} END`,
+        asset: hasIncomingSignal
+          ? (data.asset ?? null)
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.asset} ELSE NULL END`,
+        linked: hasIncomingSignal
+          ? (data.linked ?? false)
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.linked} ELSE FALSE END`,
+        pluginCount: hasIncomingSignal
+          ? (data.pluginCount ?? 0)
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.pluginCount} ELSE 0 END`,
+        registryCount: hasIncomingSignal
+          ? (data.registryCount ?? 0)
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.registryCount} ELSE 0 END`,
+        agentIdentityUri: hasIncomingSignal
+          ? (data.agentIdentityUri ?? null)
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.agentIdentityUri} ELSE NULL END`,
+        registration: hasIncomingSignal
+          ? (data.registration ?? null)
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.registration} ELSE NULL END`,
+        registryAgents: hasIncomingSignal
+          ? (data.registryAgents ?? [])
+          : sql`CASE WHEN ${keepExistingSignal} THEN ${agentMetaplex.registryAgents} ELSE '[]'::jsonb END`,
         source: data.source ?? 'unknown',
         error: data.error ?? null,
         refreshedAt: now,
         updatedAt: now,
       },
     });
+}
+
+/* ── Truth Layer: Entity Aliases + Directory Snapshots ─── */
+
+export type EntityAliasInsert = typeof entityAliases.$inferInsert;
+export type AgentDirectorySnapshotInsert = typeof agentDirectorySnapshots.$inferInsert;
+
+export async function upsertEntityAliases(rows: EntityAliasInsert[]) {
+  if (rows.length === 0) return;
+  const now = new Date();
+  await db
+    .insert(entityAliases)
+    .values(rows.map((row) => ({
+      ...row,
+      firstSeenAt: row.firstSeenAt ?? now,
+      lastSeenAt: now,
+    })))
+    .onConflictDoUpdate({
+      target: entityAliases.alias,
+      set: {
+        entityType: sql`excluded.entity_type`,
+        canonical: sql`excluded.canonical`,
+        relation: sql`excluded.relation`,
+        source: sql`excluded.source`,
+        confidence: sql`GREATEST(${entityAliases.confidence}, excluded.confidence)`,
+        metadata: sql`${entityAliases.metadata} || excluded.metadata`,
+        lastSeenAt: now,
+      },
+      setWhere: sql`
+        ${entityAliases.canonical} IS DISTINCT FROM excluded.canonical
+        OR ${entityAliases.relation} IS DISTINCT FROM excluded.relation
+        OR ${entityAliases.entityType} IS DISTINCT FROM excluded.entity_type
+        OR ${entityAliases.metadata} IS DISTINCT FROM (${entityAliases.metadata} || excluded.metadata)
+      `,
+    });
+}
+
+export async function upsertAgentDirectorySnapshots(rows: AgentDirectorySnapshotInsert[]) {
+  if (rows.length === 0) return;
+  const now = new Date();
+  await db
+    .insert(agentDirectorySnapshots)
+    .values(rows.map((row) => ({
+      ...row,
+      verifiedAt: row.verifiedAt ?? now,
+      updatedAt: now,
+    })))
+    .onConflictDoUpdate({
+      target: agentDirectorySnapshots.agentPda,
+      set: {
+        wallet: sql`excluded.wallet`,
+        name: sql`excluded.name`,
+        isActive: sql`excluded.is_active`,
+        isMerchant: sql`excluded.is_merchant`,
+        hasMetaplex: sql`excluded.has_metaplex`,
+        toolCount: sql`excluded.tool_count`,
+        volume24hLamports: sql`excluded.volume_24h_lamports`,
+        volume7dLamports: sql`excluded.volume_7d_lamports`,
+        totalSettledLamports: sql`excluded.total_settled_lamports`,
+        calls7d: sql`excluded.calls_7d`,
+        totalCalls: sql`excluded.total_calls`,
+        healthScore: sql`excluded.health_score`,
+        activityScore: sql`excluded.activity_score`,
+        payload: sql`excluded.payload`,
+        sources: sql`excluded.sources`,
+        verifiedAt: sql`excluded.verified_at`,
+        updatedAt: now,
+      },
+      setWhere: sql`
+        ${agentDirectorySnapshots.payload} IS DISTINCT FROM excluded.payload
+        OR ${agentDirectorySnapshots.activityScore} IS DISTINCT FROM excluded.activity_score
+        OR ${agentDirectorySnapshots.sources} IS DISTINCT FROM excluded.sources
+      `,
+    });
+}
+
+export async function selectAgentDirectorySnapshots(limit = 200) {
+  return db
+    .select()
+    .from(agentDirectorySnapshots)
+    .orderBy(
+      sql`${agentDirectorySnapshots.activityScore} DESC`,
+      desc(agentDirectorySnapshots.verifiedAt),
+    )
+    .limit(limit);
+}
+
+export async function insertDataHealthCheck(data: typeof dataHealthChecks.$inferInsert) {
+  return db.insert(dataHealthChecks).values(data).returning({ id: dataHealthChecks.id });
 }
 
 /* ── Agent Logos ─────────────────────────────── */
@@ -1174,4 +1698,21 @@ export async function upsertAgentEnrichment(
         updatedAt: now,
       },
     });
+}
+
+function dateValue(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+function emptyNetworkActivity(capturedAt: Date): NetworkActivityPoint {
+  return {
+    capturedAt,
+    agents: 0,
+    activeAgents: 0,
+    tools: 0,
+    totalCallsServed: '0',
+    totalInvocations: '0',
+    transactions: 0,
+    feeLamports: '0',
+  };
 }

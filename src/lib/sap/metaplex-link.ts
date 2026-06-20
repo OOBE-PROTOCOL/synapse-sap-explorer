@@ -24,7 +24,7 @@
  * ────────────────────────────────────────────────────────── */
 
 import { PublicKey, Keypair, Transaction } from '@solana/web3.js';
-import { deriveAgent } from '@oobe-protocol-labs/synapse-sap-sdk/pda';
+import { deriveAgent } from './sdk-compat';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { publicKey as umiPublicKey, type Umi } from '@metaplex-foundation/umi';
 import {
@@ -38,7 +38,7 @@ import { SAP_EXPLORER_BASE_URL } from '../constants';
 import type {
   RegisterAgentInput,
   TripleCheckResult,
-} from '@oobe-protocol-labs/synapse-sap-sdk/registries';
+} from './sdk-compat';
 
 /* ── Types ─────────────────────────────────────────────── */
 

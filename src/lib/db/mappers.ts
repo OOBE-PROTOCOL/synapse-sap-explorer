@@ -22,6 +22,7 @@ import type {
   ApiTxPayload,
 } from '~/types/api';
 import type { SerializedDiscoveredAgent, SerializedDiscoveredTool, SerializedPluginRef } from '~/types/sap';
+import { asPublicKeyText } from '~/lib/format';
 
 /* ── Types ────────────────────────────────────── */
 type AgentRow = InferSelectModel<typeof agents>;
@@ -33,19 +34,35 @@ type FeedbackRow = InferSelectModel<typeof feedbacks>;
 type VaultRow = InferSelectModel<typeof vaults>;
 type TxRow = InferSelectModel<typeof transactions>;
 
+function chainDate(value: unknown): Date | undefined {
+  if (value == null || value === '0' || value === 0) return undefined;
+  if (value instanceof Date) return value;
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) {
+    return new Date((n > 1e12 ? n : n * 1000));
+  }
+  if (typeof value === 'string') {
+    const ms = Date.parse(value);
+    if (Number.isFinite(ms)) return new Date(ms);
+  }
+  return undefined;
+}
+
 /* ── Agents ───────────────────────────────────── */
 
 export function dbAgentToApi(row: AgentRow) {
   const capabilities = (row.capabilities ?? []) as Capability[];
   const pricing = (row.pricing ?? []) as PricingTier[];
   const protocols = (row.protocols ?? []) as string[];
+  const pda = asPublicKeyText(row.pda);
+  const wallet = asPublicKeyText(row.wallet);
 
   return {
-    pda: row.pda,
+    pda,
     identity: {
       bump: row.bump,
       version: row.version,
-      wallet: row.wallet,
+      wallet,
       name: row.name,
       description: row.description,
       agentId: row.agentId,
@@ -98,13 +115,18 @@ export function apiAgentToDb(agent: ApiAgentPayload | SerializedDiscoveredAgent)
   uptimePercent: number;
   capabilities: Capability[];
   pricing: PricingTier[];
-  protocols: string[];
-  activePlugins: ActivePlugin[];
-} {
-  const id = agent.identity ?? {};
-  return {
-    pda: agent.pda,
-    wallet: id.wallet ?? '',
+	  protocols: string[];
+	  activePlugins: ActivePlugin[];
+	  createdAt?: Date;
+	  updatedAt?: Date;
+	  indexedAt?: Date;
+	} {
+	  const id = agent.identity ?? {};
+	  const createdAt = chainDate((id as { createdAt?: unknown }).createdAt);
+	  const updatedAt = chainDate((id as { updatedAt?: unknown }).updatedAt);
+	  return {
+	    pda: asPublicKeyText(agent.pda),
+	    wallet: asPublicKeyText(id.wallet),
     name: id.name ?? '',
     description: id.description ?? '',
     agentId: id.agentId ?? null,
@@ -120,20 +142,25 @@ export function apiAgentToDb(agent: ApiAgentPayload | SerializedDiscoveredAgent)
     avgLatencyMs: id.avgLatencyMs ?? 0,
     uptimePercent: id.uptimePercent ?? 0,
     capabilities: (id.capabilities ?? []) as unknown as Capability[],
-    pricing: (id.pricing ?? []) as unknown as PricingTier[],
-    protocols: id.protocols ?? [],
-    activePlugins: (id.activePlugins ?? []) as unknown as ActivePlugin[],
-  };
-}
+	    pricing: (id.pricing ?? []) as unknown as PricingTier[],
+	    protocols: id.protocols ?? [],
+	    activePlugins: (id.activePlugins ?? []) as unknown as ActivePlugin[],
+	    ...(createdAt ? { createdAt } : {}),
+	    ...(updatedAt ? { updatedAt } : {}),
+	    indexedAt: new Date(),
+	  };
+	}
 
 /* ── Tools ────────────────────────────────────── */
 
 export function dbToolToApi(row: ToolRow) {
+  const pda = asPublicKeyText(row.pda);
+  const agentPda = asPublicKeyText(row.agentPda);
   return {
-    pda: row.pda,
+    pda,
     descriptor: {
       bump: row.bump,
-      agent: row.agentPda,
+      agent: agentPda,
       toolNameHash: [],
       toolName: row.toolName,
       protocolHash: row.protocolHash ? [row.protocolHash] : [],
@@ -158,8 +185,8 @@ export function dbToolToApi(row: ToolRow) {
 export function apiToolToDb(tool: ApiToolDescriptorPayload | SerializedDiscoveredTool) {
   const d = tool.descriptor ?? {};
   return {
-    pda: tool.pda,
-    agentPda: typeof d.agent === 'string' ? d.agent : (d.agent?.toBase58?.() ?? ''),
+    pda: asPublicKeyText(tool.pda),
+    agentPda: asPublicKeyText((d as { agent?: unknown }).agent),
     toolName: d.toolName ?? '',
     toolNameHash: Array.isArray(d.toolNameHash)
       ? Buffer.from(d.toolNameHash).toString('hex')
@@ -193,10 +220,10 @@ export function apiToolToDb(tool: ApiToolDescriptorPayload | SerializedDiscovere
 
 export function dbEscrowToApi(row: EscrowRow) {
   return {
-    pda: row.pda,
-    agent: row.agentPda,
-    depositor: row.depositor,
-    agentWallet: row.agentWallet,
+    pda: asPublicKeyText(row.pda),
+    agent: asPublicKeyText(row.agentPda),
+    depositor: asPublicKeyText(row.depositor),
+    agentWallet: asPublicKeyText(row.agentWallet),
     balance: row.balance,
     totalDeposited: row.totalDeposited,
     totalSettled: row.totalSettled,
@@ -208,32 +235,34 @@ export function dbEscrowToApi(row: EscrowRow) {
     closedAt: row.closedAt?.toISOString?.() ?? null,
     lastSettledAt: row.lastSettledAt?.toISOString?.() ?? '0',
     expiresAt: row.expiresAt?.toISOString?.() ?? '0',
-    tokenMint: row.tokenMint,
+    tokenMint: row.tokenMint ? asPublicKeyText(row.tokenMint) : row.tokenMint,
     tokenDecimals: row.tokenDecimals,
     volumeCurve: row.volumeCurve ?? [],
+    metadata: null,
   };
 }
 
 export function apiEscrowToDb(e: ApiEscrowPayload) {
   return {
-    pda: e.pda,
-    agentPda: e.agent ?? '',
-    depositor: e.depositor ?? '',
-    agentWallet: e.agentWallet ?? '',
+    pda: asPublicKeyText(e.pda),
+    agentPda: asPublicKeyText(e.agent),
+    depositor: asPublicKeyText(e.depositor),
+    agentWallet: asPublicKeyText(e.agentWallet),
     balance: String(e.balance ?? '0'),
     totalDeposited: String(e.totalDeposited ?? '0'),
     totalSettled: String(e.totalSettled ?? '0'),
     totalCallsSettled: String(e.totalCallsSettled ?? '0'),
     pricePerCall: String(e.pricePerCall ?? '0'),
     maxCalls: String(e.maxCalls ?? '0'),
-    tokenMint: e.tokenMint ?? null,
+    status: e.status ?? 'active',
+    tokenMint: e.tokenMint ? asPublicKeyText(e.tokenMint) : null,
     tokenDecimals: e.tokenDecimals ?? 9,
     volumeCurve: e.volumeCurve ?? [],
-    status: e.status ?? 'active',
-    createdAt: e.createdAt && e.createdAt !== '0' ? new Date(Number(e.createdAt) * 1000) : new Date(),
-    closedAt: e.closedAt ? new Date(e.closedAt) : null,
-    lastSettledAt: e.lastSettledAt && e.lastSettledAt !== '0' ? new Date(Number(e.lastSettledAt) * 1000) : null,
-    expiresAt: e.expiresAt && e.expiresAt !== '0' ? new Date(Number(e.expiresAt) * 1000) : null,
+    createdAt: chainDate(e.createdAt),
+    closedAt: chainDate(e.closedAt),
+    lastSettledAt: chainDate(e.lastSettledAt),
+    expiresAt: chainDate(e.expiresAt),
+    indexedAt: new Date(),
   };
 }
 
@@ -242,18 +271,18 @@ export function apiEscrowToDb(e: ApiEscrowPayload) {
 export function dbEscrowEventToApi(row: EscrowEventRow) {
   return {
     id: row.id,
-    escrowPda: row.escrowPda,
+    escrowPda: asPublicKeyText(row.escrowPda),
     txSignature: row.txSignature,
     eventType: row.eventType,
     slot: row.slot,
     blockTime: row.blockTime?.toISOString?.() ?? null,
-    signer: row.signer,
+    signer: row.signer ? asPublicKeyText(row.signer) : null,
     balanceBefore: row.balanceBefore,
     balanceAfter: row.balanceAfter,
     amountChanged: row.amountChanged,
     callsSettled: row.callsSettled,
-    agentPda: row.agentPda,
-    depositor: row.depositor,
+    agentPda: row.agentPda ? asPublicKeyText(row.agentPda) : null,
+    depositor: row.depositor ? asPublicKeyText(row.depositor) : null,
     indexedAt: row.indexedAt?.toISOString?.() ?? new Date().toISOString(),
   };
 }
@@ -262,9 +291,9 @@ export function dbEscrowEventToApi(row: EscrowEventRow) {
 
 export function dbAttestationToApi(row: AttestationRow) {
   return {
-    pda: row.pda,
-    agent: row.agentPda,
-    attester: row.attester,
+    pda: asPublicKeyText(row.pda),
+    agent: asPublicKeyText(row.agentPda),
+    attester: asPublicKeyText(row.attester),
     attestationType: row.attestationType,
     isActive: row.isActive,
     createdAt: row.createdAt?.toISOString?.() ?? '0',
@@ -275,9 +304,9 @@ export function dbAttestationToApi(row: AttestationRow) {
 
 export function apiAttestationToDb(a: ApiAttestationPayload) {
   return {
-    pda: a.pda,
-    agentPda: a.agent ?? '',
-    attester: a.attester ?? '',
+    pda: asPublicKeyText(a.pda),
+    agentPda: asPublicKeyText(a.agent),
+    attester: asPublicKeyText(a.attester),
     attestationType: a.attestationType ?? '',
     isActive: a.isActive ?? false,
     metadataHash: a.metadataHash ?? null,
@@ -290,9 +319,9 @@ export function apiAttestationToDb(a: ApiAttestationPayload) {
 
 export function dbFeedbackToApi(row: FeedbackRow) {
   return {
-    pda: row.pda,
-    agent: row.agentPda,
-    reviewer: row.reviewer,
+    pda: asPublicKeyText(row.pda),
+    agent: asPublicKeyText(row.agentPda),
+    reviewer: asPublicKeyText(row.reviewer),
     score: row.score,
     tag: row.tag,
     isRevoked: row.isRevoked,
@@ -304,9 +333,9 @@ export function dbFeedbackToApi(row: FeedbackRow) {
 
 export function apiFeedbackToDb(f: ApiFeedbackPayload) {
   return {
-    pda: f.pda,
-    agentPda: f.agent ?? '',
-    reviewer: f.reviewer ?? '',
+    pda: asPublicKeyText(f.pda),
+    agentPda: asPublicKeyText(f.agent),
+    reviewer: asPublicKeyText(f.reviewer),
     score: f.score ?? 0,
     tag: f.tag ?? '',
     isRevoked: f.isRevoked ?? false,
@@ -320,9 +349,9 @@ export function apiFeedbackToDb(f: ApiFeedbackPayload) {
 
 export function dbVaultToApi(row: VaultRow) {
   return {
-    pda: row.pda,
-    agent: row.agentPda,
-    wallet: row.wallet,
+    pda: asPublicKeyText(row.pda),
+    agent: asPublicKeyText(row.agentPda),
+    wallet: asPublicKeyText(row.wallet),
     totalSessions: row.totalSessions,
     totalInscriptions: row.totalInscriptions,
     totalBytesInscribed: row.totalBytesInscribed,
@@ -334,9 +363,9 @@ export function dbVaultToApi(row: VaultRow) {
 
 export function apiVaultToDb(v: ApiVaultPayload) {
   return {
-    pda: v.pda,
-    agentPda: v.agent ?? '',
-    wallet: v.wallet ?? '',
+    pda: asPublicKeyText(v.pda),
+    agentPda: asPublicKeyText(v.agent),
+    wallet: asPublicKeyText(v.wallet),
     totalSessions: v.totalSessions ?? 0,
     totalInscriptions: String(v.totalInscriptions ?? '0'),
     totalBytesInscribed: String(v.totalBytesInscribed ?? '0'),

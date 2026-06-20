@@ -1,13 +1,17 @@
 ---
 title: SessionManager
-description: Unified memory API that orchestrates vault, session, and ledger operations behind a single interface.
+description: Unified memory API that orchestrates vault, session, and ledger operations behind a single interface. SDK v0.20.0 aligned.
 ---
 
 # SessionManager
 
+**SDK Version:** v0.20.0
+
 The `SessionManager` is the recommended way to work with agent memory. It wraps the vault and ledger modules into a single cohesive API that handles all setup automatically.
 
 Access via `client.session`.
+
+---
 
 ## Type Reference
 
@@ -52,6 +56,8 @@ interface SessionStatus {
 }
 ```
 
+---
+
 ## How It Works
 
 ```
@@ -65,7 +71,9 @@ client.session.start("conversation-123")
 SessionContext { sessionPda, ledgerPda, vaultPda, agentPda, ... }
 ```
 
-`start()` is idempotent. It skips any step that has already been completed on-chain. Safe to call multiple times for the same session ID.
+`start()` is idempotent. It skips any step that has already been completed on-chain.
+
+---
 
 ## Start a Session
 
@@ -82,6 +90,8 @@ const ctx = await client.session.start("conversation-123");
 // ctx.wallet        provider wallet
 ```
 
+---
+
 ## Write Data
 
 ```typescript
@@ -95,6 +105,8 @@ console.log("Size:", result.dataSize, "bytes");
 await client.session.write(ctx, Buffer.from([0x01, 0x02, 0x03]));
 ```
 
+---
+
 ## Read Latest
 
 Reads from the ring buffer using `getAccountInfo()`. This is free on any RPC and does not require an archival node.
@@ -107,6 +119,8 @@ for (const entry of entries) {
 }
 ```
 
+---
+
 ## Seal to Permanent Archive
 
 Sealing creates a permanent `LedgerPage` PDA containing a snapshot of the current ring buffer. The ring buffer is then reset for new writes.
@@ -118,7 +132,9 @@ console.log("Sealed page index:", sealResult.pageIndex);
 console.log("TX:", sealResult.txSignature);
 ```
 
-Cost: approximately 0.031 SOL per sealed page.
+**Cost:** approximately 0.031 SOL per sealed page.
+
+---
 
 ## Read Sealed Pages
 
@@ -129,6 +145,8 @@ const pageEntries = await client.session.readPage(ctx, 0);
 // Read all data: sealed pages (oldest) + ring buffer (latest)
 const allEntries = await client.session.readAll(ctx);
 ```
+
+---
 
 ## Get Session Status
 
@@ -145,6 +163,8 @@ console.log("Sealed pages:", status.numPages);
 console.log("Merkle root:", status.merkleRoot);
 ```
 
+---
+
 ## Close Session
 
 Full teardown that closes the ledger and session. Reclaims all rent. Idempotent.
@@ -152,6 +172,8 @@ Full teardown that closes the ledger and session. Reclaims all rent. Idempotent.
 ```typescript
 await client.session.close(ctx);
 ```
+
+---
 
 ## Derive Context Without Creating
 
@@ -161,6 +183,8 @@ If you need the PDAs without creating anything on-chain:
 // Pure computation, no network calls
 const ctx = client.session.deriveContext("conversation-123");
 ```
+
+---
 
 ## Complete Example
 
@@ -190,3 +214,16 @@ console.log(`${status.totalEntries} entries, ${status.numPages} sealed pages`);
 // Cleanup when done
 await client.session.close(ctx);
 ```
+
+---
+
+## Next Steps
+
+- **[Memory Systems](/docs/core/memory-systems)** — Architecture overview
+- **[Vault Delegation](/docs/best-practices/security)** — Security patterns
+- **[Ledger Pages](/docs/core/on-chain-reference)** — Account structures
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

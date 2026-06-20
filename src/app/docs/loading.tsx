@@ -6,7 +6,7 @@
 export default function DocsBoundaryLoading() {
   return (
     <div className="flex min-h-dvh w-full bg-fd-background">
-      <aside className="hidden w-64 border-r border-fd-border/50 p-4 md:block">
+      <aside className="hidden xs:w-1/3 md:w-80 border-r border-fd-border/50 p-4 md:block">
         <div className="space-y-3">
           <div className="h-8 w-full animate-pulse rounded bg-fd-muted/40" />
           <div className="h-4 w-3/4 animate-pulse rounded bg-fd-muted/30" />

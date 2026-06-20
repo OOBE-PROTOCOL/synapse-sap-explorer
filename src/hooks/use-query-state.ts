@@ -78,6 +78,7 @@ export function useQueryState<T>(
   }, []);
 
   const [value, setValueState] = useState<T>(initial);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
 
   // Keep state in sync with back/forward navigation.
   const lastWrittenRef = useRef<string | null>(serializer.serialize(initial));
@@ -89,23 +90,27 @@ export function useQueryState<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  useEffect(() => {
+    if (!pendingUrl) return;
+    router.replace(pendingUrl, { scroll: false });
+    setPendingUrl(null);
+  }, [pendingUrl, router]);
+
   const setValue = useCallback(
     (next: T | ((prev: T) => T)) => {
-      setValueState((prev) => {
-        const computed = typeof next === 'function' ? (next as (p: T) => T)(prev) : next;
-        const serialized = serializer.serialize(computed);
-        // Build next URL from CURRENT searchParams (read fresh each call).
-        const params = new URLSearchParams(window.location.search);
-        if (serialized == null) params.delete(key);
-        else params.set(key, serialized);
-        const qs = params.toString();
-        const url = qs ? `${pathname}?${qs}` : pathname;
-        lastWrittenRef.current = serialized;
-        router.replace(url, { scroll: false });
-        return computed;
-      });
+      const computed = typeof next === 'function' ? (next as (p: T) => T)(value) : next;
+      const serialized = serializer.serialize(computed);
+      // Build next URL from CURRENT searchParams (read fresh each call).
+      const params = new URLSearchParams(window.location.search);
+      if (serialized == null) params.delete(key);
+      else params.set(key, serialized);
+      const qs = params.toString();
+      const url = qs ? `${pathname}?${qs}` : pathname;
+      lastWrittenRef.current = serialized;
+      setValueState(computed);
+      setPendingUrl(url);
     },
-    [key, pathname, router, serializer],
+    [key, pathname, serializer, value],
   );
 
   return [value, setValue];

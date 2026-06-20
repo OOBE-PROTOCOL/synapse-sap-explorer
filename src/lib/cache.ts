@@ -17,6 +17,8 @@ type SwrOpts = {
   ttl?: number;
   /** Stale-while-revalidate window in ms (default 5min) */
   swr?: number;
+  /** Suppress background refresh warnings for non-critical refreshes. */
+  silentRevalidationErrors?: boolean;
 };
 
 const DEFAULT_TTL = 60_000;     // 1 minute
@@ -53,7 +55,9 @@ export async function swr<T>(
           return data;
         })
         .catch((err) => {
-          console.warn('[cache] Background revalidation failed for "%s": %s', key, err?.message);
+          if (!opts?.silentRevalidationErrors) {
+            console.warn('[cache] Background revalidation failed for "%s": %s', key, err?.message);
+          }
           return entry.data; // keep stale
         })
         .finally(() => _inflight.delete(key));
@@ -82,6 +86,11 @@ export async function swr<T>(
 export function peek<T>(key: string): T | undefined {
   const entry = _store.get(key) as CacheEntry<T> | undefined;
   return entry?.data;
+}
+
+/** Store a value explicitly. Useful for last-good route snapshots. */
+export function put<T>(key: string, data: T): void {
+  _store.set(key, { data, ts: Date.now() });
 }
 
 /** Invalidate a specific cache key */

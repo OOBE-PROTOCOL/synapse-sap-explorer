@@ -26,6 +26,7 @@ import {
   Swords,
   Activity,
   Home,
+  Menu,
   Vault,
   X,
 } from 'lucide-react';
@@ -76,6 +77,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Activity',
     items: [
       { href: '/protocol-flow', label: 'Protocol Flow', icon: Activity },
+      { href: '/developer-docs', label: 'Developer Docs', icon: BookOpen },
       { href: '/docs', label: 'Documentation', icon: BookOpen },
     ],
   },
@@ -83,7 +85,7 @@ const NAV_SECTIONS: NavSection[] = [
 
 const NAV_ITEMS = NAV_SECTIONS.flatMap(s => s.items);
 
-/* ── Scroll-aware nav with animated indicator ── */
+/* ── Scroll-aware navigation ── */
 function NavScrollable({ collapsed, isNavActive, pathname }: { collapsed: boolean; isNavActive: (href: string) => boolean; pathname: string }) {
   const ref = React.useRef<HTMLElement>(null);
   const [canScrollDown, setCanScrollDown] = React.useState(false);
@@ -111,7 +113,7 @@ function NavScrollable({ collapsed, isNavActive, pathname }: { collapsed: boolea
   }, [pathname]);
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div className="relative flex-1  flex flex-col overflow-hidden">
       <nav
         ref={ref}
         className={cn('flex-1 overflow-y-auto scrollbar-none', collapsed ? 'px-2 py-3' : 'px-3 py-1')}
@@ -120,11 +122,11 @@ function NavScrollable({ collapsed, isNavActive, pathname }: { collapsed: boolea
           <div key={section.label}>
             {!collapsed ? (
               <div className={cn('flex items-center gap-2 mx-1', sIdx === 0 ? 'mt-2 mb-1.5' : 'mt-5 mb-1.5')}>
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground/80 shrink-0">{section.label}</span>
-                <div className="flex-1 h-px bg-muted-foreground/50" />
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{section.label}</span>
+                <div className="h-px flex-1 bg-border" />
               </div>
             ) : (
-              sIdx > 0 && <div className="my-3 mx-1 h-px bg-muted-foreground/20" />
+              sIdx > 0 && <div className="mx-1 my-3 h-px bg-border" />
             )}
             <div className="space-y-0.5">
               {section.items.map(({ href, label, icon: Icon }) => {
@@ -155,18 +157,12 @@ function NavScrollable({ collapsed, isNavActive, pathname }: { collapsed: boolea
         ))}
       </nav>
 
-      {/* ── Scroll indicator: 3 chevrons pulsing sequentially ── */}
+      {/* ── Scroll indicator ── */}
       {canScrollDown && (
         <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-1 pt-4 pointer-events-none"
           style={{ background: 'linear-gradient(to bottom, transparent, hsl(var(--sidebar-background)) 70%)' }}
         >
-          {[0, 1, 2].map((i) => (
-            <ChevronDown
-              key={i}
-              className="h-3 w-3 text-primary"
-              style={{ animation: `scroll-pulse 1.2s ease-in-out ${i * 0.2}s infinite`, marginTop: i === 0 ? 0 : -4 }}
-            />
-          ))}
+          <ChevronDown className="h-4 w-4 text-primary" />
         </div>
       )}
     </div>
@@ -248,7 +244,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* ── Mobile overlay backdrop ──────────────── */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-[55] bg-black/70 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-[55] bg-foreground/50 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -260,24 +256,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           'sidebar flex flex-col transition-all duration-300',
           /* mobile: hidden by default, becomes fixed overlay drawer when open */
           mobileOpen
-            ? 'fixed inset-y-0 left-0 w-[260px] max-w-[82vw] z-[60] shadow-2xl flex'
+            ? 'fixed inset-y-0 left-0 z-[60] flex w-[280px] max-w-[86vw] shadow-2xl'
             : 'hidden',
           /* desktop: always visible, width depends on collapsed state */
-          collapsed ? 'lg:flex lg:w-[58px]' : 'lg:flex lg:w-[230px]',
+          collapsed ? 'lg:flex lg:w-[72px]' : 'lg:flex lg:w-[268px]',
         )}
       >
         {/* Collapse / expand toggle — visible everywhere */}
         <Button
           variant="outline"
           size="icon"
-          className="hidden lg:flex absolute -right-3 top-20 z-50 h-6 w-6 rounded-full bg-card border-border shadow-sm hover:bg-accent transition-colors items-center justify-center"
+          className="absolute -right-4 top-[50%] z-50 hidden h-9 w-9 items-center justify-center rounded-full border-border bg-card shadow-sm transition-colors hover:bg-accent lg:flex"
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? 'Expand' : 'Collapse'}
         >
           {collapsed ? (
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+            <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
           ) : (
-            <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+            <ChevronLeft className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
           )}
         </Button>
 
@@ -285,14 +281,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div
           className={cn(
             'sidebar-header flex items-center gap-2 transition-all duration-300',
-            effectiveCollapsed ? 'h-12 justify-center px-2' : 'h-14 px-4 lg:px-5',
+            effectiveCollapsed ? 'h-14 justify-center px-2' : 'h-16 px-4 lg:px-5',
           )}
         >
           {/* Brand text: desktop expanded only */}
           {!effectiveCollapsed && !isMobile && (
             <Link href="/" className="truncate flex-1">
-              <span className="text-sm font-bold text-foreground tracking-wide">SYNAPSE</span>
-              <span className="ml-1.5 text-xs font-medium font-sans text-primary uppercase tracking-widest">EXPLORER</span>
+              <Image src="/explorer_logo.png" alt="Synapse Explorer" width={28} height={28} className="inline-block mr-2" />
+              <span className="text-sm font-semibold text-foreground">Synapse</span>
+              <span className="ml-1.5 text-xs font-medium text-primary">Explorer</span>
             </Link>
           )}
           {/* Logo: desktop collapsed */}
@@ -306,15 +303,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <>
               <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
                 <Image src="/explorer_logo.png" alt="Synapse Explorer" width={26} height={26} className="shrink-0" />
-                <span className="text-sm font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
-                <span className="text-xs font-medium text-primary uppercase tracking-widest">Explorer</span>
+                <span className="truncate text-sm font-semibold text-foreground">Synapse</span>
+                <span className="text-xs font-medium text-primary">Explorer</span>
               </Link>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label="Close menu"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </>
           )}
@@ -322,7 +319,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* ── Search ── */}
         {!effectiveCollapsed && (
-          <div className="shrink-0 px-4 pb-3 pt-4">
+          <div className="shrink-0 px-4 pb-3 pt-2 lg:hidden">
             <SearchCommand />
           </div>
         )}
@@ -331,7 +328,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <NavScrollable collapsed={effectiveCollapsed} isNavActive={isNavActive} pathname={pathname} />
 
         {/* ── Sidebar Footer ── */}
-        <div className={cn('sidebar-footer space-y-2', effectiveCollapsed ? 'p-2 pb-3' : 'p-3')}>
+          <div className={cn('sidebar-footer space-y-2', effectiveCollapsed ? 'p-2 pb-3' : 'p-3')}>
           {/* Compact icon row: external links + theme toggle.
               Expanded → horizontal row. Collapsed → vertical stack. */}
           <TooltipProvider delayDuration={150}>
@@ -343,19 +340,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               {[
                 { href: 'https://oobeprotocol.ai', label: 'OOBE Protocol', icon: Globe },
-                { href: 'https://synapse.oobeprotocol.ai', label: 'Synapse RPC Gateway', icon: ExternalLink },
-                { href: 'https://github.com/oobe-protocol/synapse-sap-sdk', label: 'SAP Client SDK', icon: Github },
-                { href: 'https://synapse.oobeprotocol.ai/skills.md', label: 'Skill Manifest', icon: BookOpen },
+                { href: 'https://github.com/oobe-protocol/synapse-sap-sdk', label: 'SDK', icon: Github },
+                { href: '/developer-docs', label: 'Developer Docs', icon: BookOpen },
               ].map(({ href, label, icon: Icon }) => (
                 <Tooltip key={href}>
                   <TooltipTrigger asChild>
                     <a
                       href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      target={href.startsWith('http') ? '_blank' : undefined}
+                      rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
                       aria-label={label}
                       className={cn(
-                        'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors',
+                        'flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                       )}
                     >
                       <Icon className="h-3.5 w-3.5" />
@@ -371,7 +367,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <button
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                     aria-label="Toggle theme"
-                    className="relative flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    className="relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                     <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -384,17 +380,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </TooltipProvider>
 
-          {/* SAP program status pill — visible only when expanded */}
-          {!effectiveCollapsed && (
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-3 py-1.5">
-              <span className="relative flex h-1.5 w-1.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">SAP Program</span>
-              <span className="ml-auto text-[10px] font-mono text-muted-foreground/60">v0.10</span>
-            </div>
-          )}
+          
 
           {/* Wallet connect — primary CTA at bottom of sidebar */}
           <div className={cn('wallet-trigger-sidebar', effectiveCollapsed && 'is-collapsed flex justify-center')}>
@@ -410,44 +396,40 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="lg:hidden flex items-center h-12 px-3 gap-2 bg-card border-b border-border shrink-0">
           <Link href="/" className="flex items-center gap-2 min-w-0 flex-1">
             <Image src="/explorer_logo.png" alt="Synapse Explorer" width={26} height={26} className="shrink-0" />
-            <span className="text-[13px] font-bold text-foreground tracking-wide truncate">SYNAPSE</span>
-            <span className="text-xs font-medium text-primary uppercase tracking-widest hidden xs:inline">Explorer</span>
+            <span className="truncate text-sm font-semibold text-foreground">Synapse</span>
+            <span className="hidden text-xs font-medium text-primary xs:inline">Explorer</span>
           </Link>
           <a
-            href="/api-playground.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-primary hover:bg-accent transition-colors shrink-0"
-            aria-label="Open API docs"
-            title="API Docs"
+            href="/developer-docs"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Open developer docs"
+            title="Developer Docs"
           >
             <BookOpen className="h-4 w-4" />
           </a>
-          <span className="flex items-center gap-1 text-xs text-foreground font-medium uppercase tracking-widest shrink-0">
+          <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             Mainnet
           </span>
           <button
             onClick={() => setMobileOpen(true)}
-            className="flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors -mr-1 shrink-0"
+            className="-mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Open menu"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            <Menu className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
         {/* ── Breadcrumb + Status Bar ── */}
-        <div className="content-topbar hidden lg:flex items-center h-10 px-6 gap-4 bg-card border-b border-border">
+        <div className="content-topbar hidden h-16 items-center gap-4 border-b bg-card px-4 lg:flex">
           {/* Breadcrumbs */}
-          <nav className="flex items-center gap-1 text-[12px] min-w-0">
+          <nav className="flex min-w-0 flex-1 items-center gap-1 text-xs">
             <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
               <Home className="h-3.5 w-3.5" />
             </Link>
             {breadcrumbs.map((crumb, i) => (
               <span key={crumb.href} className="flex items-center gap-1 min-w-0">
-                <ChevronBreadcrumb className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                <ChevronBreadcrumb className="h-3 w-3 text-muted-foreground shrink-0" />
                 {i === breadcrumbs.length - 1 ? (
                   <span className="text-foreground font-medium truncate">{crumb.label}</span>
                 ) : (
@@ -459,25 +441,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
+          <div className="w-[360px] max-w-[34vw] shrink-0">
+            <SearchCommand />
+          </div>
+
           {/* Network status */}
-          <div className="ml-auto flex items-center gap-3 text-xs shrink-0">
+          <div className="flex shrink-0 items-center gap-2 text-xs">
             <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-[data-tick_2s_ease-in-out_infinite]" />
-              <span className="text-foreground font-medium uppercase tracking-widest">Mainnet</span>
+              <svg className="size-4" width="16" height="14" viewBox="0 0 16 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15.9162 11.0381L13.2749 13.809C13.2178 13.8692 13.1486 13.9172 13.0716 13.95C12.9947 13.9829 12.9117 13.9999 12.8277 14H0.306886C0.247168 14 0.188756 13.9829 0.138801 13.9509C0.0888472 13.9189 0.0495192 13.8733 0.0256329 13.8197C0.00174657 13.7662 -0.00566129 13.707 0.00431634 13.6494C0.014294 13.5918 0.0412241 13.5383 0.0818091 13.4954L2.72013 10.7246C2.77725 10.6644 2.84644 10.6164 2.92338 10.5835C3.00031 10.5507 3.08335 10.5336 3.1673 10.5336H15.6881C15.7484 10.5323 15.8077 10.5486 15.8585 10.5803C15.9094 10.6119 15.9495 10.6576 15.9739 10.7115C15.9983 10.7655 16.0058 10.8253 15.9955 10.8834C15.9853 10.9415 15.9577 10.9953 15.9162 11.0381ZM13.2749 5.45712C13.2175 5.39721 13.1483 5.34937 13.0714 5.31652C12.9945 5.28368 12.9116 5.26651 12.8277 5.26608H0.306886C0.247168 5.26611 0.188756 5.28318 0.138801 5.3152C0.0888472 5.34721 0.0495192 5.39279 0.0256329 5.44633C0.00174657 5.49988 -0.00566129 5.55908 0.00431634 5.61669C0.014294 5.67429 0.0412241 5.7278 0.0818091 5.77066L2.72013 8.54294C2.77747 8.60285 2.84671 8.65069 2.92359 8.68354C3.00048 8.71639 3.0834 8.73355 3.1673 8.73398H15.6881C15.7477 8.73367 15.8059 8.71639 15.8557 8.68427C15.9054 8.65214 15.9445 8.60655 15.9682 8.55306C15.9919 8.49957 15.9992 8.44049 15.9891 8.38302C15.9791 8.32554 15.9522 8.27217 15.9117 8.2294L13.2749 5.45712ZM0.306886 3.46651H12.8277C12.9117 3.46644 12.9947 3.44944 13.0716 3.41657C13.1486 3.3837 13.2178 3.33566 13.2749 3.27547L15.9162 0.504645C15.9471 0.472622 15.9705 0.434302 15.9846 0.392425C15.9986 0.350548 16.0031 0.306148 15.9975 0.262399C15.992 0.21865 15.9767 0.176632 15.9527 0.13935C15.9286 0.102067 15.8965 0.0704405 15.8585 0.0467307C15.8076 0.0150784 15.7484 -0.00115781 15.6881 6.42451e-05H3.1673C3.08335 0.000150701 3.00031 0.0171585 2.92338 0.0500271C2.84644 0.0828956 2.77725 0.13092 2.72013 0.191105L0.0818091 2.96193C0.0412241 3.00479 0.014294 3.05829 0.00431634 3.1159C-0.00566129 3.1735 0.00174657 3.2327 0.0256329 3.28625C0.0495192 3.3398 0.0888472 3.38537 0.138801 3.41739C0.188756 3.4494 0.247168 3.46647 0.306886 3.46651Z" fill="url(#_r_6_)"></path><defs><linearGradient id="_r_6_" x1="1.35029" y1="14.334" x2="14.1587" y2="-0.425393" gradientUnits="userSpaceOnUse"><stop offset="0.08" stop-color="#9945FF"></stop><stop offset="0.3" stop-color="#8752F3"></stop><stop offset="0.5" stop-color="#5497D5"></stop><stop offset="0.6" stop-color="#43B4CA"></stop><stop offset="0.72" stop-color="#28E0B9"></stop><stop offset="0.97" stop-color="#14F195"></stop></linearGradient></defs></svg>
+              <span className="font-medium text-foreground">Mainnet</span>
             </div>
             <a
-              href="/api-playground.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+              href="/developer-docs"
+              className="flex h-9 items-center gap-1 rounded-md px-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              API Docs <ExternalLink className="h-2.5 w-2.5" />
+              Developer Docs
             </a>
             <a
               href="https://solscan.io/account/SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+              className="flex h-9 items-center gap-1 rounded-md px-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Solscan <ExternalLink className="h-2.5 w-2.5" />
             </a>
@@ -485,9 +469,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* ── Main Content ── */}
-        <main className={cn('content-main', pathname === '/network' ? 'overflow-hidden' : 'p-3 sm:p-4 lg:p-6')}>
+        <main className={cn('content-main', pathname === '/network' ? 'overflow-hidden' : 'p-2 sm:p-3 lg:p-4')}>
           {pathname === '/network' ? children : (
-            <div className="max-w-[1440px] mx-auto relative">{children}</div>
+            <div className="relative mx-auto w-full max-w-[1600px]">{children}</div>
           )}
         </main>
       </div>

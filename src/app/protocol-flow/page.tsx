@@ -886,8 +886,8 @@ function ArchitectureOverview() {
       color: '--glow',
       description: 'The SAP program runs as compiled BPF bytecode on Solana validators. It processes instructions, validates inputs, mutates state, and emits events.',
       items: [
-        { text: '72 instructions, 13 domains', detail: 'Covers agent lifecycle, memory vaults, escrow settlements, and more in one upgradeable program.' },
-        { text: 'Deep validation engine', detail: 'Every input field is validated at the BPF level before any state mutation. This includes string lengths, format checks, uniqueness, and cross-field constraints.' },
+        { text: '8 domain modules', detail: 'Agent Identity, Trustless Reputation, Web of Trust, x402 Escrow, Tool Registry, Encrypted Memory, Discovery Indexes, Memory Ledger.' },
+        { text: '52 on-chain tools', detail: 'Every domain exposes structured tools with Zod-validated inputs, LLM-friendly descriptions, and automatic type serialization.' },
         { text: 'Checks-effects-interactions', detail: 'The program follows the CEI pattern: validate all inputs first, then mutate state, then emit events. This prevents reentrancy and partial-mutation bugs.' },
       ],
     },
@@ -898,7 +898,7 @@ function ArchitectureOverview() {
       description: 'All on-chain state lives in PDA accounts. Seeds are deterministic, meaning anyone can derive the address of any account without on-chain lookups.',
       items: [
         { text: '22 account types', detail: 'Ranges from the singleton GlobalRegistry to per-agent AgentAccount to per-task SessionLedger. Each account type has fixed seeds and known size.' },
-        { text: 'Ring buffers + TX logs', detail: 'Hot data lives in ring buffer PDAs (MemoryLedger), cold data in TX logs. This two-tier model balances read performance with storage cost.' },
+        { text: 'Two-tier storage', detail: 'Hot data lives in ring buffer PDAs (MemoryLedger 4KB), cold data in TX logs. This balances read performance with storage cost.' },
         { text: 'All closeable except LedgerPage', detail: 'Every PDA can be closed to reclaim rent, except LedgerPage which is permanent, write-once archival storage.' },
       ],
     },
@@ -908,9 +908,9 @@ function ArchitectureOverview() {
       color: '--neon-amber',
       description: 'The indexing layer makes on-chain data queryable. Geyser gRPC streams real-time account updates and transaction events to off-chain databases.',
       items: [
-        { text: 'gRPC Geyser streaming', detail: 'Real-time account and transaction updates via Geyser plugin. Events flow to a PostgreSQL database for the Explorer UI.' },
+        { text: 'Geyser streaming', detail: 'Real-time account and transaction updates via Geyser plugin. Events flow to a PostgreSQL database for the Explorer UI.' },
         { text: 'On-chain index PDAs', detail: 'CapabilityIndex, ProtocolIndex, and ToolCategoryIndex PDAs allow on-chain discovery without off-chain infrastructure.' },
-        { text: 'Hot/cold read paths', detail: 'Hot: getAccountInfo (ring buffers, latest state). Cold: getSignaturesForAddress + getTransaction (full TX log history).' },
+        { text: 'Two read paths', detail: 'Hot: getAccountInfo (ring buffers, latest state). Cold: getSignaturesForAddress + getTransaction (full TX log history).' },
       ],
     },
   ];
@@ -1177,7 +1177,7 @@ export default function ProtocolFlowPage() {
   return (
     <ExplorerPageShell
       title="Protocol Flow"
-      subtitle="Complete SAP lifecycle: 72 instructions, 22 PDA types, 13 domains"
+      subtitle="Complete SAP lifecycle: 8 domain modules, 52 tools, 22 account types"
       icon={<Activity className="h-5 w-5" />}
       badge={
         <Tip content="Total count of all on-chain entities across all lifecycle stages.">
@@ -1189,7 +1189,7 @@ export default function ProtocolFlowPage() {
           <ExplorerMetric icon={<Bot className="h-3.5 w-3.5" />} label="Agents" value={stageCounts.register} accent="primary" />
           <ExplorerMetric icon={<Wrench className="h-3.5 w-3.5" />} label="Tools" value={stageCounts.tools} accent="cyan" />
           <ExplorerMetric icon={<Lock className="h-3.5 w-3.5" />} label="Escrows" value={stageCounts.escrow} accent="emerald" />
-          <ExplorerMetric icon={<FileCode2 className="h-3.5 w-3.5" />} label="Instructions" value={totalInstructions} accent="amber" />
+          <ExplorerMetric icon={<Receipt className="h-3.5 w-3.5" />} label="Receipts" value={stageCounts.receipts} accent="amber" />
         </>
       }
     >

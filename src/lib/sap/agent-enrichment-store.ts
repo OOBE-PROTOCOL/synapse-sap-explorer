@@ -98,7 +98,7 @@ const EMPTY_HARD_TTL_MS = 5 * 60_000;
 
 /* ── Shared SOL price cache (60s) ─────────────────────── */
 let solPriceCache: { price: number | null; ts: number } = { price: null, ts: 0 };
-async function fetchSolPrice(): Promise<number | null> {
+export async function fetchSolPrice(): Promise<number | null> {
   if (Date.now() - solPriceCache.ts < 60_000) return solPriceCache.price;
   try {
     const res = await fetch(

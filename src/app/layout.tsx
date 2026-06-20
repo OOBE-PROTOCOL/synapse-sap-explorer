@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Synapse Explorer — SAP Agent Protocol',
-    description: 'Real-time on-chain explorer for the Synapse Agent Protocol.',
+    description: 'Solana explorer for the Synapse Agent Protocol.',
     images: [`${SITE_URL}/synapse-metadata-logo.png`],
     creator: '@oobeprotocol',
   },
@@ -61,14 +61,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="bg-background" suppressHydrationWarning>
       <body
         className={`${GeistMono.variable} font-mono bg-background text-foreground antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >

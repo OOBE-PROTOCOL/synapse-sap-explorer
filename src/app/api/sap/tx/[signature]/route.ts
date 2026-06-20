@@ -10,13 +10,23 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { BorshInstructionCoder } from '@coral-xyz/anchor';
-import { SAP_IDL } from '@oobe-protocol-labs/synapse-sap-sdk/idl';
+import {
+  parseSapTransactionComplete,
+  SAP_IDL,
+  SAP_PROGRAM_ID as SAP_PROGRAM_PUBLIC_KEY,
+  type ParsedSapTransaction,
+} from '~/lib/sap/sdk-compat';
 import { getSynapseConnection, getSapClient } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
 import { selectTxDetails, upsertTxDetail, upsertTransaction } from '~/lib/db/queries';
 import type { ParsedAnchorEvent, ApiTxInstruction } from '~/types';
 import type { RpcTransactionMessage, RpcTransactionMeta } from '~/types/indexer';
 import type { AccountKey, ParsedInstruction, BalanceChange, TokenBalanceChange } from '~/db/schema';
+
+type RichApiTxInstruction = ApiTxInstruction & {
+  decodedArgs?: Record<string, unknown> | null;
+  parsed?: unknown;
+};
 
 /* ── SAP instruction decoder (v0.4.2 IDL-based) ── */
 const sapCoder = new BorshInstructionCoder(SAP_IDL as unknown as ConstructorParameters<typeof BorshInstructionCoder>[0]);
@@ -100,6 +110,93 @@ function serializeEventData(data: unknown): Record<string, unknown> {
     }
   }
   return out;
+}
+
+function serializeSdkValue(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'bigint') return value.toString();
+  if (Buffer.isBuffer(value)) return { type: 'Buffer', data: Array.from(value) };
+  if (value instanceof Uint8Array) return { type: 'Buffer', data: Array.from(value) };
+  if (typeof (value as { toBase58?: unknown }).toBase58 === 'function') {
+    return (value as { toBase58: () => string }).toBase58();
+  }
+  if (typeof (value as { toNumber?: unknown }).toNumber === 'function') {
+    try { return (value as { toNumber: () => number }).toNumber(); }
+    catch { return (value as { toString: () => string }).toString(); }
+  }
+  if (Array.isArray(value)) return value.map(serializeSdkValue);
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, serializeSdkValue(item)]),
+    );
+  }
+  return String(value);
+}
+
+function serializeSdkObject(value: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!value) return null;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, serializeSdkValue(item)]),
+  );
+}
+
+function serializeSapParsed(parsed: ParsedSapTransaction | null, source: 'sdk' | 'db') {
+  if (!parsed) return null;
+  return {
+    source,
+    signature: parsed.signature,
+    success: parsed.success,
+    instructions: parsed.instructions.map((ix) => ({
+      name: ix.name,
+      args: serializeSdkObject(ix.args),
+      accounts: ix.accounts.map((account) => account.toBase58()),
+    })),
+    innerInstructions: parsed.innerInstructions.map((ix) => ({
+      outerIndex: ix.outerIndex,
+      innerIndex: ix.innerIndex,
+      name: ix.name,
+      args: serializeSdkObject(ix.args),
+      accounts: ix.accounts.map((account) => account.toBase58()),
+      programId: ix.programId.toBase58(),
+    })),
+    events: parsed.events.map((event) => ({
+      name: event.name,
+      data: serializeSdkObject(event.data as Record<string, unknown>),
+    })),
+  };
+}
+
+function buildDbSapParsed(instructions: RichApiTxInstruction[], events: ParsedAnchorEvent[]) {
+  const sapInstructions = instructions
+    .filter((ix) => ix.programId === SAP_PROGRAM_ID)
+    .map((ix) => ({
+      name: ix.type ?? 'Unknown',
+      args: ix.decodedArgs ?? null,
+      accounts: ix.accounts ?? [],
+    }));
+  const innerInstructions = instructions.flatMap((ix, outerIndex) =>
+    ((ix.innerInstructions ?? []) as RichApiTxInstruction[])
+      .filter((inner) => inner.programId === SAP_PROGRAM_ID)
+      .map((inner, innerIndex) => ({
+        outerIndex,
+        innerIndex,
+        name: inner.type ?? 'Unknown',
+        args: inner.decodedArgs ?? null,
+        accounts: inner.accounts ?? [],
+        programId: inner.programId,
+      })),
+  );
+
+  if (sapInstructions.length === 0 && innerInstructions.length === 0 && events.length === 0) return null;
+  return {
+    source: 'db' as const,
+    signature: null,
+    success: null,
+    instructions: sapInstructions,
+    innerInstructions,
+    events,
+  };
 }
 
 /** Extract SAP events from transaction logs using SDK EventParser */
@@ -193,6 +290,14 @@ export async function GET(
           const dbBlockTime = row.blockTime
             ? Math.floor(new Date(row.blockTime).getTime() / 1000)
             : null;
+          const dbInstructions = ((row.instructions ?? []) as Array<Record<string, unknown>>).map((ix) => ({
+            ...ix,
+            innerInstructions: ((ix.innerInstructions as Array<Record<string, unknown>> | undefined) ?? []).map((inner) => ({
+              ...inner,
+              innerInstructions: (inner.innerInstructions as unknown[] | undefined) ?? [],
+            })),
+          })) as unknown as RichApiTxInstruction[];
+          const dbEvents = extractSapEvents(row.logs ?? []);
           return {
             signature: row.signature,
             slot: (row as unknown as { slot?: number | null }).slot ?? null,
@@ -204,15 +309,10 @@ export async function GET(
             version: (row as unknown as { version?: string }).version ?? 'legacy',
             recentBlockhash: null as string | null,
             accountKeys: row.accountKeys ?? [],
-            instructions: ((row.instructions ?? []) as Array<Record<string, unknown>>).map((ix) => ({
-              ...ix,
-              innerInstructions: ((ix.innerInstructions as Array<Record<string, unknown>> | undefined) ?? []).map((inner) => ({
-                ...inner,
-                innerInstructions: (inner.innerInstructions as unknown[] | undefined) ?? [],
-              })),
-            })),
+            instructions: dbInstructions,
             logs: row.logs ?? [],
-            events: extractSapEvents(row.logs ?? []),
+            events: dbEvents,
+            sapParsed: buildDbSapParsed(dbInstructions, dbEvents),
             balanceChanges: row.balanceChanges ?? [],
             tokenBalanceChanges: row.tokenBalanceChanges ?? [],
             computeUnitsConsumed: row.computeUnits,
@@ -307,6 +407,21 @@ export async function GET(
       }
 
       const logs = meta?.logMessages ?? [];
+      const sap = getSapClient();
+      const sdkParsed = (() => {
+        try {
+          return serializeSapParsed(
+            parseSapTransactionComplete(tx, sap.program, SAP_PROGRAM_PUBLIC_KEY, {
+              includeEvents: true,
+              includeInner: true,
+            }),
+            'sdk',
+          );
+        } catch (e) {
+          console.warn(`[tx/${sig}] SDK complete parser failed:`, (e as Error).message);
+          return null;
+        }
+      })();
       const preBalances = meta?.preBalances ?? [];
       const postBalances = meta?.postBalances ?? [];
       const preTokenBalances = meta?.preTokenBalances ?? [];
@@ -347,6 +462,7 @@ export async function GET(
         instructions,
         logs,
         events: extractSapEvents(logs),
+        sapParsed: sdkParsed,
         balanceChanges,
         tokenBalanceChanges,
         computeUnitsConsumed: meta?.computeUnitsConsumed ?? null,

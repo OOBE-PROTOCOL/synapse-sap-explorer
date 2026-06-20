@@ -17,7 +17,7 @@ import {
 } from '~/components/ui/explorer';
 import { useEscrow, useAddressEvents, type SapEvent } from '~/hooks/use-sap';
 import { AgentTag } from '~/components/ui/agent-tag';
-import { formatTokenAmount } from '~/lib/format';
+import { asText, entityPath, formatTokenAmount, short as shortText } from '~/lib/format';
 import { Receipt } from 'lucide-react';
 
 export default function EscrowDetailPage() {
@@ -50,6 +50,7 @@ export default function EscrowDetailPage() {
 
   const dec = escrow.tokenDecimals ?? 9;
   const formatAmount = (v: string | number) => formatTokenAmount(v, dec);
+  const escrowPda = asText(escrow.pda);
   const balance = Number(escrow.balance);
   const isExpired = escrow.expiresAt !== '0' && Number(escrow.expiresAt) * 1000 < Date.now();
   const hasBalance = balance > 0;
@@ -59,7 +60,7 @@ export default function EscrowDetailPage() {
       backHref="/escrows"
       backLabel="All Escrows"
       title="Escrow Account"
-      subtitle={`${escrow.pda.slice(0, 12)}…${escrow.pda.slice(-8)}`}
+      subtitle={shortText(escrowPda, 12, 8)}
       onBack={() => router.push('/escrows')}
       badges={
         <>
@@ -103,19 +104,19 @@ export default function EscrowDetailPage() {
         <CardContent className="pt-6">
           <SectionHeader title="Account Information" />
           <CopyableField label="Escrow PDA" value={escrow.pda} />
-          <CopyableField label="Agent (seller)" value={escrow.agent} href={`/address/${escrow.agent}`} />
+          <CopyableField label="Agent (seller)" value={escrow.agent} href={entityPath('/address', escrow.agent)} />
           <div className="ml-[120px] -mt-1 mb-2">
             <AgentTag address={escrow.agent} className="text-xs" truncate={false} />
           </div>
-          <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={`/address/${escrow.agentWallet}`} />
+          <CopyableField label="Agent Wallet" value={escrow.agentWallet} href={entityPath('/address', escrow.agentWallet)} />
           <div className="ml-[120px] -mt-1 mb-2">
             <AgentTag address={escrow.agentWallet} className="text-xs" truncate={false} />
           </div>
-          <CopyableField label="Depositor (buyer)" value={escrow.depositor} href={`/address/${escrow.depositor}`} />
+          <CopyableField label="Depositor (buyer)" value={escrow.depositor} href={entityPath('/address', escrow.depositor)} />
           <div className="ml-[120px] -mt-1 mb-2">
             <AgentTag address={escrow.depositor} className="text-xs" truncate={false} />
           </div>
-          {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={`/address/${escrow.tokenMint}`} />}
+          {escrow.tokenMint && <CopyableField label="Token Mint" value={escrow.tokenMint} href={entityPath('/address', escrow.tokenMint)} />}
           <CopyableField label="Token Decimals" value={String(escrow.tokenDecimals)} mono={false} />
           <div className="flex items-start justify-between gap-4 py-2.5 border-b border-border/50">
             <span className="text-xs text-muted-foreground shrink-0 min-w-[120px]">Solscan</span>
@@ -315,10 +316,10 @@ function EscrowEventTimeline({
                       )}
                       {ev.txSignature && (
                         <a
-                          href={`/tx/${ev.txSignature}`}
+                          href={entityPath('/tx', ev.txSignature)}
                           className="text-xs font-mono text-primary/70 hover:text-primary transition-colors"
                         >
-                          {ev.txSignature.slice(0, 8)}…
+                          {shortText(ev.txSignature, 8, 4)}
                         </a>
                       )}
                     </div>

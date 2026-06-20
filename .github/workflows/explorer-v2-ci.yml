@@ -1,0 +1,87 @@
+name: Explorer v2 CI
+
+on:
+  pull_request:
+    paths:
+      - 'explorer-v2/**'
+      - '.github/workflows/explorer-v2-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'explorer-v2/**'
+      - '.github/workflows/explorer-v2-ci.yml'
+
+concurrency:
+  group: explorer-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sap_explorer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sap_explorer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sap_explorer
+      INTEGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sap_explorer
+    defaults:
+      run:
+        working-directory: explorer-v2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: explorer-v2/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Migrate database
+        run: pnpm db:migrate
+
+      - name: Check database
+        run: pnpm db:check
+
+      - name: Integration test
+        run: pnpm test:integration
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @sap-explorer/web exec playwright install --with-deps chromium
+
+      - name: End-to-end test
+        run: pnpm test:e2e

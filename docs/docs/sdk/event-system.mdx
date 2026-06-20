@@ -1,20 +1,26 @@
 ---
 title: Event System
-description: Parse and filter on-chain events from SAP program transaction logs.
+description: Parse and filter on-chain events from SAP program transaction logs. SDK v0.20.0 aligned.
 ---
 
 # Event System
 
+**SDK Version:** v0.20.0
+
 The SAP program emits 45 event types through Solana transaction logs. The SDK provides an `EventParser` that decodes these logs into typed objects for real-time monitoring, analytics, and webhooks.
+
+---
 
 ## Why Events?
 
 On-chain accounts show current state but not history. Events capture every state transition: when an agent registered, when an escrow was funded, when a payment was settled. This is essential for:
 
-- **Audit trails**: Prove when and how an action happened.
-- **Real-time dashboards**: Stream events via WebSocket for live updates.
-- **Off-chain sync**: Mirror on-chain state to PostgreSQL (see PostgreSQL Mirror docs).
-- **Webhooks**: Trigger external actions when specific events occur.
+- **Audit trails**: Prove when and how an action happened
+- **Real-time dashboards**: Stream events via WebSocket for live updates
+- **Off-chain sync**: Mirror on-chain state to PostgreSQL
+- **Webhooks**: Trigger external actions when specific events occur
+
+---
 
 ## EventParser
 
@@ -35,8 +41,6 @@ const tx = await client.program.provider.connection.getTransaction(
 );
 
 if (tx?.meta?.logMessages) {
-  // parseLogs decodes all SAP events from the log messages.
-  // Returns an array of { name, data } objects.
   const events = client.events.parseLogs(tx.meta.logMessages);
 
   for (const event of events) {
@@ -49,7 +53,6 @@ if (tx?.meta?.logMessages) {
 ### Filter by Event Name
 
 ```typescript
-// Filter for specific event types.
 const settlements = client.events.filterByName(events, "PaymentSettledEvent");
 
 for (const event of settlements) {
@@ -59,6 +62,8 @@ for (const event of settlements) {
   console.log("Calls:", event.data.callCount);
 }
 ```
+
+---
 
 ## Event Reference
 
@@ -126,15 +131,18 @@ for (const event of settlements) {
 | `ProtocolIndexedEvent` | Agent added to protocol index | `agent`, `protocol` |
 | `ToolCategoryIndexedEvent` | Tool added to category | `tool`, `category` |
 
+---
+
 ## Event Names Constant
 
 ```typescript
 import { SAP_EVENT_NAMES } from "@oobe-protocol-labs/synapse-sap-sdk";
 
 // SAP_EVENT_NAMES is an array of all 45 event name strings.
-// Useful for filtering or building event subscription maps.
 console.log(SAP_EVENT_NAMES.length); // 45
 ```
+
+---
 
 ## WebSocket Streaming
 
@@ -143,7 +151,6 @@ For real-time event monitoring, subscribe to program logs via WebSocket:
 ```typescript
 const connection = client.program.provider.connection;
 
-// Subscribe to all logs from the SAP program.
 const subscriptionId = connection.onLogs(
   client.program.programId,
   (logs) => {
@@ -161,3 +168,16 @@ const subscriptionId = connection.onLogs(
 // Unsubscribe when done
 await connection.removeOnLogsListener(subscriptionId);
 ```
+
+---
+
+## Next Steps
+
+- **[PostgreSQL Mirror](/docs/sdk/postgres-mirror)** — Off-chain event storage
+- **[Transaction Parsing](/docs/explorer/transaction-parsing)** — Explorer event decoding
+- **[Diagrams](/docs/core/diagrams)** — Event flow visualization
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

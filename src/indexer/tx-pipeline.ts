@@ -2,7 +2,8 @@
 import { db } from '~/db';
 import { transactions, txDetails } from '~/db/schema';
 import type { TxProgram, AccountKey, ParsedInstruction, BalanceChange, TokenBalanceChange } from '~/db/schema';
-import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
+import { sql } from 'drizzle-orm';
+import { SAP_PROGRAM_ADDRESS } from '~/lib/sap/sdk-compat';
 import { conflictUpdateSet } from './utils';
 import type { RpcTransaction, TransactionError, RpcTransactionMeta } from '~/types/indexer';
 import type { TransactionInsert, TxDetailInsert } from '~/types/db';
@@ -217,6 +218,11 @@ export async function upsertHydratedTx(txRow: TransactionInsert, detailRow: TxDe
     .onConflictDoUpdate({
       target: transactions.signature,
       set: conflictUpdateSet(transactions, ['signature']),
+      setWhere: sql`${transactions.instructionCount} = 0
+        OR ${transactions.signer} IS NULL
+        OR ${transactions.computeUnits} IS NULL
+        OR ${transactions.programs}::text = '[]'
+        OR array_length(${transactions.sapInstructions}, 1) IS NULL`,
     });
 
   if (detailRow) {
@@ -226,7 +232,9 @@ export async function upsertHydratedTx(txRow: TransactionInsert, detailRow: TxDe
       .onConflictDoUpdate({
         target: txDetails.signature,
         set: conflictUpdateSet(txDetails, ['signature']),
+        setWhere: sql`array_length(${txDetails.logs}, 1) IS NULL
+          OR jsonb_array_length(${txDetails.instructions}) = 0
+          OR jsonb_array_length(${txDetails.accountKeys}) = 0`,
       });
   }
 }
-

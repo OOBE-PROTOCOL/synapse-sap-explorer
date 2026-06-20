@@ -1,38 +1,48 @@
 ---
 title: Error Handling
-description: Structured error handling patterns for SAP SDK calls, Anchor errors, and API routes.
+description: Structured error handling patterns for SAP SDK v0.20.0 calls, Anchor errors, API routes, and recovery strategies.
 ---
 
 # Error Handling
 
+**SDK Version:** v0.20.0
+
 Robust error handling is critical for on-chain applications. Unlike traditional APIs where errors are usually recoverable with a simple retry, blockchain operations can fail for reasons that require different recovery strategies: insufficient funds, expired accounts, rate limits from RPC nodes, or constraint violations in the smart contract.
 
 This guide covers the SAP SDK error hierarchy, Anchor program errors, API route patterns, and recovery strategies. Understanding these patterns will save significant debugging time.
+
+---
 
 ## Error Categories
 
 SAP operations can fail for several distinct reasons. Identifying the category quickly determines the right recovery strategy:
 
 | Category | Cause | Recovery | How to Identify |
-|----------|-------|----------|----------------|
-| **RPC errors** | Network timeout, 429 rate limit, node unavailable | Retry with backoff | Error message contains "429", "timeout", or "ECONNREFUSED" |
-| **Anchor errors** | Constraint violation, insufficient funds, wrong signer | Fix inputs, check state | Error contains hex code like "0x1770" |
-| **Account errors** | PDA not found, account not initialized | Initialize first, check derivation | Error contains "Account does not exist" |
-| **SDK errors** | Invalid parameters, type mismatch | Fix calling code | TypeScript compile error or runtime type check |
-| **Simulation errors** | TX would fail (preflight check) | Inspect logs, fix instruction | Error contains "Simulation failed" |
+|----------|-------|----------|-----------------|
+| **RPC Errors** | Network timeout, 429 rate limit, node unavailable | Retry with backoff | Error contains "429", "timeout", or "ECONNREFUSED" |
+| **Anchor Errors** | Constraint violation, insufficient funds, wrong signer | Fix inputs, check state | Error contains hex code like "0x1770" |
+| **Account Errors** | PDA not found, account not initialized | Initialize first, check derivation | Error contains "Account does not exist" |
+| **SDK Errors** | Invalid parameters, type mismatch | Fix calling code | TypeScript compile error or runtime type check |
+| **Simulation Errors** | TX would fail (preflight check) | Inspect logs, fix instruction | Error contains "Simulation failed" |
 
-## SDK Error Hierarchy
+---
+
+## SDK Error Hierarchy (v0.20.0)
 
 The SDK provides a structured error hierarchy so you can handle each failure mode differently. All SDK errors extend `SapError`:
 
 ```
 SapError (base)
-├── SapValidationError     - invalid inputs, length limits, type mismatches
-├── SapRpcError            - network timeouts, 429 rate limits, node failures
-├── SapAccountNotFoundError - PDA doesn't exist, account not initialized
-├── SapTimeoutError        - operation exceeded timeout threshold
-└── SapPermissionError     - wrong signer, delegate lacks permission
+├── SapValidationError      — invalid inputs, length limits, type mismatches
+├── SapRpcError             — network timeouts, 429 rate limits, node failures
+├── SapAccountNotFoundError — PDA doesn't exist, account not initialized
+├── SapTimeoutError         — operation exceeded timeout threshold
+├── SapPermissionError      — wrong signer, delegate lacks permission
+├── SapInstructionError     — on-chain instruction failed (v0.20.0)
+└── SapDisputeError         — dispute-related errors (v0.20.0)
 ```
+
+### Example: Structured Error Handling
 
 ```typescript
 import {
@@ -42,6 +52,7 @@ import {
   SapAccountNotFoundError,
   SapTimeoutError,
   SapPermissionError,
+  SapInstructionError,
 } from "@oobe-protocol-labs/synapse-sap-sdk";
 
 try {
@@ -52,6 +63,7 @@ try {
 } catch (error: unknown) {
   if (error instanceof SapAccountNotFoundError) {
     // PDA doesn't exist yet - expected on first run
+    console.log("Agent not found - needs registration");
   } else if (error instanceof SapValidationError) {
     // Bad inputs - fix calling code
     console.error("Validation:", error.message);
@@ -64,6 +76,9 @@ try {
   } else if (error instanceof SapPermissionError) {
     // Wrong signer or delegate lacks permission
     console.error("Permission:", error.message);
+  } else if (error instanceof SapInstructionError) {
+    // On-chain instruction failed - check program logs
+    console.error("Instruction:", error.code, error.logs);
   } else if (error instanceof SapError) {
     // Other SDK error
     console.error("SAP:", error.message);
@@ -72,6 +87,8 @@ try {
   }
 }
 ```
+
+---
 
 ## `classifyAnchorError` and `extractAnchorErrorCode`
 
@@ -103,6 +120,8 @@ try {
 }
 ```
 
+---
+
 ## Anchor Error Code Reference
 
 Common Anchor framework errors encountered in SAP:
@@ -116,7 +135,9 @@ Common Anchor framework errors encountered in SAP:
 | `0xbc2` | 3010 | Account owned by wrong program |
 | `0x1770`+ | 6000+ | Custom program errors (SAP-specific) |
 
-## SAP Program Error Codes
+---
+
+## SAP Program Error Codes (v0.20.0)
 
 These are the custom errors defined by the SAP program (offset from 6000):
 
@@ -124,14 +145,23 @@ These are the custom errors defined by the SAP program (offset from 6000):
 |------|------|-------------|
 | 6000 | `AgentAlreadyRegistered` | This wallet already has a registered agent |
 | 6001 | `AgentNotFound` | No agent PDA exists for this wallet |
+| 6002 | `InvalidCapabilityFormat` | Capability JSON is malformed |
+| 6003 | `MaxCapabilitiesExceeded` | More than 32 capabilities |
 | 6009 | `EscrowExpired` | Escrow past its `expiresAt` timestamp |
 | 6010 | `EscrowInsufficientBalance` | Balance too low for settlement |
+| 6011 | `EscrowNotActive` | Escrow is closed or disputed |
 | 6015 | `VaultAlreadyInitialized` | Vault with this nonce already exists |
 | 6017 | `SessionClosed` | Session is closed, no further writes |
 | 6018 | `DataExceedsMaxWriteSize` | Data exceeds 750-byte limit |
 | 6019 | `RingBufferOverflow` | Ring buffer full, seal page first |
+| 6020 | `InvalidEpochIndex` | Epoch index doesn't match sequence / 1000 |
+| 6021 | `DelegateExpired` | Vault delegate has expired |
+| 6022 | `DisputeAlreadyFiled` | Dispute already exists for this escrow |
+| 6023 | `DisputeWindowExpired` | Dispute filing window has passed |
 
 See the [Troubleshooting](./troubleshooting) guide for detailed fixes for each error.
+
+---
 
 ## API Route Error Pattern
 
@@ -153,25 +183,34 @@ export async function GET() {
     if (message.includes("Account does not exist")) {
       return NextResponse.json(
         { error: "Agent not found", code: "NOT_FOUND" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
     if (message.includes("429")) {
       return NextResponse.json(
         { error: "Rate limited", code: "RATE_LIMITED" },
-        { status: 429 },
+        { status: 429 }
+      );
+    }
+
+    if (message.includes("Simulation failed")) {
+      return NextResponse.json(
+        { error: "Transaction simulation failed", code: "SIMULATION_FAILED" },
+        { status: 400 }
       );
     }
 
     console.error("[API] Agent fetch failed:", message);
     return NextResponse.json(
       { error: "Internal error", code: "INTERNAL" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 ```
+
+---
 
 ## Client-Side Hook Pattern
 
@@ -199,6 +238,8 @@ export function useAgent() {
 }
 ```
 
+---
+
 ## Transaction Simulation
 
 Before sending a transaction, simulate it to catch errors early:
@@ -222,6 +263,8 @@ try {
   }
 }
 ```
+
+---
 
 ## Recovery Patterns
 
@@ -252,3 +295,76 @@ try {
   return cached ? JSON.parse(cached) : null;
 }
 ```
+
+### Retry with Exponential Backoff
+
+```typescript
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 500,
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      if (attempt === maxRetries) throw error;
+      
+      const isRateLimit = 
+        error instanceof Error && error.message.includes("429");
+      const delay = isRateLimit 
+        ? baseDelay * Math.pow(2, attempt) 
+        : baseDelay;
+      
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error("Unreachable");
+}
+```
+
+---
+
+## Error Monitoring
+
+For production applications, implement error monitoring:
+
+```typescript
+// src/lib/error-monitoring.ts
+import { SapError } from "@oobe-protocol-labs/synapse-sap-sdk";
+
+export function reportError(error: unknown, context: string) {
+  if (error instanceof SapError) {
+    // Send to monitoring service
+    console.error(`[SAP:${context}]`, {
+      type: error.constructor.name,
+      code: (error as any).code,
+      message: error.message,
+      timestamp: Date.now(),
+    });
+  } else {
+    console.error(`[Unknown:${context}]`, error);
+  }
+}
+
+// Usage
+try {
+  await client.agent.register(params);
+} catch (error: unknown) {
+  reportError(error, "agent.register");
+  throw error; // Re-throw for caller to handle
+}
+```
+
+---
+
+## Next Steps
+
+- **[Troubleshooting](/docs/best-practices/troubleshooting)** — Common errors and fixes
+- **[RPC Configuration](/docs/best-practices/rpc-network)** — Reliable connectivity
+- **[Security](/docs/best-practices/security)** — Key management best practices
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0

@@ -14,10 +14,10 @@ import type { AggregatedReputation } from '~/hooks/use-aggregated-reputation';
 type Tier = AggregatedReputation['combined']['tier'];
 
 const TIER_STYLE: Record<Tier, string> = {
-  low: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
-  medium: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-  high: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-  elite: 'border-violet-400/40 bg-violet-500/15 text-violet-200',
+  low: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400',
+  medium: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  high: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  elite: 'border-primary/30 bg-primary/10 text-primary',
 };
 
 export function ReputationChip({
@@ -31,7 +31,7 @@ export function ReputationChip({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 text-muted-foreground/60',
+          'inline-flex items-center gap-1 rounded-full border bg-muted text-muted-foreground',
           size === 'xs' ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]',
         )}
         title="FairScale × SAP reputation pending"

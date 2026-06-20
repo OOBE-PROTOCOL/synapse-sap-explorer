@@ -1,17 +1,23 @@
 ---
-title: Security
-description: Security best practices for SAP integrations, including key management, input validation, escrow safety, and content integrity.
+title: Security Best Practices
+description: Security best practices for SAP integrations, including key management, input validation, escrow safety, and content integrity. SDK v0.20.0 aligned.
 ---
 
-# Security
+# Security Best Practices
+
+**SDK Version:** v0.20.0
 
 On-chain applications handle real value. Unlike traditional web applications where a security breach might expose data, a compromised keypair on Solana can lead to direct financial loss. This guide covers key management, delegate wallets, input validation, escrow safety, and content integrity patterns for SAP integrations.
+
+---
 
 ## The Fundamentals
 
 Solana security boils down to one principle: **whoever holds the private key controls the account.** There is no password reset, no customer support, no "forgot my key" flow. If your keypair is compromised, the attacker has full control. If your keypair is lost, the account is permanently inaccessible.
 
 This is not a flaw; it is the tradeoff that makes the system trustless. No intermediary can freeze your account or reverse your transactions. But it also means security practices must be rigorous from day one.
+
+---
 
 ## Key Management
 
@@ -21,7 +27,7 @@ The wallet that registers an agent becomes its permanent authority. Compromise o
 
 ```typescript
 // WRONG: hardcoded secret
-const keypair = Keypair.fromSecretKey(new Uint8Array([...]));
+const keypair = Keypair.fromSecretKey(new Uint8Array([...]))
 
 // CORRECT: loaded from encrypted file at runtime
 import fs from "fs";
@@ -45,11 +51,13 @@ Add to `.gitignore`:
 !tsconfig.json
 ```
 
+---
+
 ## Delegate Wallets
 
 For automated systems, use a delegate wallet with limited authority. This is the single most important security practice for production services.
 
-**Why:** Your main keypair is the master key to your agent's entire on-chain presence. If it sits on a server that gets compromised, everything is lost. A delegate wallet is a separate keypair with a small balance, used only for routine operations. If it is compromised, the blast radius is limited to whatever SOL is in that wallet.
+**Why:** Your main keypair is the master key to your agent's entire on-chain presence. If it sits on a server that gets compromised, everything is lost. A delegate wallet is a separate keypair with a small balance, used only for routine operations.
 
 1. Create a dedicated keypair for the service
 2. Fund it with only the SOL needed for operations
@@ -57,6 +65,8 @@ For automated systems, use a delegate wallet with limited authority. This is the
 4. Monitor its balance and top up programmatically
 
 This limits blast radius: if the delegate is compromised, the attacker can only operate within the agent's scope, not access your main treasury.
+
+---
 
 ## Vault Delegation & Permission Bitmask
 
@@ -81,7 +91,9 @@ await client.vault.inscribeDelegated(sessionPda, data, hash);
 await client.vault.revokeDelegate(vaultPda, hotWallet);
 ```
 
-Delegations have an `expiresAt` timestamp - after expiry they are automatically invalid. Combine short expiry windows with minimal permission bits for defense in depth.
+Delegations have an `expiresAt` timestamp — after expiry they are automatically invalid. Combine short expiry windows with minimal permission bits for defense in depth.
+
+---
 
 ## Authority Model
 
@@ -102,12 +114,13 @@ Every on-chain operation requires a specific signer. Understanding who can do wh
 | Create attestation | Any wallet (attester) | One per attester-subject pair |
 | Revoke attestation | Attester wallet | Only attester can revoke |
 
+---
+
 ## Encryption
 
-Memory vault inscriptions are encrypted client-side before being stored on-chain. The SDK does **not** enforce a specific encryption algorithm - you choose your own `encrypt(plaintext, key)` implementation. Common choices:
+Memory vault inscriptions are encrypted client-side before being stored on-chain. The SDK does **not** enforce a specific encryption algorithm — you choose your own `encrypt(plaintext, key)` implementation.
 
-- **NaCl `secretbox`** - Recommended. Fast, authenticated, 24-byte nonce.
-- **AES-256-GCM** - Also suitable for structured data.
+### Recommended: NaCl secretbox
 
 ```typescript
 import nacl from "tweetnacl";
@@ -131,15 +144,14 @@ function decrypt(ciphertext: Buffer, key: Uint8Array): string {
 
 ### Nonce Rotation
 
-Vaults track a `nonceVersion` counter. When you rotate:
-
 ```typescript
 await client.vault.rotateNonce(vaultPda);
 // Increments nonceVersion, updates lastNonceRotation timestamp
-// New inscriptions should use the new nonce seed
 ```
 
-Rotation invalidates the old encryption nonce without deleting existing inscriptions. Historical data can still be decrypted if you retain the old key. Rotate periodically (e.g. weekly) as a defense-in-depth measure.
+Rotation invalidates the old encryption nonce without deleting existing inscriptions. Rotate periodically (e.g. weekly) as a defense-in-depth measure.
+
+---
 
 ## Input Validation
 
@@ -198,6 +210,8 @@ export async function POST(request: Request) {
 }
 ```
 
+---
+
 ## Escrow Safety
 
 ### Set Expiry Times
@@ -236,19 +250,21 @@ if (remaining && remaining.balance.gtn(0)) {
 }
 ```
 
+---
+
 ## Content Integrity
 
 ### Schema Hash Verification
 
-When publishing tools, the SDK stores a SHA-256 hash of the schema on-chain. The full JSON schema is inscribed into transaction logs (zero ongoing rent), while the PDA stores only the 32-byte hash. Consumers can verify schema integrity by hashing the original schema and comparing it with the on-chain hash:
+When publishing tools, the SDK stores a SHA-256 hash of the schema on-chain. Consumers can verify schema integrity:
 
 ```typescript
 import { sha256, hashToArray } from "@oobe-protocol-labs/synapse-sap-sdk/utils";
 
-// Fetch the tool descriptor (contains only the hash, not the full schema)
+// Fetch the tool descriptor (contains only the hash)
 const tool = await client.tools.fetch(agentPda, "myTool");
 
-// The original schema (obtained from TX logs or off-chain cache)
+// The original schema (from TX logs or off-chain cache)
 const originalSchema = '{"type":"object","properties":{"token":{"type":"string"}}}';
 
 // Compute the expected hash and compare with on-chain hash
@@ -260,8 +276,6 @@ if (!isValid) {
   throw new Error("Schema has been tampered with");
 }
 ```
-
-> **Note:** Full schemas are stored in transaction logs via `inscribeSchema()`, not in fetachable PDA accounts. To retrieve inscribed schemas, parse the transaction logs of the inscription TX using `client.parser`.
 
 ### Session Data Integrity
 
@@ -280,15 +294,30 @@ const hash = hashEntry(entry);
 await client.session.write(ctx, `${entry}|hash:${hash}`);
 ```
 
+---
+
 ## Production Security Checklist
 
-1. Main keypair stored in encrypted vault (not in environment variables)
-2. Delegate wallets used for automated operations
-3. All user inputs validated server-side before transaction construction
-4. Escrow accounts always have expiration timestamps
-5. Schema hashes verified before trusting tool descriptors
-6. API routes require authentication (API key, JWT, or session tokens)
-7. Rate limiting applied to all public-facing endpoints
-8. Transaction simulation enabled (preflight checks) for all writes
-9. Monitoring and alerts for unusual account activity
-10. Regular key rotation for delegate wallets
+- [ ] Main keypair stored in encrypted vault (not in environment variables)
+- [ ] Delegate wallets used for automated operations
+- [ ] All user inputs validated server-side before transaction construction
+- [ ] Escrow accounts always have expiration timestamps
+- [ ] Schema hashes verified before trusting tool descriptors
+- [ ] API routes require authentication (API key, JWT, or session tokens)
+- [ ] Rate limiting applied to all public-facing endpoints
+- [ ] Transaction simulation enabled (preflight checks) for all writes
+- [ ] Monitoring and alerts for unusual account activity
+- [ ] Regular key rotation for delegate wallets
+
+---
+
+## Next Steps
+
+- **[Error Handling](/docs/best-practices/error-handling)** — Error patterns
+- **[Troubleshooting](/docs/best-practices/troubleshooting)** — Common issues
+- **[On-Chain Reference](/docs/core/on-chain-reference)** — Account types
+
+---
+
+**Last Updated:** June 2026  
+**SDK Version:** 0.20.0
