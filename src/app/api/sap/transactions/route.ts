@@ -7,7 +7,7 @@ import type { BorshInstructionCoder } from '@coral-xyz/anchor';
 import { SAP_PROGRAM_ADDRESS } from '@oobe-protocol-labs/synapse-sap-sdk/constants';
 import { getSynapseConnection, getSapClient, getRpcConfig } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
-import { selectTransactions, countTransactions, upsertTransactions } from '~/lib/db/queries';
+import { selectTransactions, selectTransactionsInRange, countTransactions, upsertTransactions } from '~/lib/db/queries';
 import { isDbDown, markDbDown } from '~/db';
 import { dbTxToApi, apiTxToDb } from '~/lib/db/mappers';
 import { rawGetTransaction } from '~/lib/rpc';
@@ -324,7 +324,11 @@ async function fetchTxBatch(
  * Fetches latest sigs from RPC, hydrates, writes to DB, returns hydrated list.
  * This is called in the background so it never blocks the response.
  */
-async function backgroundRpcRefresh(limit: number): Promise<HydratedTransaction[]> {
+async function backgroundRpcRefresh(
+  limit: number,
+  fromUnix: number | null,
+  toUnix: number | null,
+): Promise<HydratedTransaction[]> {
   const conn = getSynapseConnection();
   const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
 
@@ -362,7 +366,13 @@ async function backgroundRpcRefresh(limit: number): Promise<HydratedTransaction[
     console.warn('[transactions] DB write failed:', (e as Error).message),
   );
 
-  return hydrated;
+  if (fromUnix === null && toUnix === null) return hydrated;
+  return hydrated.filter((tx) => {
+    if (tx.blockTime == null) return false;
+    if (fromUnix !== null && tx.blockTime < fromUnix) return false;
+    if (toUnix !== null && tx.blockTime > toUnix) return false;
+    return true;
+  });
 }
 
 export async function GET(req: Request) {
@@ -371,19 +381,32 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
     const perPage = Math.min(Math.max(1, Number(searchParams.get('perPage') ?? '25')), 5000);
     const afterSlot = searchParams.get('after') ? Number(searchParams.get('after')) : null;
+    const fromRaw = searchParams.get('from');
+    const toRaw = searchParams.get('to');
+    const fromUnix = fromRaw ? Number(fromRaw) : null;
+    const toUnix = toRaw ? Number(toRaw) : null;
+
+    if ((fromRaw && !Number.isFinite(fromUnix)) || (toRaw && !Number.isFinite(toUnix))) {
+      return NextResponse.json({ error: 'Invalid from/to range params' }, { status: 400 });
+    }
+    if (fromUnix !== null && toUnix !== null && fromUnix > toUnix) {
+      return NextResponse.json({ error: '`from` must be <= `to`' }, { status: 400 });
+    }
 
     const limit = perPage;
     const offset = (page - 1) * perPage;
 
     const fetchLimit = Math.max(offset + limit, 50);
-    const cacheKey = `transactions:${fetchLimit}`;
+    const cacheKey = `transactions:${fetchLimit}:${fromUnix ?? 'na'}:${toUnix ?? 'na'}`;
 
     // ── Step 1: DB read (~10ms) — always primary source ──
     let dbRows: HydratedTransaction[] = [];
     let total = 0;
     if (!isDbDown()) {
       try {
-        const rows = await selectTransactions(limit, offset);
+        const rows = (fromUnix !== null || toUnix !== null)
+          ? await selectTransactionsInRange(limit, offset, fromUnix, toUnix)
+          : await selectTransactions(limit, offset);
         dbRows = rows.map(dbTxToApi);
       } catch (e) {
         console.warn('[transactions] DB page read failed:', (e as Error).message);
@@ -392,7 +415,7 @@ export async function GET(req: Request) {
 
       if (dbRows.length > 0) {
         try {
-          total = await countTransactions();
+          total = await countTransactions(fromUnix, toUnix);
         } catch (e) {
           // Do not fail pagination if only count query fails.
           console.warn('[transactions] DB count failed, using fallback total:', (e as Error).message);
@@ -406,7 +429,7 @@ export async function GET(req: Request) {
       if (afterSlot !== null) result = result.filter((tx) => (tx.slot as number) > afterSlot);
       // Fire-and-forget refresh only for first page without incremental filter.
       if (page === 1 && afterSlot === null) {
-        swr(cacheKey, () => backgroundRpcRefresh(fetchLimit), { ttl: 30_000, swr: 300_000 }).catch(() => {});
+        swr(cacheKey, () => backgroundRpcRefresh(fetchLimit, fromUnix, toUnix), { ttl: 30_000, swr: 300_000 }).catch(() => {});
       }
       const res = NextResponse.json({ transactions: result, total, page, perPage: limit, source: 'db' });
       res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -416,7 +439,7 @@ export async function GET(req: Request) {
     // True cold start — no DB data. Must await RPC.
     let result: HydratedTransaction[] = [];
     try {
-      result = await swr(cacheKey, () => backgroundRpcRefresh(fetchLimit), { ttl: 30_000, swr: 300_000 });
+      result = await swr(cacheKey, () => backgroundRpcRefresh(fetchLimit, fromUnix, toUnix), { ttl: 30_000, swr: 300_000 });
     } catch (e) {
       console.error('[transactions] RPC cold start failed:', (e as Error).message);
     }

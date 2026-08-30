@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /**
  * Lightweight IntersectionObserver hook for progressive loading.
@@ -19,8 +19,8 @@ export function useInView<T extends HTMLElement = HTMLElement>(options?: {
   threshold?: number | number[];
   /** Re-trigger when leaving and re-entering. Defaults to false (sticky). */
   reentrant?: boolean;
-}): { ref: React.RefObject<T>; inView: boolean } {
-  const ref = useRef<T>(null);
+}): { ref: RefObject<T | null>; inView: boolean } {
+  const ref = useRef<T | null>(null);
   const [inView, setInView] = useState(false);
 
   useEffect(() => {

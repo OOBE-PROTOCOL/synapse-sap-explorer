@@ -3,9 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import {
   findAllTools,
-  findAllAgents,
-  serializeDiscoveredAgent,
 } from '~/lib/sap/discovery';
+import { loadIndexedSerializedAgents } from '~/lib/sap/agent-index';
 import type { AgentWellKnown } from '~/lib/sap/well-known';
 import { getCachedAgentMetaplexBatch } from '~/lib/sap/metaplex-snapshot-store';
 import { getCachedAgentLogosBatch, type AgentLogoSnapshot } from '~/lib/sap/agent-logo-store';
@@ -56,21 +55,11 @@ export interface EnrichedAgentsResponse {
 /* ── Assembly ─────────────────────────────────────────── */
 
 async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
-  // Fast on-chain reads.
-  const [rawAgents, allTools] = await Promise.all([
-    findAllAgents(),
+  // Read from unified indexed source + on-chain tools.
+  const [{ agents }, allTools] = await Promise.all([
+    loadIndexedSerializedAgents(),
     findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
   ]);
-
-  // Dedup by PDA, cap at 100.
-  const seen = new Set<string>();
-  const unique = rawAgents.filter((a) => {
-    const key = a.pda.toBase58();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const agents: SerializedDiscoveredAgent[] = unique.slice(0, 100).map(serializeDiscoveredAgent);
 
   // PDA → tool count
   const toolCountByAgent = new Map<string, number>();

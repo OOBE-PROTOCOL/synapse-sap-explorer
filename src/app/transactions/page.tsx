@@ -74,6 +74,20 @@ type EscrowMap = Record<string, EscrowInfo>;
 const POLL_MS = 12_000;
 const SAP_ADDRESS = "SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ";
 const PREFETCH_PER_PAGE = 5000;
+type TimeSpanPreset = "24h" | "7d" | "30d" | "120d" | "all";
+const TIME_SPAN_SECONDS: Record<Exclude<TimeSpanPreset, "all">, number> = {
+  "24h": 24 * 60 * 60,
+  "7d": 7 * 24 * 60 * 60,
+  "30d": 30 * 24 * 60 * 60,
+  "120d": 120 * 24 * 60 * 60,
+};
+const TIME_SPAN_LABELS: Record<TimeSpanPreset, string> = {
+  "24h": "Last 24H",
+  "7d": "Last 7D",
+  "30d": "Last 30D",
+  "120d": "Last 120D",
+  all: "All time",
+};
 
 /* ── Helpers ────────────────────────────────── */
 
@@ -688,8 +702,8 @@ function TxRow({
       {/* Programs (as icons) */}
       <TableCell>
         <div className="flex items-center gap-1">
-          {tx.programs.map((p) => (
-            <ProgramIcon key={p.id} program={p} size={20} />
+          {tx.programs.map((p, index) => (
+            <ProgramIcon key={`${p.id}-${index}`} program={p} size={20} />
           ))}
         </div>
       </TableCell>
@@ -720,6 +734,13 @@ export default function TransactionsPage() {
   const [sapFilter, setSapFilter] = useState("all");
   const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
+  const [timeSpan, setTimeSpan] = useState<TimeSpanPreset>("all");
+
+  const getRangeBounds = useCallback(() => {
+    if (timeSpan === "all") return { from: null, to: null };
+    const nowSec = Math.floor(Date.now() / 1000);
+    return { from: nowSec - TIME_SPAN_SECONDS[timeSpan], to: nowSec };
+  }, [timeSpan]);
 
   useEffect(() => {
     setNow(Date.now());
@@ -735,6 +756,9 @@ export default function TransactionsPage() {
         page: "1",
         perPage: String(PREFETCH_PER_PAGE),
       });
+      const { from, to } = getRangeBounds();
+      if (from !== null) params.set("from", String(from));
+      if (to !== null) params.set("to", String(to));
       if (poll) {
         const cur = txsRef.current;
         if (cur.length > 0)
@@ -775,7 +799,7 @@ export default function TransactionsPage() {
       if (poll) setRefreshing(false);
       else setLoading(false);
     }
-  }, []);
+  }, [getRangeBounds]);
 
   const fetchAgentMap = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -920,12 +944,12 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, hideSpam, hideFailed, sortDir, sapFilter]);
+  }, [search, hideSpam, hideFailed, sortDir, sapFilter, timeSpan]);
 
   return (
     <ExplorerPageShell
       title="Transactions"
-      subtitle={`${total.toLocaleString()} on-chain SAP program transactions`}
+      subtitle={`${total.toLocaleString()} SAP program transactions · ${TIME_SPAN_LABELS[timeSpan]}`}
       icon={<ArrowRightLeft className="h-5 w-5" />}
       actions={
         <div className="relative w-full">
@@ -955,10 +979,10 @@ export default function TransactionsPage() {
       stats={
         <>
           <ExplorerMetric
-            label="Total Loaded"
+            label="Transactions Count"
             value={total.toLocaleString()}
             icon={<ArrowRightLeft className="h-4 w-4" />}
-            sub={`${stats.oldest} – ${stats.newest}`}
+            sub={TIME_SPAN_LABELS[timeSpan]}
             accent="primary"
           />
           <ExplorerMetric
@@ -978,6 +1002,26 @@ export default function TransactionsPage() {
           {/* Filters card — border only, no bg, 2-column grid */}
           <Card className="border-neutral-700 bg-transparent hover:border-neutral-600 transition-all duration-300 flex items-center justify-center">
             <div className="p-4 w-full">
+              <div className="mb-2 flex flex-wrap items-center gap-1">
+                {(["24h", "7d", "30d", "120d", "all"] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setTimeSpan(preset);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      "h-7 rounded-md border px-2.5 text-xs transition-colors",
+                      timeSpan === preset
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white",
+                    )}
+                  >
+                    {TIME_SPAN_LABELS[preset]}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-2 gap-2 w-full">
                 {/* Col 1: sort + SAP instruction filter */}
                 <div className="flex flex-col gap-2">

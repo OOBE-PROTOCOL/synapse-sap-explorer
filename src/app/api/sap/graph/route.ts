@@ -7,14 +7,15 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
+import { PublicKey } from '@solana/web3.js';
 import type { DiscoveredAgent } from '~/lib/sap/discovery';
 import {
   findAgentsByProtocol,
   findAgentsByCapability,
-  findAllAgents,
   findAllTools,
   buildGraphData,
 } from '~/lib/sap/discovery';
+import { loadIndexedSerializedAgents } from '~/lib/sap/agent-index';
 import { swr, peek } from '~/lib/cache';
 import type { GraphData } from '~/types/sap';
 
@@ -25,7 +26,19 @@ async function rpcFetchGraph(capability: string | null, protocol: string | null)
   } else if (protocol) {
     agents = await findAgentsByProtocol(protocol);
   } else {
-    agents = await findAllAgents();
+    const { agents: indexed } = await loadIndexedSerializedAgents();
+    agents = indexed.flatMap((agent) => {
+      if (!agent.identity) return [];
+      try {
+        return [{
+          pda: new PublicKey(agent.pda),
+          identity: agent.identity as unknown as DiscoveredAgent['identity'],
+          stats: null,
+        }];
+      } catch {
+        return [];
+      }
+    });
   }
   const seen = new Set<string>();
   const unique = agents.filter((a) => {

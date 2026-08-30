@@ -1,4 +1,4 @@
-// ecosystem.config.cjs — PM2 configuration for SAP Explorer
+  // ecosystem.config.cjs — PM2 configuration for SAP Explorer
 //
 // Usage:
 //   pm2 start ecosystem.config.cjs          # start all

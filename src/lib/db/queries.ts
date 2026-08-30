@@ -360,8 +360,58 @@ export async function selectTransactions(limit = 50, offset = 0) {
     .offset(offset);
 }
 
-export async function countTransactions() {
-  const result = await db.select({ count: count() }).from(transactions);
+function buildTransactionsTimeWhere(fromUnix?: number | null, toUnix?: number | null) {
+  if (typeof fromUnix !== 'number' && typeof toUnix !== 'number') return undefined;
+  const clauses = [sql`${transactions.blockTime} IS NOT NULL`];
+  if (typeof fromUnix === 'number') {
+    clauses.push(sql`${transactions.blockTime} >= to_timestamp(${fromUnix})`);
+  }
+  if (typeof toUnix === 'number') {
+    clauses.push(sql`${transactions.blockTime} <= to_timestamp(${toUnix})`);
+  }
+  return and(...clauses);
+}
+
+export async function selectTransactionsInRange(
+  limit = 50,
+  offset = 0,
+  fromUnix?: number | null,
+  toUnix?: number | null,
+) {
+  return db
+    .select({
+      signature: transactions.signature,
+      slot: transactions.slot,
+      blockTime: transactions.blockTime,
+      err: transactions.err,
+      memo: transactions.memo,
+      signer: transactions.signer,
+      fee: transactions.fee,
+      feeSol: transactions.feeSol,
+      programs: transactions.programs,
+      sapInstructions: transactions.sapInstructions,
+      instructionCount: transactions.instructionCount,
+      innerInstructionCount: transactions.innerInstructionCount,
+      computeUnits: transactions.computeUnits,
+      signerBalanceChange: transactions.signerBalanceChange,
+      version: transactions.version,
+      indexedAt: transactions.indexedAt,
+      accountKeys: txDetails.accountKeys,
+      tokenBalanceChanges: txDetails.tokenBalanceChanges,
+      balanceChanges: txDetails.balanceChanges,
+    })
+    .from(transactions)
+    .leftJoin(txDetails, eq(transactions.signature, txDetails.signature))
+    .where(buildTransactionsTimeWhere(fromUnix, toUnix))
+    .orderBy(desc(transactions.slot))
+    .limit(limit)
+    .offset(offset);
+}
+
+export async function countTransactions(fromUnix?: number | null, toUnix?: number | null) {
+  const where = buildTransactionsTimeWhere(fromUnix, toUnix);
+  const query = db.select({ count: count() }).from(transactions);
+  const result = where ? await query.where(where) : await query;
   return result[0]?.count ?? 0;
 }
 

@@ -37,3 +37,4 @@ next-env.d.ts
 
 # misc build / debug output
 build_output.txt
+/.source/
