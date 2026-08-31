@@ -1,10 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import {
-  findAllTools,
-} from '~/lib/sap/discovery';
-import { loadIndexedSerializedAgents } from '~/lib/sap/agent-index';
+import { loadIndexedSerializedAgents, loadDbTools } from '~/lib/sap/agent-index';
 import type { AgentWellKnown } from '~/lib/sap/well-known';
 import { getCachedAgentMetaplexBatch } from '~/lib/sap/metaplex-snapshot-store';
 import { getCachedAgentLogosBatch, type AgentLogoSnapshot } from '~/lib/sap/agent-logo-store';
@@ -58,7 +55,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
   // Read from unified indexed source + on-chain tools.
   const [{ agents }, allTools] = await Promise.all([
     loadIndexedSerializedAgents(),
-    findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
+    loadDbTools().catch(() => []),
   ]);
 
   // PDA → tool count

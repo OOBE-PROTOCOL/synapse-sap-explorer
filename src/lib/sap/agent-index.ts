@@ -1,10 +1,12 @@
+import { PublicKey } from '@solana/web3.js';
 import { dbAgentToApi } from '~/lib/db/mappers';
-import { selectAllAgents } from '~/lib/db/queries';
+import { selectAllAgents, selectAllTools } from '~/lib/db/queries';
 import {
   findAllAgents,
   getNetworkOverview,
   serializeDiscoveredAgent,
 } from '~/lib/sap/discovery';
+import type { DiscoveredTool } from '~/lib/sap/discovery';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
 
 type IndexedAgentsResult = {
@@ -25,53 +27,82 @@ function dedupeSerialized(list: SerializedDiscoveredAgent[]): SerializedDiscover
 }
 
 /**
- * Best-effort unified agent source used by read-heavy views.
+ * DB-first unified agent source for read-heavy views.
  *
- * Primary source is on-chain RPC (`findAllAgents`), but when RPC under-returns
- * during transient upstream issues we backfill missing slots from the indexed DB,
- * using `getNetworkOverview().totalAgents` as the expected floor.
+ * Primary source is the indexed DB (fast, always available). RPC is used
+ * only as a last-resort fallback when the DB is empty (cold start / first run).
+ * This avoids `getProgramAccounts` RPC calls that can fail with 426 errors.
  */
 export async function loadIndexedSerializedAgents(): Promise<IndexedAgentsResult> {
-  const [rpcRes, dbRes, overviewRes] = await Promise.allSettled([
-    findAllAgents(),
+  const [dbRes, overviewRes] = await Promise.allSettled([
     selectAllAgents(),
     getNetworkOverview(),
   ]);
 
-  const rpcAgents = rpcRes.status === 'fulfilled'
-    ? dedupeSerialized(rpcRes.value.map(serializeDiscoveredAgent))
-    : [];
-
   const dbAgents = dbRes.status === 'fulfilled'
     ? dedupeSerialized(
-      dbRes.value
-        .map((row) => dbAgentToApi(row) as SerializedDiscoveredAgent)
-        .filter((a) => a.identity !== null),
-    )
+        dbRes.value
+          .map((row) => dbAgentToApi(row) as SerializedDiscoveredAgent)
+          .filter((a) => a.identity !== null),
+      )
     : [];
 
   const expectedTotal = overviewRes.status === 'fulfilled'
     ? Number(overviewRes.value.totalAgents ?? 0)
     : null;
 
-  const merged = new Map<string, SerializedDiscoveredAgent>();
-  for (const agent of rpcAgents) merged.set(agent.pda, agent);
-
-  const shouldBackfill =
-    merged.size === 0 ||
-    (expectedTotal !== null && expectedTotal > 0 && merged.size < expectedTotal);
-
-  if (shouldBackfill) {
-    const target = expectedTotal !== null && expectedTotal > 0
-      ? expectedTotal
-      : Number.POSITIVE_INFINITY;
-    for (const agent of dbAgents) {
-      if (merged.size >= target) break;
-      if (!merged.has(agent.pda)) merged.set(agent.pda, agent);
-    }
+  // DB has data — return it immediately without blocking on RPC.
+  if (dbAgents.length > 0) {
+    return { agents: dbAgents, expectedTotal };
   }
 
-  const agents = Array.from(merged.values()).filter((a) => a.identity !== null);
-  return { agents, expectedTotal };
+  // DB empty (cold start) — fall back to RPC one time.
+  try {
+    const rpcAgents = await findAllAgents();
+    const agents = dedupeSerialized(rpcAgents.map(serializeDiscoveredAgent));
+    return { agents, expectedTotal };
+  } catch (e) {
+    console.warn('[agent-index] RPC fallback failed:', (e as Error).message);
+    return { agents: [], expectedTotal };
+  }
+}
+
+/**
+ * Load tools from the indexed DB as `DiscoveredTool`-compatible objects.
+ * Avoids the `getProgramAccounts` RPC call used by `findAllTools()`.
+ * Falls back to an empty array on any DB error.
+ */
+export async function loadDbTools(): Promise<DiscoveredTool[]> {
+  try {
+    const rows = await selectAllTools();
+    const results: DiscoveredTool[] = [];
+    for (const row of rows) {
+      let pda: PublicKey;
+      let agentKey: PublicKey | null = null;
+      try { pda = new PublicKey(row.pda); } catch { continue; }
+      try { agentKey = new PublicKey(row.agentPda); } catch { /* no agent link */ }
+      results.push({
+        pda,
+        descriptor: {
+          agent: agentKey,
+          toolName: row.toolName ?? '',
+          category: row.category ?? 'custom',
+          httpMethod: row.httpMethod ?? 'get',
+          paramsCount: row.paramsCount ?? 0,
+          requiredParams: row.requiredParams ?? 0,
+          isCompound: row.isCompound ?? false,
+          isActive: row.isActive ?? true,
+          totalInvocations: BigInt(row.totalInvocations ?? '0'),
+          version: row.version ?? 0,
+          createdAt: row.createdAt ? BigInt(row.createdAt.getTime()) : null,
+          updatedAt: row.updatedAt ? BigInt(row.updatedAt.getTime()) : null,
+        } as unknown as DiscoveredTool['descriptor'],
+      });
+    }
+    return results;
+  } catch (e) {
+    console.warn('[agent-index] loadDbTools failed:', (e as Error).message);
+    return [];
+  }
 }
 

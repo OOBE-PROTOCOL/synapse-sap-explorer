@@ -12,10 +12,9 @@ import type { DiscoveredAgent } from '~/lib/sap/discovery';
 import {
   findAgentsByProtocol,
   findAgentsByCapability,
-  findAllTools,
   buildGraphData,
 } from '~/lib/sap/discovery';
-import { loadIndexedSerializedAgents } from '~/lib/sap/agent-index';
+import { loadIndexedSerializedAgents, loadDbTools } from '~/lib/sap/agent-index';
 import { swr, peek } from '~/lib/cache';
 import type { GraphData } from '~/types/sap';
 
@@ -47,7 +46,7 @@ async function rpcFetchGraph(capability: string | null, protocol: string | null)
     seen.add(key);
     return true;
   });
-  const tools = await findAllTools();
+  const tools = await loadDbTools();
   return buildGraphData(unique, tools);
 }
 

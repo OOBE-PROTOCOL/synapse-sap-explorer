@@ -16,11 +16,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import {
-  findAllAgents,
-  findAllTools,
-  serializeDiscoveredAgent,
-} from '~/lib/sap/discovery';
+import { loadIndexedSerializedAgents, loadDbTools } from '~/lib/sap/agent-index';
 import { swr, peek } from '~/lib/cache';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
 
@@ -35,19 +31,12 @@ export interface AgentListResponse {
 }
 
 async function build(): Promise<AgentListResponse> {
-  const [rawAgents, allTools] = await Promise.all([
-    findAllAgents(),
-    findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
+  const [{ agents: rawAgents }, allTools] = await Promise.all([
+    loadIndexedSerializedAgents(),
+    loadDbTools().catch(() => []),
   ]);
 
-  const seen = new Set<string>();
-  const unique = rawAgents.filter((a) => {
-    const key = a.pda.toBase58();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const agents = unique.slice(0, 100).map(serializeDiscoveredAgent);
+  const agents = rawAgents.slice(0, 100);
 
   const toolCount = new Map<string, number>();
   for (const tool of allTools) {
