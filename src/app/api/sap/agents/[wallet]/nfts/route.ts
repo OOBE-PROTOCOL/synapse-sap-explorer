@@ -7,13 +7,8 @@
  */
 import { synapseResponse } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
-import {
-  getMetaplexAssetsForWallet,
-  getMetaplexAssetById,
-  type MetaplexNftItem,
-} from '~/lib/sap/metaplex-link';
-import { listRegistryAgentsForWallet } from '~/lib/metaplex/registry';
-import { getRpcConfig, getSapClient } from '~/lib/sap/discovery';
+import type { MetaplexNftItem } from '~/lib/sap/metaplex-link';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,7 +21,10 @@ export async function GET(
   const data = await swr(
     `agent:${walletOrId}:nfts`,
     async () => {
-      const { url } = getRpcConfig();
+      const { getSapClient } = await import('~/lib/sap/discovery');
+      const { getMetaplexAssetsForWallet, getMetaplexAssetById } = await import('~/lib/sap/metaplex-link');
+      const { listRegistryAgentsForWallet } = await import('~/lib/metaplex/registry');
+      const { url } = getSynapseRpcConfig();
       const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
         identifier: walletOrId,
         rpcUrl: url,

@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PublicKey, Connection } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
-import { getRpcConfig } from '~/lib/sap/discovery';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,23 +25,29 @@ type BondingCurveData = {
   holderCount: number;
 };
 
-/* Solana SPL Token program IDs — sourced from @solana/spl-token to avoid
- * the hardcoded typo bug ('…A8Cuu' instead of '…23VQ5DA') that previously
- * made every fungible mint look unowned and produced empty holder lists. */
-const SPL_TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toBase58();
-const TOKEN_2022_PROGRAM_ID_STR = TOKEN_2022_PROGRAM_ID.toBase58();
-
 /* Token-account data sizes per program. Legacy SPL = 165 bytes; Token-2022
  * accounts are at least 165 but may be larger when extensions are present —
  * we drop the dataSize filter for Token-2022 and rely on the mint memcmp. */
 const SPL_TOKEN_ACCOUNT_SIZE = 165;
 
+async function loadSolanaWeb3() {
+  return import('@solana/web3.js');
+}
+
+async function loadTokenProgramIds() {
+  const { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } = await import('@solana/spl-token');
+  return {
+    splTokenProgramId: TOKEN_PROGRAM_ID,
+    token2022ProgramId: TOKEN_2022_PROGRAM_ID,
+  };
+}
+
 async function fetchHolders(mint: string): Promise<BondingCurveData | null> {
   try {
-    const SPL_TOKEN_PROGRAM_ID = new PublicKey(SPL_TOKEN_PROGRAM_ID_STR);
-    const TOKEN_2022_PROGRAM_ID = new PublicKey(TOKEN_2022_PROGRAM_ID_STR);
+    const { Connection, PublicKey } = await loadSolanaWeb3();
+    const { splTokenProgramId, token2022ProgramId } = await loadTokenProgramIds();
 
-    const rpcConfig = getRpcConfig();
+    const rpcConfig = getSynapseRpcConfig();
     // MUST forward x-api-key — Synapse RPC returns 401 without it.
     const connection = new Connection(rpcConfig.url, {
       commitment: 'confirmed',
@@ -61,9 +65,9 @@ async function fetchHolders(mint: string): Promise<BondingCurveData | null> {
 
     const ownerProgram = mintInfo.value.owner.toBase58();
     const tokenProgramId =
-      ownerProgram === TOKEN_2022_PROGRAM_ID.toBase58() ? TOKEN_2022_PROGRAM_ID : SPL_TOKEN_PROGRAM_ID;
+      ownerProgram === token2022ProgramId.toBase58() ? token2022ProgramId : splTokenProgramId;
     const tokenProgram: TokenProgramKind =
-      tokenProgramId.equals(TOKEN_2022_PROGRAM_ID) ? 'token-2022' : 'spl-token';
+      tokenProgramId.equals(token2022ProgramId) ? 'token-2022' : 'spl-token';
 
     const parsedData = mintInfo.value.data as { type?: string; parsed?: { info?: { supply?: string; decimals?: number } } };
     if (parsedData.type !== 'mint' || !parsedData.parsed?.info) return null;
@@ -139,6 +143,7 @@ export async function GET(
 
   // Validate mint
   try {
+    const { PublicKey } = await loadSolanaWeb3();
     new PublicKey(mint);
   } catch {
     return NextResponse.json({ error: 'Invalid mint address' }, { status: 400 });

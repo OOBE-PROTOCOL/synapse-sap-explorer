@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /* ──────────────────────────────────────────────
  * GET /api/sap/agents/[wallet]/x402 — x402 direct payments
@@ -10,11 +11,6 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getAgentDirectPayments,
-  getAgentX402Stats,
-  scanAgentDirectPayments,
-} from '~/lib/sap/x402-scanner';
 import { x402DirectPayments } from '~/db/schema';
 import { db } from '~/db';
 
@@ -33,6 +29,7 @@ export async function GET(
     // Optionally trigger a fresh scan
     if (scan) {
       try {
+        const { scanAgentDirectPayments } = await import('~/lib/sap/x402-scanner');
         const found = await scanAgentDirectPayments(wallet);
         if (found.length > 0) {
           await db
@@ -61,6 +58,7 @@ export async function GET(
       }
     }
 
+    const { getAgentDirectPayments, getAgentX402Stats } = await import('~/lib/sap/x402-scanner');
     const [data, stats] = await Promise.all([
       getAgentDirectPayments(wallet, { limit, offset }),
       getAgentX402Stats(wallet),

@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { getSynapseConnection, getRpcConfig, getSapClient } from '~/lib/sap/discovery';
 import { withTimeout } from '~/lib/async-timeout';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 
 export interface TokenMeta {
   name: string;
@@ -49,7 +49,8 @@ const KNOWN_TOKENS: Record<string, TokenMeta> = {
   So11111111111111111111111111111111111111112: { symbol: 'WSOL', name: 'Wrapped SOL', logo: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png' },
 };
 
-const METAPLEX_METADATA_PROGRAM = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+const METAPLEX_METADATA_PROGRAM = 'metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s';
+const LAMPORTS_PER_SOL = 1_000_000_000;
 const BALANCE_CACHE_TTL_MS = 60_000;
 const RESOLVE_TIMEOUT_MS = 1_000;
 const BALANCE_RPC_TIMEOUT_MS = 2_000;
@@ -97,7 +98,7 @@ interface MintMetaResult {
 
 async function resolveOnChainMeta(mint: string): Promise<MintMetaResult | null> {
   try {
-    const { url, headers } = getRpcConfig();
+    const { url, headers } = getSynapseRpcConfig();
     const res = await fetch(url, {
       method: 'POST', headers,
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAccountInfo', params: [mint, { encoding: 'jsonParsed' }] }),
@@ -129,12 +130,14 @@ async function resolveOnChainMeta(mint: string): Promise<MintMetaResult | null> 
 
 async function resolveViaMetaplex(mint: string): Promise<MintMetaResult | null> {
   try {
+    const { PublicKey } = await import('@solana/web3.js');
     const mintPk = new PublicKey(mint);
+    const metadataProgram = new PublicKey(METAPLEX_METADATA_PROGRAM);
     const [pda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('metadata'), METAPLEX_METADATA_PROGRAM.toBuffer(), mintPk.toBuffer()],
-      METAPLEX_METADATA_PROGRAM,
+      [Buffer.from('metadata'), metadataProgram.toBuffer(), mintPk.toBuffer()],
+      metadataProgram,
     );
-    const { url, headers } = getRpcConfig();
+    const { url, headers } = getSynapseRpcConfig();
     const res = await fetch(url, {
       method: 'POST', headers,
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getAccountInfo', params: [pda.toBase58(), { encoding: 'base64' }] }),
@@ -270,7 +273,8 @@ export async function GET(
       });
     }
 
-    const { url: rpcUrl } = getRpcConfig();
+    const { url: rpcUrl, headers: rpcHeaders } = getSynapseRpcConfig();
+    const { getSapClient } = await import('~/lib/sap/discovery');
     const resolved = await withTimeout(
       getSapClient().metaplex.resolveAgentIdentifier({
         identifier: walletOrId,
@@ -292,7 +296,8 @@ export async function GET(
       });
     }
 
-    let pubkey: PublicKey;
+    const { PublicKey, Connection } = await import('@solana/web3.js');
+    let pubkey: InstanceType<typeof PublicKey>;
     try {
       pubkey = new PublicKey(wallet);
     } catch {
@@ -301,7 +306,10 @@ export async function GET(
       });
     }
 
-    const connection = getSynapseConnection();
+    const connection = new Connection(rpcUrl, {
+      commitment: 'confirmed',
+      httpHeaders: rpcHeaders,
+    });
 
     const [solBalance, tokenAccounts, token2022Accounts, solPrice] = await Promise.all([
       withTimeout(connection.getBalance(pubkey), BALANCE_RPC_TIMEOUT_MS, 'wallet sol balance').catch(() => 0),

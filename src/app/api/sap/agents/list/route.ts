@@ -14,15 +14,14 @@
  */
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import {
-  findAllAgents,
-  findAllTools,
-  serializeDiscoveredAgent,
-} from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
 import type { SerializedDiscoveredAgent } from '~/types/sap';
+import { selectAllAgents, selectAllTools } from '~/lib/db/queries';
+import { dbAgentToApi } from '~/lib/db/mappers';
+import { asPublicKeyText } from '~/lib/format';
 
 export interface AgentListItem {
   agent: SerializedDiscoveredAgent;
@@ -35,28 +34,48 @@ export interface AgentListResponse {
 }
 
 async function build(): Promise<AgentListResponse> {
-  const [rawAgents, allTools] = await Promise.all([
-    findAllAgents(),
-    findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
+  const [agentRows, toolRows] = await Promise.all([
+    selectAllAgents().catch(() => []),
+    selectAllTools().catch(() => []),
   ]);
 
-  const seen = new Set<string>();
-  const unique = rawAgents.filter((a) => {
-    const key = a.pda.toBase58();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const agents = unique.slice(0, 100).map(serializeDiscoveredAgent);
+  let agents: SerializedDiscoveredAgent[] = agentRows
+    .slice(0, 100)
+    .map((row) => {
+      const api = dbAgentToApi(row);
+      return {
+        pda: asPublicKeyText(api.pda),
+        identity: api.identity ?? null,
+        stats: null,
+      };
+    });
 
   const toolCount = new Map<string, number>();
-  for (const tool of allTools) {
-    const agentPda = (tool.descriptor as { agent?: { toBase58?: () => string; toString?: () => string } })?.agent;
-    if (!agentPda) continue;
-    const key = typeof agentPda === 'string'
-      ? agentPda
-      : (agentPda.toBase58?.() ?? agentPda.toString?.() ?? String(agentPda));
+  for (const tool of toolRows) {
+    const key = asPublicKeyText(tool.agentPda);
+    if (!key) continue;
     toolCount.set(key, (toolCount.get(key) ?? 0) + 1);
+  }
+
+  if (agents.length === 0) {
+    const { findAllAgents, findAllTools, serializeDiscoveredAgent } = await import('~/lib/sap/discovery');
+    const [rawAgents, allTools] = await Promise.all([
+      findAllAgents().catch(() => []),
+      findAllTools().catch(() => []),
+    ]);
+    const seen = new Set<string>();
+    const unique = rawAgents.filter((a) => {
+      const key = a.pda.toBase58();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    agents = unique.slice(0, 100).map(serializeDiscoveredAgent);
+    for (const tool of allTools) {
+      const agentPda = asPublicKeyText((tool.descriptor as { agent?: unknown } | null)?.agent);
+      if (!agentPda) continue;
+      toolCount.set(agentPda, (toolCount.get(agentPda) ?? 0) + 1);
+    }
   }
 
   return {

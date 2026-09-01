@@ -1,8 +1,15 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { useMemo, type ComponentType, type ReactNode } from 'react';
+import {
+  ConnectionProvider,
+  WalletProvider,
+  type ConnectionProviderProps,
+} from '@solana/wallet-adapter-react';
+import {
+  WalletModalProvider,
+  type WalletModalProviderProps,
+} from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
@@ -17,6 +24,9 @@ import '@solana/wallet-adapter-react-ui/styles.css';
  * swap to the real same-origin proxy URL on the client.
  */
 const SSR_PLACEHOLDER_ENDPOINT = 'https://api.mainnet-beta.solana.com';
+
+const TypedConnectionProvider = ConnectionProvider as ComponentType<ConnectionProviderProps>;
+const TypedWalletModalProvider = WalletModalProvider as ComponentType<WalletModalProviderProps>;
 
 export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   const endpoint = useMemo(() => {
@@ -34,10 +44,10 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <TypedConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
+        <TypedWalletModalProvider>{children}</TypedWalletModalProvider>
       </WalletProvider>
-    </ConnectionProvider>
+    </TypedConnectionProvider>
   );
 }

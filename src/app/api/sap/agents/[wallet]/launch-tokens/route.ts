@@ -23,20 +23,13 @@ export const dynamic = 'force-dynamic';
  * on upstream failure so the UI can degrade gracefully.
  * ────────────────────────────────────────────── */
 
-import { Connection, PublicKey } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { synapseResponse } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
-import {
-  listRegistryAgentsForWallet,
-  getRegistryAgentsByMints,
-  type MetaplexRegistryAgent,
-} from '~/lib/metaplex/registry';
-import { getGenesisTokenLaunches } from '~/lib/metaplex/genesis';
-import { fetchGenesisLaunchesByAuthority } from '~/lib/metaplex/genesis-onchain';
-import { fetchMetaplexAgentsByOwner } from '~/lib/metaplex/agents-api';
-import { getMetaplexAssetsForWallet } from '~/lib/sap/metaplex-link';
-import { getRpcConfig, getSapClient, getSynapseConnection } from '~/lib/sap/discovery';
+import type { MetaplexRegistryAgent } from '~/lib/metaplex/registry';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
+import type { Connection, PublicKey } from '@solana/web3.js';
+
+export const runtime = 'nodejs';
 
 export type AgentLaunchTokenEntry = {
   /** Fungible mint address (validated via RPC). */
@@ -70,8 +63,8 @@ export type AgentLaunchTokensResponse = {
 // hardcoded SPL constant was wrong (ended in 'A8Cuu' instead of '23VQ5DA'),
 // which caused classifyMints to reject every real fungible mint -- the
 // agent Token Launch tab was always empty as a result.
-const SPL_TOKEN_PROGRAM_ID_STR = TOKEN_PROGRAM_ID.toBase58();
-const TOKEN_2022_PROGRAM_ID_STR = TOKEN_2022_PROGRAM_ID.toBase58();
+const SPL_TOKEN_PROGRAM_ID_STR = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const TOKEN_2022_PROGRAM_ID_STR = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 /** Solana base58 pubkey shape — exactly 32–44 chars, no 0/O/I/l. */
 const BASE58_PUBKEY_RE = /[1-9A-HJ-NP-Za-km-z]{32,44}/g;
 /** Mint addresses we never surface as agent launch tokens. */
@@ -87,7 +80,8 @@ export async function GET(
 ) {
   try {
     const { wallet: walletOrId } = await params;
-    const { url: rpcUrl } = getRpcConfig();
+    const { getSapClient } = await import('~/lib/sap/discovery');
+    const { url: rpcUrl } = getSynapseRpcConfig();
     const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
       identifier: walletOrId,
       rpcUrl,
@@ -125,6 +119,14 @@ async function buildLaunchTokens(
   profilePda: string,
   origin: string,
 ): Promise<AgentLaunchTokensResponse> {
+  const { getMetaplexAssetsForWallet } = await import('~/lib/sap/metaplex-link');
+  const { listRegistryAgentsForWallet, getRegistryAgentsByMints } = await import('~/lib/metaplex/registry');
+  const { getGenesisTokenLaunches } = await import('~/lib/metaplex/genesis');
+  const { fetchGenesisLaunchesByAuthority } = await import('~/lib/metaplex/genesis-onchain');
+  const { fetchMetaplexAgentsByOwner } = await import('~/lib/metaplex/agents-api');
+  const { Connection } = await import('@solana/web3.js');
+  const { url: rpcUrl, headers: rpcHeaders } = getSynapseRpcConfig();
+
   // 1. Gather registry agents for this wallet.
   let registryAgents: MetaplexRegistryAgent[] = [];
   let coreAssetAddresses: string[] = [];
@@ -279,7 +281,10 @@ async function buildLaunchTokens(
   //    AUTHENTICATED Connection — most production RPCs reject anonymous
   //    `getMultipleParsedAccounts`. `getSynapseConnection()` carries the
   //    SAP API key for us.
-  const connection = getSynapseConnection();
+  const connection = new Connection(rpcUrl, {
+    commitment: 'confirmed',
+    httpHeaders: rpcHeaders,
+  });
   let upstreamError: string | undefined;
   const fungibleMap = await classifyMints(connection, candidates.map((c) => c.mint))
     .catch((err) => {
@@ -372,6 +377,7 @@ async function classifyMints(
   const out = new Map<string, MintClassification>();
   if (mints.length === 0) return out;
 
+  const { PublicKey } = await import('@solana/web3.js');
   const pubkeys: PublicKey[] = [];
   const indexToMint: string[] = [];
   for (const m of mints) {
@@ -446,13 +452,7 @@ function walkStrings(value: unknown, visit: (s: string) => void): void {
 }
 
 function isPlausiblePubkey(s: string): boolean {
-  if (s.length < 32 || s.length > 44) return false;
-  try {
-    new PublicKey(s);
-    return true;
-  } catch {
-    return false;
-  }
+  return s.length >= 32 && s.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(s);
 }
 
 /* ── Agent name similarity ────────────────────────── */

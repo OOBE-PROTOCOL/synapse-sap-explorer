@@ -117,7 +117,8 @@
     ],
     "overrides": {
       "esbuild": "0.25.12",
-      "uuid": "^9.0.1"
+      "uuid": "^9.0.1",
+      "rpc-websockets>uuid": "9.0.1"
     }
   }
 }

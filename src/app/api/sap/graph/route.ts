@@ -13,10 +13,33 @@ import {
   findAgentsByCapability,
   findAllAgents,
   findAllTools,
+  fetchIndexedAgents,
+  fetchIndexedTools,
   buildGraphData,
 } from '~/lib/sap/discovery';
 import { swr, peek } from '~/lib/cache';
 import type { GraphData } from '~/types/sap';
+
+function dedupeAgents(agents: DiscoveredAgent[]) {
+  const seen = new Set<string>();
+  return agents.filter((agent) => {
+    const key = agent.pda.toBase58();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function filterAgentsBySelection(agents: DiscoveredAgent[], capability: string | null, protocol: string | null) {
+  let filtered = agents;
+  if (capability) {
+    filtered = filtered.filter((agent) => (agent.identity?.capabilities ?? []).some((cap) => cap.id === capability || cap.protocolId === capability));
+  }
+  if (protocol) {
+    filtered = filtered.filter((agent) => (agent.identity?.protocols ?? []).includes(protocol));
+  }
+  return filtered;
+}
 
 async function rpcFetchGraph(capability: string | null, protocol: string | null) {
   let agents: DiscoveredAgent[];
@@ -27,15 +50,21 @@ async function rpcFetchGraph(capability: string | null, protocol: string | null)
   } else {
     agents = await findAllAgents();
   }
-  const seen = new Set<string>();
-  const unique = agents.filter((a) => {
-    const key = a.pda.toBase58();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const unique = dedupeAgents(agents);
   const tools = await findAllTools();
-  return buildGraphData(unique, tools);
+  return buildGraphData(filterAgentsBySelection(unique, capability, protocol), tools);
+}
+
+async function dbFetchGraph(capability: string | null, protocol: string | null) {
+  const [indexedAgents, indexedTools] = await Promise.all([
+    fetchIndexedAgents(),
+    fetchIndexedTools(),
+  ]);
+  if (indexedAgents.length === 0 && indexedTools.length === 0) {
+    return rpcFetchGraph(capability, protocol);
+  }
+  const filtered = filterAgentsBySelection(dedupeAgents(indexedAgents), capability, protocol);
+  return buildGraphData(filtered, indexedTools);
 }
 
 export const GET = withSynapseError(async (req: Request) => {
@@ -47,12 +76,12 @@ export const GET = withSynapseError(async (req: Request) => {
   // Instant return if cache warm
   const cached = peek<GraphData>(cacheKey);
   if (cached) {
-    swr(cacheKey, () => rpcFetchGraph(capability, protocol), { ttl: 60_000, swr: 300_000 }).catch(() => {});
+    swr(cacheKey, () => dbFetchGraph(capability, protocol), { ttl: 60_000, swr: 300_000 }).catch(() => {});
     return synapseResponse(cached);
   }
 
   // Cold start
-  const data = await rpcFetchGraph(capability, protocol);
+  const data = await dbFetchGraph(capability, protocol);
   swr(cacheKey, () => Promise.resolve(data), { ttl: 60_000, swr: 300_000 }).catch(() => {});
   return synapseResponse(data);
 });

@@ -10,14 +10,11 @@
  * type so client/server share the same shape.
  * ────────────────────────────────────────────────────────── */
 
-import { PublicKey } from '@solana/web3.js';
-
 import type {
   AggregatedReputation,
   AggregateOptions,
 } from './sdk-compat';
 
-import { getSapClient } from './discovery';
 import { swr } from '~/lib/cache';
 
 export type { AggregatedReputation, AggregateOptions };
@@ -37,8 +34,11 @@ export async function aggregateReputation(
   });
   return swr(
     cacheKey,
-    () =>
-      getSapClient().fairscale.aggregate(new PublicKey(wallet), opts),
+    async () => {
+      const { PublicKey } = await import('@solana/web3.js');
+      const { getSapClient } = await import('./discovery');
+      return getSapClient().fairscale.aggregate(new PublicKey(wallet), opts);
+    },
     { ttl: 5 * 60_000, swr: 15 * 60_000 },
   );
 }

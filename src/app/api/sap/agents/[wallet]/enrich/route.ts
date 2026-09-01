@@ -12,14 +12,11 @@
  */
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import {
-  getCachedAgentEnrichment,
-  type AgentEnrichmentSnapshot,
-} from '~/lib/sap/agent-enrichment-store';
-import { getCachedAgentLogo, type AgentLogoSnapshot } from '~/lib/sap/agent-logo-store';
-import { getCachedAgentMetaplex } from '~/lib/sap/metaplex-snapshot-store';
+import type { AgentEnrichmentSnapshot } from '~/lib/sap/agent-enrichment-store';
+import type { AgentLogoSnapshot } from '~/lib/sap/agent-logo-store';
 
 export interface AgentEnrichResponse {
   enrichment: AgentEnrichmentSnapshot;
@@ -45,6 +42,9 @@ export async function GET(
     const agentPda = url.searchParams.get('agentPda');
     const endpoint = url.searchParams.get('endpoint');
     const agentUri = url.searchParams.get('agentUri');
+    const { getCachedAgentEnrichment } = await import('~/lib/sap/agent-enrichment-store');
+    const { getCachedAgentLogo } = await import('~/lib/sap/agent-logo-store');
+    const { getCachedAgentMetaplex } = await import('~/lib/sap/metaplex-snapshot-store');
 
     const [enrichment, logos, metaplex] = await Promise.all([
       getCachedAgentEnrichment({ wallet, agentPda, endpoint, agentUri }),

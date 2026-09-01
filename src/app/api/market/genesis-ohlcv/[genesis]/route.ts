@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
 import { sql } from 'drizzle-orm';
 import { db, isDbDown } from '~/db';
+
+export const dynamic = 'force-dynamic';
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export interface OhlcvCandle {
   time: number;       // unix seconds (start of bucket)
@@ -29,12 +32,7 @@ const INTERVAL_SECONDS: Record<string, number> = {
 };
 
 function isValid(addr: string): boolean {
-  try {
-    new PublicKey(addr);
-    return true;
-  } catch {
-    return false;
-  }
+  return BASE58_ADDRESS_RE.test(addr);
 }
 
 export async function GET(

@@ -14,17 +14,8 @@
  * different EIP hosts.
  * ────────────────────────────────────────────────────────── */
 
-import { PublicKey } from '@solana/web3.js';
-import { getSapClient } from './discovery';
-import {
-  getMetaplexLinkSnapshot,
-  type Eip8004RegistrationJson,
-  type MetaplexLinkSnapshot,
-} from './metaplex-link';
-import {
-  listRegistryAgentsForWallet,
-  type MetaplexRegistryListResponse,
-} from '~/lib/metaplex/registry';
+import type { Eip8004RegistrationJson, MetaplexLinkSnapshot } from './metaplex-link';
+import type { MetaplexRegistryListResponse } from '~/lib/metaplex/registry';
 
 export const SAP_PROGRAM_ID = 'SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ';
 
@@ -129,7 +120,7 @@ type RawCapability = {
 };
 
 type RawAgentAccount = {
-  wallet: PublicKey | string;
+  wallet: unknown;
   name?: string;
   description?: string;
   agentUri?: string | null;
@@ -149,13 +140,17 @@ type RawAgentAccount = {
 export async function buildHybridEip8004Card(
   sapPdaStr: string,
 ): Promise<HybridEip8004Card> {
+  const { PublicKey } = await import('@solana/web3.js');
+  const { getSapClient } = await import('./discovery');
+  const { getMetaplexLinkSnapshot } = await import('./metaplex-link');
+  const { listRegistryAgentsForWallet } = await import('~/lib/metaplex/registry');
   const sapPda = new PublicKey(sapPdaStr);
   const sap = getSapClient();
 
   // Anchor exposes typed account namespaces with a `.fetchNullable(pubkey)`
   // method that accepts a raw PDA — no wallet derivation required.
   const accounts = sap.program.account as unknown as {
-    agentAccount: { fetchNullable: (pk: PublicKey) => Promise<RawAgentAccount | null> };
+    agentAccount: { fetchNullable: (pk: InstanceType<typeof PublicKey>) => Promise<RawAgentAccount | null> };
   };
 
   const agent = await accounts.agentAccount.fetchNullable(sapPda);
@@ -164,7 +159,9 @@ export async function buildHybridEip8004Card(
   const wallet =
     typeof agent.wallet === 'string'
       ? agent.wallet
-      : agent.wallet.toBase58();
+      : (typeof (agent.wallet as { toBase58?: unknown })?.toBase58 === 'function'
+          ? (agent.wallet as { toBase58: () => string }).toBase58()
+          : '');
 
   // Run Metaplex discovery in parallel — both are best-effort.
   const [snapResult, regResult] = await Promise.allSettled([

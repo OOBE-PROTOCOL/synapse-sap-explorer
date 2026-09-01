@@ -13,16 +13,12 @@
  *     routes serialize to JSON and clients want plain numbers/strings.
  */
 
-import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { publicKey } from '@metaplex-foundation/umi';
-import {
-  genesis,
-  safeFetchGenesisAccountV2,
-  getGenesisAccountV2GpaBuilder,
-  getGenesisAccountV1GpaBuilder,
-} from '@metaplex-foundation/genesis';
-import { getRpcConfig } from '~/lib/sap/discovery';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 import { env } from '~/lib/env';
+
+type UmiInstance = ReturnType<
+  (typeof import('@metaplex-foundation/umi-bundle-defaults'))['createUmi']
+>;
 
 export interface GenesisAccountOnchain {
   address: string;
@@ -43,11 +39,13 @@ export interface GenesisAccountOnchain {
   index: number;
 }
 
-let _umi: ReturnType<typeof createUmi> | null = null;
+let _umi: UmiInstance | null = null;
 
-function getUmi() {
+async function getUmi() {
   if (_umi) return _umi;
-  const { url } = getRpcConfig();
+  const { createUmi } = await import('@metaplex-foundation/umi-bundle-defaults');
+  const { genesis } = await import('@metaplex-foundation/genesis');
+  const { url } = getSynapseRpcConfig();
   _umi = createUmi(url, { httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY } }).use(genesis());
   return _umi;
 }
@@ -61,7 +59,9 @@ export async function fetchGenesisAccountByAddress(
   address: string,
 ): Promise<GenesisAccountOnchain | null> {
   try {
-    const umi = getUmi();
+    const umi = await getUmi();
+    const { publicKey } = await import('@metaplex-foundation/umi');
+    const { safeFetchGenesisAccountV2 } = await import('@metaplex-foundation/genesis');
     const account = await safeFetchGenesisAccountV2(umi, publicKey(address));
     if (!account) return null;
 
@@ -122,7 +122,12 @@ export async function fetchGenesisLaunchesByAuthority(
   authority: string,
 ): Promise<GenesisLaunchByAuthority[]> {
   const out: GenesisLaunchByAuthority[] = [];
-  const umi = getUmi();
+  const umi = await getUmi();
+  const { publicKey } = await import('@metaplex-foundation/umi');
+  const {
+    getGenesisAccountV2GpaBuilder,
+    getGenesisAccountV1GpaBuilder,
+  } = await import('@metaplex-foundation/genesis');
   const authorityPk = publicKey(authority);
 
   // V2 — current schema. This is what `initializeV2` writes today.

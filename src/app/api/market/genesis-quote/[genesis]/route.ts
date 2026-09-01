@@ -1,23 +1,10 @@
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
-import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { publicKey } from '@metaplex-foundation/umi';
-import {
-  genesis,
-  safeFetchGenesisAccountV2,
-  findBondingCurveBucketV2Pda,
-  safeFetchBondingCurveBucketV2,
-  SwapDirection,
-} from '@metaplex-foundation/genesis';
-import {
-  getSwapResult,
-  getCurrentPriceComponents,
-  isFirstBuyPending,
-  isSwappable,
-  getFillPercentage,
-} from '@metaplex-foundation/genesis';
-import { getRpcConfig } from '~/lib/sap/discovery';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 import { env } from '~/lib/env';
+
+export const dynamic = 'force-dynamic';
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 /**
  * POST /api/market/genesis-quote/[genesis]
@@ -50,13 +37,7 @@ interface QuoteBody {
 }
 
 function isAddr(s: unknown): s is string {
-  if (typeof s !== 'string') return false;
-  try {
-    new PublicKey(s);
-    return true;
-  } catch {
-    return false;
-  }
+  return typeof s === 'string' && BASE58_ADDRESS_RE.test(s);
 }
 
 export async function POST(
@@ -82,7 +63,22 @@ export async function POST(
       return NextResponse.json({ error: 'amount must be > 0' }, { status: 400 });
     }
 
-    const { url } = getRpcConfig();
+    const { createUmi } = await import('@metaplex-foundation/umi-bundle-defaults');
+    const { publicKey } = await import('@metaplex-foundation/umi');
+    const {
+      genesis,
+      safeFetchGenesisAccountV2,
+      findBondingCurveBucketV2Pda,
+      safeFetchBondingCurveBucketV2,
+      SwapDirection,
+      getSwapResult,
+      getCurrentPriceComponents,
+      isFirstBuyPending,
+      isSwappable,
+      getFillPercentage,
+    } = await import('@metaplex-foundation/genesis');
+
+    const { url } = getSynapseRpcConfig();
     const umi = createUmi(url, { httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY } }).use(genesis());
 
     const genesisPk = publicKey(genesisAddress);

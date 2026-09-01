@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /* ──────────────────────────────────────────────
  * GET /api/sap/address/[addr]/events
@@ -21,12 +22,11 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
-import { getSapClient, getRpcConfig } from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
 import { rawGetTransaction, serializeEventData } from '~/lib/rpc';
 import type { SapEvent, ParsedAnchorEvent } from '~/types/api';
 import { asPublicKeyText } from '~/lib/format';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 
 export type { SapEvent as SapEventRecord };
 
@@ -37,6 +37,8 @@ interface RawSignatureInfo {
   memo: string | null;
   blockTime: number | null;
 }
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 /** Raw JSON-RPC getSignaturesForAddress — avoids web3.js superstruct validation */
 async function rawGetSignaturesForAddress(
@@ -66,7 +68,8 @@ async function fetchAddressEvents(
   limit: number,
   filterNames: string[] | null,
 ): Promise<{ events: SapEvent[]; scanned: number }> {
-  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+  const { url: rpcUrl, headers: rpcHeaders } = getSynapseRpcConfig();
+  const { getSapClient } = await import('~/lib/sap/discovery');
   const sap = getSapClient();
   const eventParser = sap.events;
 
@@ -129,9 +132,7 @@ export async function GET(
     const addr = asPublicKeyText(address) || address;
 
     // Validate address
-    try {
-      new PublicKey(addr);
-    } catch {
+    if (!BASE58_ADDRESS_RE.test(addr)) {
       return NextResponse.json({ error: 'Invalid address' }, { status: 400 });
     }
 

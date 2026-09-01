@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { getSapClient } from '~/lib/sap/discovery';
 import type { AgentStakeSummary } from '~/app/api/sap/agents/enriched/route';
+
+const LAMPORTS_PER_SOL = 1_000_000_000;
 
 export async function GET(
   _req: Request,
@@ -11,6 +12,8 @@ export async function GET(
 ) {
   try {
     const { wallet } = await params;
+    const { PublicKey } = await import('@solana/web3.js');
+    const { getSapClient } = await import('~/lib/sap/discovery');
     const agentPda = new PublicKey(wallet);
     const stake = await getSapClient().staking.fetchNullable(agentPda);
 

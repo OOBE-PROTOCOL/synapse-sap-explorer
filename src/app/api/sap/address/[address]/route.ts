@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /* ──────────────────────────────────────────────
  * GET /api/sap/address/[address] — Universal address lookup
@@ -8,10 +9,6 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
-import {
-  getSynapseConnection,
-} from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
 import {
   selectAddressEntities,
@@ -26,9 +23,91 @@ import {
 } from '~/lib/db/mappers';
 import { isDbDown, markDbDown } from '~/db';
 import type { RpcSignatureInfo, TransactionError } from '~/types/indexer';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 
 /** Minimal shape shared by DB-mapped API types and RPC-serialized entities. */
 type EntityRecord = Record<string, unknown> & { pda: string };
+
+type RawAccountInfo = {
+  owner?: string;
+  executable?: boolean;
+  rentEpoch?: number | string;
+  data?: string | [string, string];
+};
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+async function rpcCall<T>(
+  rpcUrl: string,
+  rpcHeaders: Record<string, string>,
+  method: string,
+  params: unknown[],
+): Promise<T> {
+  const res = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: rpcHeaders,
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message ?? JSON.stringify(json.error));
+  return json.result as T;
+}
+
+async function rawGetAccountInfo(
+  address: string,
+  rpcUrl: string,
+  rpcHeaders: Record<string, string>,
+): Promise<RawAccountInfo | null> {
+  const result = await rpcCall<{ value: RawAccountInfo | null }>(
+    rpcUrl,
+    rpcHeaders,
+    'getAccountInfo',
+    [address, { encoding: 'base64' }],
+  );
+  return result?.value ?? null;
+}
+
+async function rawGetBalance(
+  address: string,
+  rpcUrl: string,
+  rpcHeaders: Record<string, string>,
+): Promise<number> {
+  const result = await rpcCall<{ value?: number }>(
+    rpcUrl,
+    rpcHeaders,
+    'getBalance',
+    [address],
+  );
+  return Number(result?.value ?? 0);
+}
+
+async function rawGetSignatures(
+  address: string,
+  rpcUrl: string,
+  rpcHeaders: Record<string, string>,
+  limit = 20,
+): Promise<RpcSignatureInfo[]> {
+  const rows = await rpcCall<Array<{
+    signature: string;
+    slot: number;
+    blockTime: number | null;
+    err: unknown;
+    memo: string | null;
+  }>>(
+    rpcUrl,
+    rpcHeaders,
+    'getSignaturesForAddress',
+    [address, { limit }],
+  );
+  return (rows ?? []).map((s) => ({
+    signature: s.signature,
+    slot: s.slot,
+    blockTime: s.blockTime ?? null,
+    err: s.err as TransactionError,
+    memo: s.memo ?? null,
+  }));
+}
 
 export async function GET(
   _req: Request,
@@ -36,16 +115,18 @@ export async function GET(
 ) {
   try {
     const { address } = await params;
+    if (!BASE58_ADDRESS_RE.test(address)) {
+    return NextResponse.json({ error: 'Invalid address' }, { status: 400 });
+    }
 
     const result = await swr(`address:${address}`, async () => {
-      const synConn = getSynapseConnection();
-      const pubkey = new PublicKey(address);
+    const { url: rpcUrl, headers: rpcHeaders } = getSynapseRpcConfig();
 
-      // 1) Account info + balance (always from RPC — lightweight)
-      const [accountInfo, balance] = await Promise.all([
-        synConn.getAccountInfo(pubkey).catch(() => null),
-        synConn.getBalance(pubkey).catch(() => 0),
-      ]);
+    // 1) Account info + balance (always from RPC — lightweight)
+    const [accountInfo, balance] = await Promise.all([
+      rawGetAccountInfo(address, rpcUrl, rpcHeaders).catch(() => null),
+      rawGetBalance(address, rpcUrl, rpcHeaders).catch(() => 0),
+    ]);
 
       // 2) Targeted DB entity lookup. This route is used by every unknown
       // address link, so it must never read all explorer tables per request.
@@ -111,14 +192,7 @@ export async function GET(
       // 4) Recent transactions (lightweight RPC call)
       let recentTxs: RpcSignatureInfo[] = [];
       try {
-        const sigs = await synConn.getSignaturesForAddress(pubkey, { limit: 20 });
-        recentTxs = sigs.map((s) => ({
-          signature: s.signature,
-          slot: s.slot,
-          blockTime: s.blockTime ?? null,
-          err: s.err as TransactionError,
-          memo: s.memo ?? null,
-        }));
+        recentTxs = await rawGetSignatures(address, rpcUrl, rpcHeaders, 20);
       } catch (e) { console.warn(`[address/${address}] tx history fetch failed:`, (e as Error).message); }
 
       const entityType = asAgentPda ? 'agent' :
@@ -135,12 +209,14 @@ export async function GET(
         address,
         entityType,
         balance,
-        owner: accountInfo?.owner?.toString?.() ?? null,
+        owner: accountInfo?.owner ?? null,
         executable: accountInfo?.executable ?? false,
         rentEpoch: accountInfo?.rentEpoch ?? null,
-        dataSize: accountInfo?.data
-          ? (accountInfo.data as Buffer | Uint8Array).length ?? 0
-          : 0,
+        dataSize: Array.isArray(accountInfo?.data)
+          ? Buffer.from(accountInfo.data[0] ?? '', 'base64').length
+          : typeof accountInfo?.data === 'string'
+            ? accountInfo.data.length
+            : 0,
         agent: asAgentPda ?? asAgentWallet ?? null,
         tool: asToolPda ?? null,
         escrow: asEscrowPda ?? null,

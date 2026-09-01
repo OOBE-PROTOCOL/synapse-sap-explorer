@@ -1,24 +1,10 @@
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
-import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import {
-  publicKey,
-  createNoopSigner,
-  transactionBuilder,
-} from '@metaplex-foundation/umi';
-import {
-  genesis,
-  swapBondingCurveV2,
-  safeFetchGenesisAccountV2,
-  findBondingCurveBucketV2Pda,
-  safeFetchBondingCurveBucketV2,
-  SwapDirection,
-  isFirstBuyPending,
-  isSwappable,
-} from '@metaplex-foundation/genesis';
-import { toWeb3JsTransaction } from '@metaplex-foundation/umi-web3js-adapters';
-import { getRpcConfig } from '~/lib/sap/discovery';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 import { env } from '~/lib/env';
+
+export const dynamic = 'force-dynamic';
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 /**
  * Build an unsigned `swapBondingCurveV2` transaction for the requested
@@ -46,13 +32,7 @@ interface SwapBody {
 }
 
 function isAddr(s: unknown): s is string {
-  if (typeof s !== 'string') return false;
-  try {
-    new PublicKey(s);
-    return true;
-  } catch {
-    return false;
-  }
+  return typeof s === 'string' && BASE58_ADDRESS_RE.test(s);
 }
 
 export async function POST(
@@ -80,7 +60,25 @@ export async function POST(
         ? body.minAmountOutScaled
         : '0';
 
-    const { url } = getRpcConfig();
+    const { createUmi } = await import('@metaplex-foundation/umi-bundle-defaults');
+    const {
+      publicKey,
+      createNoopSigner,
+      transactionBuilder,
+    } = await import('@metaplex-foundation/umi');
+    const {
+      genesis,
+      swapBondingCurveV2,
+      safeFetchGenesisAccountV2,
+      findBondingCurveBucketV2Pda,
+      safeFetchBondingCurveBucketV2,
+      SwapDirection,
+      isFirstBuyPending,
+      isSwappable,
+    } = await import('@metaplex-foundation/genesis');
+    const { toWeb3JsTransaction } = await import('@metaplex-foundation/umi-web3js-adapters');
+
+    const { url } = getSynapseRpcConfig();
     const umi = createUmi(url, { httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY } }).use(genesis());
     const traderPk = publicKey(body.trader);
     umi.identity = createNoopSigner(traderPk);

@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /* ──────────────────────────────────────────────
  * GET /api/sap/agents/[wallet] — Agent profile by wallet
@@ -8,12 +9,6 @@ export const dynamic = 'force-dynamic';
  * ────────────────────────────────────────────── */
 
 import { synapseResponse } from '~/lib/synapse/client';
-import {
-  findAllAgents,
-  getAgentProfile,
-  serializeDiscoveredAgent,
-  serializeAgentProfile,
-} from '~/lib/sap/discovery';
 import { swr } from '~/lib/cache';
 import { selectAgentByPda, selectAgentByWallet, upsertAgent } from '~/lib/db/queries';
 import { dbAgentToApi, apiAgentToDb } from '~/lib/db/mappers';
@@ -66,6 +61,12 @@ export async function GET(
       } catch (e) { console.warn(`[agent/${wallet}] DB read failed:`, (e as Error).message); /* fall through to RPC */ }
 
       // --- RPC fallback ---
+      const {
+        findAllAgents,
+        getAgentProfile,
+        serializeDiscoveredAgent,
+        serializeAgentProfile,
+      } = await import('~/lib/sap/discovery');
       const rpcProfile = await getAgentProfile(wallet).catch(() => null);
       if (!rpcProfile) {
         const agents = await findAllAgents().catch(() => []);

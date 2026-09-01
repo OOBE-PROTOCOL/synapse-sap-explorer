@@ -25,16 +25,15 @@
  *     fee changes inside the program.
  */
 
-import {
+import type {
   Connection,
-  PublicKey,
-  type ConfirmedSignatureInfo,
-  type ParsedTransactionWithMeta,
+  ConfirmedSignatureInfo,
+  ParsedTransactionWithMeta,
 } from '@solana/web3.js';
 import { sql } from 'drizzle-orm';
 import { db, getSharedPool, isDbDown } from '~/db';
 import { tokenTrades, tokenTradeCursors } from '~/db/schema';
-import { getRpcConfig } from '~/lib/sap/discovery';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 
 const GENESIS_PROGRAM_ID = 'GNS1S5J5AspKXgpjz6SvKL66kPaKWAhaGRhCqPRxii2B';
 const SWAP_BONDING_CURVE_V2_DISCRIMINATOR = 65;
@@ -52,9 +51,10 @@ export interface IndexResult {
 }
 
 let _conn: Connection | null = null;
-function getConn(): Connection {
+async function getConn(): Promise<Connection> {
   if (_conn) return _conn;
-  const { url, headers } = getRpcConfig();
+  const { Connection } = await import('@solana/web3.js');
+  const { url, headers } = getSynapseRpcConfig();
   _conn = new Connection(url, { commitment: 'confirmed', httpHeaders: headers });
   return _conn;
 }
@@ -102,7 +102,8 @@ async function doIndex(
   baseMint: string,
   limit: number,
 ): Promise<IndexResult> {
-  const conn = getConn();
+  const conn = await getConn();
+  const { PublicKey } = await import('@solana/web3.js');
   const genesisPk = new PublicKey(genesisAddress);
 
   // 1. Load cursor → only fetch signatures *newer* than the last seen one.

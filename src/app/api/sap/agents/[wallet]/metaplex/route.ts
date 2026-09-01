@@ -19,9 +19,9 @@ export const dynamic = 'force-dynamic';
 
 import { synapseResponse } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
-import { getMetaplexLinkSnapshot, invalidateSnapshotCache } from '~/lib/sap/metaplex-link';
-import { invalidateMetaplexSnapshot } from '~/lib/sap/metaplex-snapshot-store';
-import { getRpcConfig, getSapClient } from '~/lib/sap/discovery';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
+
+export const runtime = 'nodejs';
 
 export async function GET(
   req: Request,
@@ -29,7 +29,10 @@ export async function GET(
 ) {
   try {
     const { wallet: walletOrId } = await params;
-    const { url: rpcUrl } = getRpcConfig();
+    const { getSapClient } = await import('~/lib/sap/discovery');
+    const { getMetaplexLinkSnapshot, invalidateSnapshotCache } = await import('~/lib/sap/metaplex-link');
+    const { invalidateMetaplexSnapshot } = await import('~/lib/sap/metaplex-snapshot-store');
+    const { url: rpcUrl } = getSynapseRpcConfig();
     const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
       identifier: walletOrId,
       rpcUrl,

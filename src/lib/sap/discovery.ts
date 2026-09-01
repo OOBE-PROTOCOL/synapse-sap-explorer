@@ -241,6 +241,70 @@ export async function findToolsByCategory(
   return getSap().discovery.findToolsByCategory(category as ToolCategoryName, opts);
 }
 
+function asPublicKeyInstance(value: unknown): PublicKey | null {
+  if (value == null) return null;
+  if (value instanceof PublicKey) return value;
+  if (typeof value === 'string') {
+    const normalized = asPublicKeyText(value);
+    if (!normalized) return null;
+    return new PublicKey(normalized);
+  }
+  if (typeof value === 'object' && 'toBase58' in value && typeof (value as { toBase58?: unknown }).toBase58 === 'function') {
+    return new PublicKey((value as { toBase58: () => string }).toBase58());
+  }
+  return null;
+}
+
+/** DB-backed agent list used as the default source for hot UI reads. */
+export async function fetchIndexedAgents(): Promise<DiscoveredAgent[]> {
+  try {
+    const { selectAllAgents } = await import('~/lib/db/queries');
+    const { dbAgentToApi } = await import('~/lib/db/mappers');
+    const rows = await selectAllAgents();
+    return rows.map((row) => {
+      const api = dbAgentToApi(row);
+      const wallet = asPublicKeyInstance(api.identity?.wallet);
+      return {
+        pda: new PublicKey(api.pda),
+        identity: api.identity
+          ? {
+              ...api.identity,
+              wallet: wallet ?? new PublicKey('11111111111111111111111111111111'),
+            }
+          : null,
+        stats: null,
+      } as DiscoveredAgent;
+    });
+  } catch (error) {
+    console.warn('[discovery] indexed agents unavailable:', (error as Error).message);
+    return [];
+  }
+}
+
+/** DB-backed tool list used as the default source for hot UI reads. */
+export async function fetchIndexedTools(): Promise<DiscoveredTool[]> {
+  try {
+    const { selectAllTools } = await import('~/lib/db/queries');
+    const { dbToolToApi } = await import('~/lib/db/mappers');
+    const rows = await selectAllTools();
+    return rows.map((row) => {
+      const api = dbToolToApi(row);
+      const descriptor = api.descriptor ?? {};
+      const agent = asPublicKeyInstance((descriptor as { agent?: unknown }).agent);
+      return {
+        pda: new PublicKey(api.pda),
+        descriptor: {
+          ...descriptor,
+          agent: agent ?? null,
+        } as unknown as ToolDescriptorData,
+      } satisfies DiscoveredTool;
+    });
+  } catch (error) {
+    console.warn('[discovery] indexed tools unavailable:', (error as Error).message);
+    return [];
+  }
+}
+
 /** Get tool category summary (counts per category) */
 export async function getToolCategorySummary(): Promise<
   Array<{ category: string; categoryNum: number; toolCount: number }>

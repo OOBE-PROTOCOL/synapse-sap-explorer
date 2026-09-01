@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { synapseResponse } from '~/lib/synapse/client';
-import { findAllAgents, getRpcConfig, getSapClient } from '~/lib/sap/discovery';
 import { selectAgentByPda, selectAgentByWallet } from '~/lib/db/queries';
 import { asPublicKeyText } from '~/lib/format';
+import { getSynapseRpcConfig } from '~/lib/sap/rpc-config';
 
 /**
  * GET /api/sap/agents/resolve/[id]
@@ -36,6 +37,7 @@ export async function GET(
       console.warn('[agents/resolve] DB lookup failed:', (e as Error).message);
     }
 
+    const { findAllAgents, getSapClient } = await import('~/lib/sap/discovery');
     const discovered = await findAllAgents()
       .then((agents) => agents.find((agent) => asPublicKeyText(agent.pda) === id))
       .catch(() => null);
@@ -50,7 +52,7 @@ export async function GET(
       });
     }
 
-    const { url } = getRpcConfig();
+    const { url } = getSynapseRpcConfig();
     const resolved = await getSapClient().metaplex.resolveAgentIdentifier({
       identifier: id,
       rpcUrl: url,

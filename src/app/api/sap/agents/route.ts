@@ -1,13 +1,8 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
-import type { DiscoveredAgent } from '~/lib/sap/discovery';
-import {
-  findAgentsByCapability,
-  findAgentsByProtocol,
-  findAllAgents,
-  serializeDiscoveredAgent,
-} from '~/lib/sap/discovery';
+import type { DiscoveredAgent } from '~/types/sap';
 import { swr, peek } from '~/lib/cache';
 import { selectAllAgents, upsertAgents, getAgentSettlementMap } from '~/lib/db/queries';
 import { isDbDown, markDbDown } from '~/db';
@@ -24,6 +19,12 @@ async function rpcFetchAgents(
   protocol: string | null,
   limit: number,
 ) {
+  const {
+    findAgentsByCapability,
+    findAgentsByProtocol,
+    findAllAgents,
+    serializeDiscoveredAgent,
+  } = await import('~/lib/sap/discovery');
   let agents: DiscoveredAgent[];
   if (capability) {
     agents = await findAgentsByCapability(capability);

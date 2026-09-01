@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /* ──────────────────────────────────────────────
  * GET /api/sap/agents/[wallet]/aggregate-reputation

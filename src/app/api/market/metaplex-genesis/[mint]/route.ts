@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
 import {
   getGenesisTokenLaunches,
 } from '~/lib/metaplex/genesis';
@@ -8,13 +7,12 @@ import type {
   MetaplexGenesisTokenLaunchesPayload,
 } from '~/lib/metaplex/genesis-types';
 
+export const dynamic = 'force-dynamic';
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
 function isValidMint(mint: string): boolean {
-  try {
-    new PublicKey(mint);
-    return true;
-  } catch {
-    return false;
-  }
+  return BASE58_ADDRESS_RE.test(mint);
 }
 
 function parseNetwork(req: Request): MetaplexGenesisNetwork {

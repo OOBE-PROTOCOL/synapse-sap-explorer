@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
+
+export const dynamic = 'force-dynamic';
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 type DexPair = {
   chainId?: string;
@@ -22,12 +25,7 @@ type DexResponse = {
 };
 
 function isValidMint(mint: string): boolean {
-  try {
-    const pk = new PublicKey(mint);
-    return PublicKey.isOnCurve(pk);
-  } catch {
-    return false;
-  }
+  return BASE58_ADDRESS_RE.test(mint);
 }
 
 export async function GET(

@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
 import { createGenesisLaunch } from '~/lib/metaplex/genesis';
 import type {
   MetaplexGenesisCreateLaunchRequest,
 } from '~/lib/metaplex/genesis-types';
 
+export const dynamic = 'force-dynamic';
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
 function isValidPubkey(value: string): boolean {
-  try {
-    new PublicKey(value);
-    return true;
-  } catch {
-    return false;
-  }
+  return BASE58_ADDRESS_RE.test(value);
 }
 
 function validatePayload(payload: MetaplexGenesisCreateLaunchRequest): string | null {

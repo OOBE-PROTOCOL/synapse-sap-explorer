@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import {
   findAllTools,
   findAllAgents,
+  fetchIndexedAgents,
+  fetchIndexedTools,
   serializeDiscoveredAgent,
 } from '~/lib/sap/discovery';
 import type { AgentWellKnown } from '~/lib/sap/well-known';
@@ -368,11 +370,15 @@ async function persistTruthLayer(agents: EnrichedAgent[], allTools: Awaited<Retu
 }
 
 async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
-  // Fast on-chain reads.
-  const [rawAgents, allTools] = await Promise.all([
-    findAllAgents(),
-    findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>),
+  const [indexedAgents, indexedTools] = await Promise.all([
+    fetchIndexedAgents(),
+    fetchIndexedTools(),
   ]);
+
+  const rawAgents = indexedAgents.length > 0 ? indexedAgents : await findAllAgents();
+  const allTools = indexedTools.length > 0
+    ? indexedTools
+    : await findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>);
 
   // Dedup by PDA, cap at 100.
   const seen = new Set<string>();

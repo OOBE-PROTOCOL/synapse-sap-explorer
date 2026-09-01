@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
-import { PublicKey } from '@solana/web3.js';
 import {
   fetchGenesisAccountByAddress,
   type GenesisAccountOnchain,
 } from '~/lib/metaplex/genesis-onchain';
 
+export const dynamic = 'force-dynamic';
+
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
 function isValidAddress(address: string): boolean {
-  try {
-    new PublicKey(address);
-    return true;
-  } catch {
-    return false;
-  }
+  return BASE58_ADDRESS_RE.test(address);
 }
 
 export interface GenesisOnchainPayload {
