@@ -74,6 +74,8 @@ type EscrowMap = Record<string, EscrowInfo>;
 const POLL_MS = 12_000;
 const SAP_ADDRESS = "SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ";
 const POLL_PER_PAGE = 50;
+const TX_RANGES = ["24h", "7d", "30d", "120d", "all"] as const;
+type TxRange = (typeof TX_RANGES)[number];
 
 /* ── Helpers ────────────────────────────────── */
 
@@ -705,8 +707,12 @@ function TxRow({
       {/* Programs (as icons) */}
       <TableCell>
         <div className="flex items-center gap-1">
-          {tx.programs.map((p) => (
-            <ProgramIcon key={p.id} program={p} size={20} />
+          {tx.programs.map((p, index) => (
+            <ProgramIcon
+              key={`${tx.signature}-${p.id}-${index}`}
+              program={p}
+              size={20}
+            />
           ))}
         </div>
       </TableCell>
@@ -735,6 +741,7 @@ export default function TransactionsPage() {
   const [hideFailed, setHideFailed] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [sapFilter, setSapFilter] = useState("all");
+  const [timeRange, setTimeRange] = useState<TxRange>("all");
   const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
 
@@ -752,6 +759,7 @@ export default function TransactionsPage() {
       const params = new URLSearchParams({
         page: poll ? "1" : String(page),
         perPage: poll ? String(POLL_PER_PAGE) : String(perPage),
+        range: timeRange,
       });
       if (poll) {
         if (page !== 1) return;
@@ -791,7 +799,7 @@ export default function TransactionsPage() {
       if (poll) setRefreshing(false);
       else setLoading(false);
     }
-  }, [page, perPage]);
+  }, [page, perPage, timeRange]);
 
   const fetchAgentMap = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -942,7 +950,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, hideSpam, hideFailed, sortDir, sapFilter]);
+  }, [search, hideSpam, hideFailed, sortDir, sapFilter, timeRange]);
 
   return (
     <ExplorerPageShell
@@ -1000,6 +1008,23 @@ export default function TransactionsPage() {
           {/* Filters card — border only, no bg, 2-column grid */}
           <Card className="border-neutral-700 bg-transparent hover:border-neutral-600 transition-all duration-300 flex items-center justify-center">
             <div className="p-4 w-full">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {TX_RANGES.map((range) => (
+                  <button
+                    key={range}
+                    type="button"
+                    onClick={() => setTimeRange(range)}
+                    className={cn(
+                      "h-7 rounded-md border px-2.5 text-[11px] font-medium transition-colors",
+                      timeRange === range
+                        ? "border-primary/60 bg-primary/10 text-primary"
+                        : "border-neutral-700 bg-transparent text-neutral-400 hover:border-neutral-500 hover:text-white",
+                    )}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-2 gap-2 w-full">
                 {/* Col 1: sort + SAP instruction filter */}
                 <div className="flex flex-col gap-2">

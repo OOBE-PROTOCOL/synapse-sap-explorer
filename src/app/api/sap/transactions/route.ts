@@ -6,7 +6,13 @@ import type { BorshInstructionCoder } from '@coral-xyz/anchor';
 import { SAP_PROGRAM_ADDRESS } from '~/lib/sap/sdk-compat';
 import { getSapClient, getRpcConfig } from '~/lib/sap/discovery';
 import { peek, put, swr } from '~/lib/cache';
-import { selectTransactions, countTransactions, upsertTransactions } from '~/lib/db/queries';
+import {
+  selectTransactions,
+  countTransactions,
+  upsertTransactions,
+  resolveTransactionTimeRange,
+  type TransactionTimeRange,
+} from '~/lib/db/queries';
 import { isDbDown, markDbDown } from '~/db';
 import { dbTxToApi, apiTxToDb } from '~/lib/db/mappers';
 import { rawGetSignaturesForAddress, rawGetTransaction } from '~/lib/rpc';
@@ -30,6 +36,29 @@ const PROGRAMS: Record<string, string> = {
 
 function identifyProgram(pubkey: string): string | null {
   return PROGRAMS[pubkey] ?? null;
+}
+
+function toTxRange(value: string | null | undefined): TransactionTimeRange {
+  const allowed: TransactionTimeRange[] = ['24h', '7d', '30d', '120d', 'all'];
+  return allowed.includes((value ?? 'all') as TransactionTimeRange)
+    ? (value ?? 'all') as TransactionTimeRange
+    : 'all';
+}
+
+function txMatchesRange(blockTime: number | null | undefined, range: TransactionTimeRange) {
+  if (range === 'all' || blockTime == null) return true;
+  const window = resolveTransactionTimeRange(range);
+  if (!window.from) return true;
+  return blockTime >= Math.floor(window.from.getTime() / 1000);
+}
+
+function parseDateFilter(raw: string | null): Date | undefined {
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return undefined;
+  const ms = value > 1e12 ? value : value * 1000;
+  const date = new Date(ms);
+  return Number.isFinite(date.getTime()) ? date : undefined;
 }
 
 /* ── Retry with exponential backoff ──────────────────── */
@@ -463,6 +492,10 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
     const perPage = Math.min(Math.max(1, Number(searchParams.get('perPage') ?? '25')), 5000);
     const afterSlot = searchParams.get('after') ? Number(searchParams.get('after')) : null;
+    const range = toTxRange(searchParams.get('range'));
+    const rangeWindow = resolveTransactionTimeRange(range);
+    const fromOverride = parseDateFilter(searchParams.get('from')) ?? rangeWindow.from;
+    const toOverride = parseDateFilter(searchParams.get('to')) ?? rangeWindow.to;
 
     const limit = perPage;
     const offset = (page - 1) * perPage;
@@ -470,9 +503,9 @@ export async function GET(req: Request) {
     const requestedFetchLimit = offset + limit;
     const refreshFetchLimit = Math.max(requestedFetchLimit, 50);
     const liveFetchLimit = afterSlot !== null ? 50 : Math.min(refreshFetchLimit, LIVE_HEAD_LIMIT_MAX);
-    const cacheKey = `transactions:${refreshFetchLimit}`;
-    const pageCacheKey = `transactions:page:${page}:${limit}:${offset}`;
-    const liveCacheKey = `transactions:live:${liveFetchLimit}`;
+    const cacheKey = `transactions:${refreshFetchLimit}:${range}`;
+    const pageCacheKey = `transactions:page:${page}:${limit}:${offset}:${range}`;
+    const liveCacheKey = `transactions:live:${liveFetchLimit}:${range}`;
     const diagnostics: TransactionDiagnostics = {
       dbAttempted: true,
       dbRows: 0,
@@ -511,6 +544,7 @@ export async function GET(req: Request) {
         );
         diagnostics.rpcRows = liveRows.length;
         if (afterSlot !== null) liveRows = liveRows.filter((tx) => tx.slot > afterSlot);
+        liveRows = liveRows.filter((tx) => txMatchesRange(tx.blockTime, range));
 
         const result = liveRows.slice(0, limit);
         const res = NextResponse.json({
@@ -546,7 +580,11 @@ export async function GET(req: Request) {
     let total = 0;
     try {
       const rows = await withTimeout(
-        selectTransactions(limit, offset, { includeDetails: true }),
+        selectTransactions(limit, offset, {
+          includeDetails: true,
+          from: fromOverride,
+          to: toOverride,
+        }),
         DB_PAGE_TIMEOUT_MS,
         'transactions db page read',
       );
@@ -578,7 +616,10 @@ export async function GET(req: Request) {
     if (!diagnostics.dbError) {
       try {
         total = await withTimeout(
-          countTransactions(),
+          countTransactions({
+            from: fromOverride,
+            to: toOverride,
+          }),
           DB_COUNT_TIMEOUT_MS,
           'transactions db count',
         );
@@ -604,7 +645,7 @@ export async function GET(req: Request) {
           diagnostics.rpcError = (error as Error).message;
           return [] as HydratedTransaction[];
         });
-        liveRowsForPageOne = liveRows;
+        liveRowsForPageOne = liveRows.filter((tx) => txMatchesRange(tx.blockTime, range));
         diagnostics.rpcAttempted = true;
         diagnostics.rpcRows = liveRows.length;
         swr(cacheKey, () => backgroundRpcRefresh(refreshFetchLimit), { ttl: 30_000, swr: 300_000 }).catch(() => {});
@@ -642,6 +683,7 @@ export async function GET(req: Request) {
           () => fetchHydratedLiveRows(FALLBACK_HYDRATE_LIMIT),
           { ttl: 8_000, swr: 60_000 },
         );
+        result = result.filter((tx) => txMatchesRange(tx.blockTime, range));
         diagnostics.rpcRows = result.length;
       } catch (e) {
         diagnostics.rpcError = (e as Error).message;

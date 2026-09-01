@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, count, inArray, or } from 'drizzle-orm';
+import { eq, desc, sql, and, count, inArray, or, gte, lte } from 'drizzle-orm';
 import { db } from '~/db';
 import { conflictUpdateSet, conflictUpdateWhere } from '~/lib/db/upsert';
 import { asPublicKeyText } from '~/lib/format';
@@ -333,12 +333,48 @@ export async function upsertVaults(dataArr: (typeof vaults.$inferInsert)[]) {
 
 /* ── Transactions ─────────────────────────────── */
 
+export type TransactionTimeRange = '24h' | '7d' | '30d' | '120d' | 'all';
+
+export function resolveTransactionTimeRange(range?: string | null) {
+  const normalized = (range ?? 'all') as TransactionTimeRange;
+  const now = Date.now();
+  const msByRange: Record<TransactionTimeRange, number> = {
+    '24h': 24 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+    '30d': 30 * 24 * 60 * 60 * 1000,
+    '120d': 120 * 24 * 60 * 60 * 1000,
+    all: 0,
+  };
+
+  const windowMs = msByRange[normalized] ?? 0;
+  return {
+    range: normalized,
+    from: windowMs > 0 ? new Date(now - windowMs) : undefined,
+    to: new Date(now),
+  };
+}
+
 export async function selectTransactions(
   limit = 50,
   offset = 0,
-  opts: { includeDetails?: boolean } = {},
+  opts: {
+    includeDetails?: boolean;
+    from?: Date | number | string;
+    to?: Date | number | string;
+  } = {},
 ) {
-  const rows = await db
+  const whereConditions = [] as ReturnType<typeof and>[];
+  const fromDate = opts.from ? new Date(opts.from) : undefined;
+  const toDate = opts.to ? new Date(opts.to) : undefined;
+
+  if (fromDate && Number.isFinite(fromDate.getTime())) {
+    whereConditions.push(gte(transactions.blockTime, fromDate));
+  }
+  if (toDate && Number.isFinite(toDate.getTime())) {
+    whereConditions.push(lte(transactions.blockTime, toDate));
+  }
+
+  const query = db
     .select({
       signature: transactions.signature,
       slot: transactions.slot,
@@ -361,9 +397,13 @@ export async function selectTransactions(
       balanceChanges: sql<null>`NULL`,
     })
     .from(transactions)
-    .orderBy(desc(transactions.slot))
-    .limit(limit)
-    .offset(offset);
+    .orderBy(desc(transactions.slot));
+
+  if (whereConditions.length > 0) {
+    query.where(and(...whereConditions));
+  }
+
+  const rows = await query.limit(limit).offset(offset);
 
   if (rows.length === 0 || opts.includeDetails === false) return rows;
 
@@ -391,8 +431,24 @@ export async function selectTransactions(
   });
 }
 
-export async function countTransactions() {
-  const result = await db.select({ count: count() }).from(transactions);
+export async function countTransactions(opts: { from?: Date | number | string; to?: Date | number | string } = {}) {
+  const whereConditions = [] as ReturnType<typeof and>[];
+  const fromDate = opts.from ? new Date(opts.from) : undefined;
+  const toDate = opts.to ? new Date(opts.to) : undefined;
+
+  if (fromDate && Number.isFinite(fromDate.getTime())) {
+    whereConditions.push(gte(transactions.blockTime, fromDate));
+  }
+  if (toDate && Number.isFinite(toDate.getTime())) {
+    whereConditions.push(lte(transactions.blockTime, toDate));
+  }
+
+  const query = db.select({ count: count() }).from(transactions);
+  if (whereConditions.length > 0) {
+    query.where(and(...whereConditions));
+  }
+
+  const result = await query;
   return result[0]?.count ?? 0;
 }
 
