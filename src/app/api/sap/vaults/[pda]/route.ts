@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * Data source priority: DB (sap_* tables) → on-chain fallback
  * ────────────────────────────────────────────────────────────── */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { PublicKey } from '@solana/web3.js';
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
@@ -187,11 +187,11 @@ function decodeRingBuffer(ringBase64: string | null): RingEntry[] {
 
 /* ── Main fetch logic ── */
 
-async function fetchVaultDetail(pdaStr: string): Promise<VaultDetailResponse> {
+async function fetchVaultDetail(pdaStr: string): Promise<VaultDetailResponse | null> {
   // 1. Vault from DB
   const vault = await getVaultByPda(pdaStr);
   if (!vault) {
-    throw new Error('Vault not found');
+    return null;
   }
 
   // 2. Parallel: sessions, delegates, events
@@ -331,12 +331,17 @@ async function fetchVaultDetail(pdaStr: string): Promise<VaultDetailResponse> {
 export const GET = withSynapseError(async (req: NextRequest) => {
   const pda = req.nextUrl.pathname.split('/').pop();
   if (!pda) {
-    return new Response(JSON.stringify({ error: 'Missing vault PDA' }), { status: 400 });
+    return NextResponse.json({ error: 'Missing vault PDA' }, { status: 400 });
   }
 
   // Validate PDA
   try { new PublicKey(pda); } catch {
-    return new Response(JSON.stringify({ error: 'Invalid PDA' }), { status: 400 });
+    return NextResponse.json({ error: 'Invalid PDA' }, { status: 400 });
+  }
+
+  const vault = await getVaultByPda(pda);
+  if (!vault) {
+    return NextResponse.json({ error: 'Vault not found' }, { status: 404 });
   }
 
   const cacheKey = `vault-detail:${pda}`;
@@ -344,6 +349,10 @@ export const GET = withSynapseError(async (req: NextRequest) => {
     ttl: 30_000,
     swr: 120_000,
   });
+
+  if (!data) {
+    return NextResponse.json({ error: 'Vault not found' }, { status: 404 });
+  }
 
   return synapseResponse(data);
 });

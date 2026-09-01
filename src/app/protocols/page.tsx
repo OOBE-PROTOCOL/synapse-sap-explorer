@@ -74,7 +74,8 @@ export default function ProtocolsPage() {
   const [sortDir, setSortDir] = useQueryState<SortDir>("sortDir", "desc", QueryParam.enum("desc", ["asc", "desc"] as const));
 
   const loading = gLoading || aLoading;
-  const error = graphError || agentsError;
+  const hasData = Boolean(graphData || agentsData);
+  const error = !hasData && (graphError || agentsError);
 
   const capabilityByProtocol = useMemo(() => {
     const map = new Map<

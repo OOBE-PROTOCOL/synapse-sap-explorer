@@ -13,10 +13,11 @@ export const dynamic = 'force-dynamic';
  *   ?rpc=true           — enable direct RPC fallback (default: false)
  * ────────────────────────────────────────────────────────── */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { PublicKey } from '@solana/web3.js';
 import { synapseResponse, withSynapseError } from '~/lib/synapse/client';
 import { swr } from '~/lib/cache';
+import { getVaultByPda } from '~/db/memory-queries';
 import {
   getSessionInscriptions,
   getVaultInscriptions,
@@ -30,11 +31,16 @@ export const GET = withSynapseError(async (req: NextRequest) => {
   const pda = segments[pdaIdx];
 
   if (!pda) {
-    return new Response(JSON.stringify({ error: 'Missing vault PDA' }), { status: 400 });
+    return NextResponse.json({ error: 'Missing vault PDA' }, { status: 400 });
   }
 
   try { new PublicKey(pda); } catch {
-    return new Response(JSON.stringify({ error: 'Invalid PDA' }), { status: 400 });
+    return NextResponse.json({ error: 'Invalid PDA' }, { status: 400 });
+  }
+
+  const vault = await getVaultByPda(pda);
+  if (!vault) {
+    return NextResponse.json({ error: 'Vault not found' }, { status: 404 });
   }
 
   const sessionPda = req.nextUrl.searchParams.get('session');
@@ -44,7 +50,7 @@ export const GET = withSynapseError(async (req: NextRequest) => {
 
   if (sessionPda) {
     try { new PublicKey(sessionPda); } catch {
-      return new Response(JSON.stringify({ error: 'Invalid session PDA' }), { status: 400 });
+      return NextResponse.json({ error: 'Invalid session PDA' }, { status: 400 });
     }
   }
 
