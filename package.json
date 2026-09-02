@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
+    "@esbuild/linux-x64": "^0.28.2",
     "@grpc/grpc-js": "^1.14.3",
     "@grpc/proto-loader": "^0.8.0",
     "@hookform/resolvers": "^5.2.2",
@@ -116,7 +117,6 @@
       "unrs-resolver"
     ],
     "overrides": {
-      "esbuild": "0.25.12",
       "uuid": "^9.0.1",
       "rpc-websockets>uuid": "9.0.1"
     },
