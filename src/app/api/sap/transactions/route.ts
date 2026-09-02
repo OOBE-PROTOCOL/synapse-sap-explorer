@@ -494,8 +494,10 @@ export async function GET(req: Request) {
     const afterSlot = searchParams.get('after') ? Number(searchParams.get('after')) : null;
     const range = toTxRange(searchParams.get('range'));
     const rangeWindow = resolveTransactionTimeRange(range);
-    const fromOverride = parseDateFilter(searchParams.get('from')) ?? rangeWindow.from;
-    const toOverride = parseDateFilter(searchParams.get('to')) ?? rangeWindow.to;
+    const explicitFrom = parseDateFilter(searchParams.get('from'));
+    const explicitTo = parseDateFilter(searchParams.get('to'));
+    const fromOverride = explicitFrom ?? (range === 'all' ? undefined : rangeWindow.from);
+    const toOverride = explicitTo ?? (range === 'all' ? undefined : rangeWindow.to);
 
     const limit = perPage;
     const offset = (page - 1) * perPage;
