@@ -14,6 +14,45 @@ export function logErr(label: string, msg: string) {
   console.error(`[${ts}] [indexer:${label}] ❌ ${msg}`);
 }
 
+const SENSITIVE_QUERY_KEYS = new Set(['api-key', 'apikey', 'key', 'token', 'x-api-key']);
+
+export function maskSecret(value: string | null | undefined): string {
+  if (!value) return '(empty)';
+  if (value.length <= 8) return `${value.slice(0, 2)}***${value.slice(-1)}`;
+  return `${value.slice(0, 4)}***${value.slice(-4)}`;
+}
+
+export function redactRpcUrl(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    if (u.username) u.username = maskSecret(u.username);
+    if (u.password) u.password = maskSecret(u.password);
+    for (const key of Array.from(u.searchParams.keys())) {
+      if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) {
+        u.searchParams.set(key, maskSecret(u.searchParams.get(key)));
+      }
+    }
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function rpcDebugEnabled(): boolean {
+  return (process.env.INDEXER_RPC_DEBUG ?? 'false').toLowerCase() === 'true';
+}
+
+export function logRpcTarget(
+  label: string,
+  method: string,
+  rpcUrl: string,
+  rpcHeaders?: Record<string, string>,
+): void {
+  if (!rpcDebugEnabled()) return;
+  const apiKey = rpcHeaders?.['x-api-key'] ?? rpcHeaders?.['X-API-Key'] ?? process.env.SYNAPSE_API_KEY ?? '';
+  log(label, `RPC ${method} -> ${redactRpcUrl(rpcUrl)} x-api-key=${maskSecret(apiKey)}`);
+}
+
 export function formatError(err: unknown): string {
   const error = err as Error & {
     cause?: unknown;

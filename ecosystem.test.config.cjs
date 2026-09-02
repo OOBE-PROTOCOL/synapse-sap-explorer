@@ -57,7 +57,8 @@ module.exports = {
         INDEXER_MODE: 'polling',
         // Optional dedicated RPC for indexer only
         // INDEXER_RPC_URL: 'https://your-indexer-rpc.example.com',
-        // https://us-1-mainnet.oobeprotocol.ai/rpc
+        INDEXER_RPC_URL: 'https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=sk_live_xxxxxx',
+        INDEXER_RPC_DEBUG: 'true',
         ENTITY_HEALING_INTERVAL_MS: '21600000',
         TX_INTERVAL_MS: '20000',
         SNAPSHOT_INTERVAL_MS: '300000',

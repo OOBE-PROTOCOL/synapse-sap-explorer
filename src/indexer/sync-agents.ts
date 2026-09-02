@@ -1,13 +1,15 @@
 // src/indexer/sync-agents.ts — Fetch all agents + stats → upsert DB
 import { db } from '~/db';
 import { agents, agentStats } from '~/db/schema';
-import { AgentAccountData, AgentStatsData, findAllAgents, findAllAgentStats } from '~/lib/sap/discovery';
+import { AgentAccountData, AgentStatsData, findAllAgents, findAllAgentStats, getRpcConfig } from '~/lib/sap/discovery';
 import { serializeAccount } from '~/lib/sap/sdk-compat';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere, sleep } from './utils';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere, sleep, logRpcTarget } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncAgents(): Promise<number> {
   log('agents', 'Fetching all agents from RPC...');
+  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+  logRpcTarget('agents', 'getProgramAccounts(agentAccount)', rpcUrl, rpcHeaders);
 
   const rawAgents = await withRetry(() => findAllAgents(), 'agents:fetch');
   log('agents', `Fetched ${rawAgents.length} agents`);
@@ -20,6 +22,7 @@ export async function syncAgents(): Promise<number> {
   // Also fetch stats for enrichment
   const statsMap = new Map<string, AgentStatsData>();
   try {
+    logRpcTarget('agents', 'getProgramAccounts(agentStats)', rpcUrl, rpcHeaders);
     const rawStats = await withRetry(() => findAllAgentStats(), 'agents:stats');
     for (const s of rawStats) {
       const agentPda = pk(s.stats?.agent ?? s.pda);

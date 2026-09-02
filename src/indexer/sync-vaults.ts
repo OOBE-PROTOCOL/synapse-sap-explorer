@@ -1,12 +1,14 @@
 // src/indexer/sync-vaults.ts — Fetch all vaults → upsert DB
 import { db } from '~/db';
 import { vaults } from '~/db/schema';
-import { findAllVaults } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere } from './utils';
+import { findAllVaults, getRpcConfig } from '~/lib/sap/discovery';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere, logRpcTarget } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncVaults(): Promise<number> {
   log('vaults', 'Fetching all vaults from RPC...');
+  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+  logRpcTarget('vaults', 'getProgramAccounts(memoryVault)', rpcUrl, rpcHeaders);
 
   const raw = await withRetry(() => findAllVaults(), 'vaults:fetch');
   log('vaults', `Fetched ${raw.length} vaults`);

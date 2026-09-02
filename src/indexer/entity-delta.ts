@@ -11,7 +11,7 @@ import {
   vaults,
 } from '~/db/schema';
 import type { ActivePlugin, Capability, PricingTier } from '~/db/schema';
-import { getSapClient, getSynapseConnection } from '~/lib/sap/discovery';
+import { getRpcConfig, getSapClient, getSynapseConnection } from '~/lib/sap/discovery';
 import {
   bn,
   bnToDate,
@@ -24,6 +24,7 @@ import {
   logErr,
   num,
   pk,
+  logRpcTarget,
 } from './utils';
 import { serializeAccount } from '~/lib/sap/sdk-compat';
 
@@ -339,6 +340,7 @@ export async function refreshAccountsByPdas(pdas: Iterable<string>): Promise<num
   if (valid.length === 0) return 0;
 
   const conn = getSynapseConnection();
+  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
   const sapProgram = getSapClient().program.programId.toBase58();
   let applied = 0;
   const BATCH = 100;
@@ -347,6 +349,7 @@ export async function refreshAccountsByPdas(pdas: Iterable<string>): Promise<num
     const batch = valid.slice(i, i + BATCH);
     let infos: Awaited<ReturnType<typeof conn.getMultipleAccountsInfo>>;
     try {
+      logRpcTarget('delta', `getMultipleAccountsInfo(batch=${batch.length})`, rpcUrl, rpcHeaders);
       infos = await conn.getMultipleAccountsInfo(batch.map((b) => b.key), 'confirmed');
     } catch (e) {
       logErr('delta', `getMultipleAccountsInfo failed: ${formatError(e)}`);

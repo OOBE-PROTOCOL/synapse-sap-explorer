@@ -2,12 +2,14 @@
 import { db } from '../db';
 import { agentSnapshots, networkSnapshots, toolSnapshots } from '../db/schema';
 import { selectAllAgents, selectAllTools } from '../lib/db/queries';
-import { getNetworkOverview, getSynapseConnection, serializeOverview } from '../lib/sap/discovery';
-import { formatError, log, logErr, withRetry } from './utils';
+import { getNetworkOverview, getRpcConfig, getSynapseConnection, serializeOverview } from '../lib/sap/discovery';
+import { formatError, log, logErr, withRetry, logRpcTarget } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncSnapshots(): Promise<void> {
   log('snapshots', 'Capturing network snapshot...');
+  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+  logRpcTarget('snapshots', 'getNetworkOverview', rpcUrl, rpcHeaders);
 
   try {
     const overview = await withRetry(() => getNetworkOverview(), 'snapshots:fetch');
@@ -93,6 +95,8 @@ async function captureAccountSnapshots(): Promise<void> {
 
 async function resolveSnapshotSlot(): Promise<number> {
   try {
+    const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+    logRpcTarget('snapshots', 'getSlot', rpcUrl, rpcHeaders);
     return await getSynapseConnection().getSlot('confirmed');
   } catch (e) {
     logErr('snapshots', `Slot lookup failed, using timestamp fallback: ${formatError(e)}`);

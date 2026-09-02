@@ -1,7 +1,7 @@
 import { SAP_PROGRAM_ADDRESS } from '~/lib/sap/sdk-compat';
 import { getRpcConfig } from '~/lib/sap/discovery';
 import type { TransactionError } from '~/types/indexer';
-import { formatError, log, logErr, withRetry, sleep } from './utils';
+import { formatError, log, logErr, withRetry, sleep, logRpcTarget } from './utils';
 import { getCursor, setCursor } from './cursor';
 import { hydrateTx, upsertHydratedTx, type SignatureLike } from './tx-pipeline';
 import { extractAndInsertEvents } from './event-extractor';
@@ -16,6 +16,7 @@ async function rawGetSignaturesForAddress(
   rpcUrl: string,
   rpcHeaders: Record<string, string>,
 ): Promise<Array<{ signature: string; slot: number; blockTime: number | null; err: TransactionError; memo: string | null }>> {
+  logRpcTarget('tx', 'getSignaturesForAddress', rpcUrl, rpcHeaders);
   const resp = await fetch(rpcUrl, {
     method: 'POST',
     headers: rpcHeaders,
@@ -39,6 +40,7 @@ async function rawGetSignaturesForAddress(
 }
 
 async function rawGetTransaction(signature: string, rpcUrl: string, rpcHeaders: Record<string, string>) {
+  logRpcTarget('tx', `getTransaction(${signature.slice(0, 12)}...)`, rpcUrl, rpcHeaders);
   const resp = await fetch(rpcUrl, {
     method: 'POST',
     headers: rpcHeaders,

@@ -1,12 +1,14 @@
 // src/indexer/sync-feedbacks.ts — Fetch all feedbacks → upsert DB
 import { db } from '~/db';
 import { feedbacks } from '~/db/schema';
-import { findAllFeedbacks } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, num, bnToDate, hashToHex, conflictUpdateSet, conflictUpdateWhere } from './utils';
+import { findAllFeedbacks, getRpcConfig } from '~/lib/sap/discovery';
+import { log, logErr, withRetry, pk, num, bnToDate, hashToHex, conflictUpdateSet, conflictUpdateWhere, logRpcTarget } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncFeedbacks(): Promise<number> {
   log('feedbacks', 'Fetching all feedbacks from RPC...');
+  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
+  logRpcTarget('feedbacks', 'getProgramAccounts(feedbackAccount)', rpcUrl, rpcHeaders);
 
   const raw = await withRetry(() => findAllFeedbacks(), 'feedbacks:fetch');
   log('feedbacks', `Fetched ${raw.length} feedbacks`);
