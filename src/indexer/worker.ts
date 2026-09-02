@@ -17,11 +17,16 @@ import { log, logErr, sleep } from './utils';
 
 /* ── Config ───────────────────────────────────────────── */
 
-const ENTITY_INTERVAL_MS  = Number(process.env.ENTITY_INTERVAL_MS  ?? 60_000);   // 60s
+const ENTITY_HEALING_INTERVAL_MS = Number(
+  process.env.ENTITY_HEALING_INTERVAL_MS
+  ?? process.env.ENTITY_INTERVAL_MS
+  ?? 6 * 60 * 60 * 1000,
+); // 6h default — full scans are healing-only
 const TX_INTERVAL_MS      = Number(process.env.TX_INTERVAL_MS      ?? 20_000);   // 20s (compensates for no real-time)
 const TX_FALLBACK_INTERVAL_MS = 300_000;                                          // 5min — fallback when gRPC is active
 const SNAPSHOT_INTERVAL_MS = Number(process.env.SNAPSHOT_INTERVAL_MS ?? 300_000); // 5min
 const INTER_ENTITY_DELAY_MS = 2_000;                                              // 2s pause between entity fetches
+const FULL_SYNC_ON_START = (process.env.FULL_SYNC_ON_START ?? 'true').toLowerCase() !== 'false';
 
 const ONCE = process.argv.includes('--once');
 const INDEXER_MODE = (process.env.INDEXER_MODE ?? 'polling').toLowerCase() as 'polling' | 'stream' | 'hybrid';
@@ -150,7 +155,7 @@ async function syncSnap() {
 async function main() {
   log('worker', 'SAP Indexer starting');
   log('worker', `  mode=${INDEXER_MODE} run=${ONCE ? 'once' : 'daemon'}`);
-  log('worker', `  intervals: entity=${ENTITY_INTERVAL_MS / 1000}s tx=${TX_INTERVAL_MS / 1000}s snap=${SNAPSHOT_INTERVAL_MS / 1000}s`);
+  log('worker', `  intervals: entity-healing=${ENTITY_HEALING_INTERVAL_MS / 1000}s tx=${TX_INTERVAL_MS / 1000}s snap=${SNAPSHOT_INTERVAL_MS / 1000}s`);
   log('worker', `  db=${process.env.DATABASE_URL?.replace(/:[^@]+@/, ':***@') ?? 'NOT SET'}`);
 
   if (!process.env.DATABASE_URL) {
@@ -177,9 +182,13 @@ async function main() {
     process.exit(0);
   }
 
-  // Continuous mode: initial full baseline
-  log('worker', 'Running initial baseline sync (entities + snapshots)...');
-  await syncAllEntities();
+  // Continuous mode: optional bootstrap full baseline
+  if (FULL_SYNC_ON_START) {
+    log('worker', 'Running initial baseline sync (entities + snapshots)...');
+    await syncAllEntities();
+  } else {
+    log('worker', 'Skipping initial full entity sync (FULL_SYNC_ON_START=false)');
+  }
   await syncSnap();
 
   // gRPC stream setup (Option B)
@@ -195,11 +204,11 @@ async function main() {
     await syncTx();
   }
 
-  // Schedule recurring cycles (entities + snapshots always on)
+  // Schedule recurring cycles (full-entity sync is healing-only)
   const entityTimer = setInterval(async () => {
     if (!running) return;
     await syncAllEntities();
-  }, ENTITY_INTERVAL_MS);
+  }, ENTITY_HEALING_INTERVAL_MS);
 
   // tx timer differs by mode:
   // - polling: main mechanism every 30s

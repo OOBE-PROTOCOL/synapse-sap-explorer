@@ -65,7 +65,7 @@ module.exports = {
         NODE_ENV: 'production',
         INDEXER_MODE: 'polling',
         // Intervals (ms) — tune as needed
-        ENTITY_INTERVAL_MS: '60000',   // 60s — entities (agents, tools, etc.)
+        ENTITY_HEALING_INTERVAL_MS: '21600000', // 6h — full entity scan (healing only)
         TX_INTERVAL_MS: '20000',       // 20s — transactions
         SNAPSHOT_INTERVAL_MS: '300000', // 5min — network snapshots
       },
@@ -97,4 +97,3 @@ module.exports = {
     },
   ],
 };
-

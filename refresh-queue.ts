@@ -1,83 +1,51 @@
-// src/indexer/refresh-queue.ts — Coalesced refresh queue for touched entities
-import type { EntityGroup } from '~/indexer/entity-impact';
-import { syncAgents } from '~/indexer/sync-agents';
-import { syncTools } from '~/indexer/sync-tools';
-import { syncEscrows } from '~/indexer/sync-escrows';
-import { syncAttestations } from '~/indexer/sync-attestations';
-import { syncFeedbacks } from '~/indexer/sync-feedbacks';
-import { syncVaults } from '~/indexer/sync-vaults';
+// src/indexer/refresh-queue.ts — Coalesced targeted account refresh queue
 import { log, logErr } from '~/indexer/utils';
+import { refreshAccountsByPdas } from '~/indexer/entity-delta';
 
-const pending = new Set<EntityGroup>();
+const pendingPdas = new Set<string>();
 let flushTimer: NodeJS.Timeout | null = null;
 let flushing = false;
 
 const FLUSH_DEBOUNCE_MS = 3500;
 
-async function runOne(entity: EntityGroup) {
-  switch (entity) {
-    case 'agents':
-      await syncAgents();
-      break;
-    case 'tools':
-      await syncTools();
-      break;
-    case 'escrows':
-      await syncEscrows();
-      break;
-    case 'attestations':
-      await syncAttestations();
-      break;
-    case 'feedbacks':
-      await syncFeedbacks();
-      break;
-    case 'vaults':
-      await syncVaults();
-      break;
+export function enqueuePdaRefresh(pda: string) {
+  if (!pda) return;
+  pendingPdas.add(pda);
+
+  if (flushTimer) return;
+  flushTimer = setTimeout(async () => {
+    flushTimer = null;
+    await flushPdaRefreshQueue();
+  }, FLUSH_DEBOUNCE_MS);
+}
+
+export function enqueuePdaRefreshMany(pdas: Iterable<string>) {
+  for (const pda of pdas) {
+    if (!pda) continue;
+    pendingPdas.add(pda);
   }
-}
-
-export function enqueueEntityRefresh(entity: EntityGroup) {
-  pending.add(entity);
-
   if (flushTimer) return;
   flushTimer = setTimeout(async () => {
     flushTimer = null;
-    await flushEntityRefreshQueue();
+    await flushPdaRefreshQueue();
   }, FLUSH_DEBOUNCE_MS);
 }
 
-export function enqueueEntityRefreshMany(entities: Iterable<EntityGroup>) {
-  for (const e of entities) pending.add(e);
-  if (flushTimer) return;
-  flushTimer = setTimeout(async () => {
-    flushTimer = null;
-    await flushEntityRefreshQueue();
-  }, FLUSH_DEBOUNCE_MS);
-}
-
-export async function flushEntityRefreshQueue() {
+export async function flushPdaRefreshQueue() {
   if (flushing) return;
-  if (pending.size === 0) return;
+  if (pendingPdas.size === 0) return;
 
   flushing = true;
-  const targets = Array.from(pending);
-  pending.clear();
+  const targets = Array.from(pendingPdas);
+  pendingPdas.clear();
 
-  log('refresh', `Flushing touched entities: ${targets.join(', ')}`);
+  log('refresh', `Flushing targeted PDAs: ${targets.length}`);
 
   try {
-    // Root-first ordering to respect FKs
-    if (targets.includes('agents')) await runOne('agents');
-    if (targets.includes('tools')) await runOne('tools');
-    if (targets.includes('escrows')) await runOne('escrows');
-    if (targets.includes('attestations')) await runOne('attestations');
-    if (targets.includes('feedbacks')) await runOne('feedbacks');
-    if (targets.includes('vaults')) await runOne('vaults');
-  } catch (e: any) {
-    logErr('refresh', `Flush failed: ${e.message}`);
+    await refreshAccountsByPdas(targets);
+  } catch (e: unknown) {
+    logErr('refresh', `Flush failed: ${(e as Error).message}`);
   } finally {
     flushing = false;
   }
 }
-

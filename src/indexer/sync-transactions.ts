@@ -5,6 +5,7 @@ import { formatError, log, logErr, withRetry, sleep } from './utils';
 import { getCursor, setCursor } from './cursor';
 import { hydrateTx, upsertHydratedTx, type SignatureLike } from './tx-pipeline';
 import { extractAndInsertEvents } from './event-extractor';
+import { enqueuePdaRefreshMany } from '../../refresh-queue';
 
 let _rpcId = 0;
 
@@ -58,6 +59,36 @@ function isRpcNotFound(err: unknown): boolean {
   return /not found/i.test(formatError(err));
 }
 
+function extractAccountKeysFromRpcTx(tx: Record<string, unknown> | null): string[] {
+  const message = (tx?.transaction as { message?: Record<string, unknown> } | undefined)?.message;
+  if (!message) return [];
+  const out: string[] = [];
+
+  const rawKeys = (message.accountKeys as unknown[]) ?? [];
+  for (const raw of rawKeys) {
+    if (typeof raw === 'string') {
+      out.push(raw);
+      continue;
+    }
+    if (raw && typeof raw === 'object') {
+      const rec = raw as { pubkey?: string; toBase58?: () => string };
+      if (typeof rec.pubkey === 'string') {
+        out.push(rec.pubkey);
+        continue;
+      }
+      if (typeof rec.toBase58 === 'function') {
+        out.push(rec.toBase58());
+      }
+    }
+  }
+
+  const loaded = (tx?.meta as { loadedAddresses?: { writable?: string[]; readonly?: string[] } } | undefined)?.loadedAddresses;
+  if (loaded?.writable) out.push(...loaded.writable);
+  if (loaded?.readonly) out.push(...loaded.readonly);
+
+  return out;
+}
+
 /** Process a single transaction: hydrate → upsert → extract events */
 async function processTx(
   sig: SignatureLike,
@@ -71,6 +102,7 @@ async function processTx(
 
   const { txRow, detailRow } = hydrateTx(sig, tx);
   await upsertHydratedTx(txRow, detailRow);
+  enqueuePdaRefreshMany(extractAccountKeysFromRpcTx(tx as Record<string, unknown> | null));
 
   if (detailRow?.logs && detailRow.logs.length > 0) {
     try {

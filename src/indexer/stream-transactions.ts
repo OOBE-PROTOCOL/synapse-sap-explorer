@@ -9,8 +9,8 @@ import {
 import { SAP_PROGRAM_ADDRESS } from '~/lib/sap/sdk-compat';
 import { env } from '~/lib/env';
 import { hydrateTx, upsertHydratedTx, type SignatureLike } from './tx-pipeline';
-import { inferTouchedEntities } from './entity-impact';
-import { enqueueEntityRefreshMany } from '../../refresh-queue';
+import { applyGrpcAccountUpdate } from './entity-delta';
+import { enqueuePdaRefreshMany } from '../../refresh-queue';
 import { setCursor } from './cursor';
 import { log, logErr, sleep } from './utils';
 import { RpcTransaction } from '~/types';
@@ -66,10 +66,18 @@ function parseGrpcEndpoint(rawUrl: string): { host: string; tls: boolean } {
 
 /**
  * Build a Geyser SubscribeRequest for SAP program transactions.
+ * Optionally include account updates (owner=SAP program) for delta indexing.
  */
-function buildSubscribeRequest() {
+function buildSubscribeRequest(includeAccounts: boolean) {
   return {
-    accounts: {},
+    accounts: includeAccounts ? {
+      sap_accounts: {
+        owner: [SAP_PROGRAM_ADDRESS],
+        account: [],
+        filters: [],
+        nonempty_txn_signature: false,
+      },
+    } : {},
     slots: {},
     transactions: {
       sap: {
@@ -145,12 +153,62 @@ function extractSignatureLike(update: Record<string, unknown>): SignatureLike | 
   };
 }
 
+function extractTransactionAccountKeys(message: Record<string, unknown> | null): string[] {
+  if (!message) return [];
+  const rawKeys = (message.account_keys as Buffer[]) ?? [];
+  const out: string[] = [];
+  for (const key of rawKeys) {
+    if (!key || key.length === 0) continue;
+    out.push(encodeBase58(key));
+  }
+  return out;
+}
+
+function extractGrpcAccountUpdate(update: Record<string, unknown>): {
+  pda: string;
+  owner: string;
+  data: Buffer;
+  lamports: number;
+  slot: number;
+} | null {
+  const accountUpdate = (update as {
+    account?: {
+      slot?: number | string;
+      account?: {
+        pubkey?: Buffer | Uint8Array;
+        owner?: Buffer | Uint8Array;
+        data?: Buffer | Uint8Array;
+        lamports?: number | string;
+      };
+    };
+  }).account;
+
+  const info = accountUpdate?.account;
+  if (!info) return null;
+  const pubkeyBytes = info.pubkey;
+  const ownerBytes = info.owner;
+  if (!pubkeyBytes || !ownerBytes) return null;
+
+  const pda = encodeBase58(Buffer.from(pubkeyBytes));
+  const owner = encodeBase58(Buffer.from(ownerBytes));
+  const data = Buffer.from(info.data ?? []);
+  const lamports = Number(info.lamports ?? 0);
+  const slot = Number(accountUpdate?.slot ?? 0);
+
+  return { pda, owner, data, lamports, slot };
+}
+
 /**
  * Process a single gRPC SubscribeUpdate from the native stream.
  */
 async function handleNativeUpdate(update: Record<string, unknown>): Promise<void> {
-  // The proto oneof field — check which update type it is
   const updateType = update.update_oneof;
+  if (updateType === 'account') {
+    const acct = extractGrpcAccountUpdate(update);
+    if (!acct) return;
+    await applyGrpcAccountUpdate(acct);
+    return;
+  }
   if (updateType !== 'transaction') return;
 
   const sigLike = extractSignatureLike(update);
@@ -194,8 +252,8 @@ async function handleNativeUpdate(update: Record<string, unknown>): Promise<void
     lastSignature: sigLike.signature,
   });
 
-  const touched = inferTouchedEntities(txRow.sapInstructions ?? []);
-  enqueueEntityRefreshMany(touched);
+  const txAccountKeys = extractTransactionAccountKeys(message);
+  enqueuePdaRefreshMany(txAccountKeys);
 
   log('grpc', `📡 TX ${sigLike.signature.slice(0, 12)}… slot=${sigLike.slot}`);
 }
@@ -231,7 +289,7 @@ export async function startGrpcTransactionStream(signal?: AbortSignal): Promise<
   log('grpc', `Resolved gRPC endpoint: ${host} (TLS=${tls})`);
 
   const GeyserCtor = getGeyserServiceCtor();
-  const req = buildSubscribeRequest();
+  let includeAccounts = (process.env.INDEXER_DISABLE_ACCOUNT_STREAM ?? 'false').toLowerCase() !== 'true';
   let backoffMs = 1_000;
   let failures = 0;
   const MAX_FAILURES = 10;
@@ -261,9 +319,10 @@ export async function startGrpcTransactionStream(signal?: AbortSignal): Promise<
         throw new Error('Failed to create gRPC stream');
       }
 
+      const req = buildSubscribeRequest(includeAccounts);
       // Send subscribe request
       stream.write(req);
-      log('grpc', `Subscribed to SAP txs (program=${SAP_PROGRAM_ADDRESS.slice(0, 12)}…)`);
+      log('grpc', `Subscribed to SAP stream (tx + ${includeAccounts ? 'accounts' : 'tx-only'})`);
 
       // Reset backoff on successful connect + first data
       let gotData = false;
@@ -305,6 +364,13 @@ export async function startGrpcTransactionStream(signal?: AbortSignal): Promise<
       log('grpc', 'Stream ended, reconnecting...');
     } catch (e: unknown) {
       const msg = (e as Error)?.message ?? String(e);
+      if (includeAccounts && /(INVALID_ARGUMENT|failed to create filter|account)/i.test(msg)) {
+        logErr('grpc', `Account stream rejected by gateway (${msg.slice(0, 120)}), falling back to tx-only stream`);
+        includeAccounts = false;
+        failures = 0;
+        backoffMs = 1_000;
+        continue;
+      }
       logErr('grpc', `Connection failed: ${msg}`);
       failures++;
 
