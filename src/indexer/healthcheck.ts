@@ -13,11 +13,24 @@ import { db } from '~/db';
 import { syncCursors } from '~/db/schema';
 
 // Max age (ms) before a cursor is considered stale
-const ENTITY_MAX_AGE_MS = Number(process.env.HEALTH_ENTITY_MAX_AGE_MS ?? 15 * 60_000); // 15 min
+const ENTITY_HEALING_INTERVAL_MS = Number(
+  process.env.ENTITY_HEALING_INTERVAL_MS
+  ?? process.env.ENTITY_INTERVAL_MS
+  ?? 6 * 60 * 60 * 1000,
+);
+const ENTITY_MAX_AGE_MS = Number(
+  process.env.HEALTH_ENTITY_MAX_AGE_MS
+  ?? (ENTITY_HEALING_INTERVAL_MS + 15 * 60_000),
+);
 const TX_MAX_AGE_MS     = Number(process.env.HEALTH_TX_MAX_AGE_MS     ?? 10 * 60_000); // 10 min
 
 const ENTITY_KEYS = ['agents', 'tools', 'escrows', 'attestations', 'feedbacks', 'vaults'];
 const TX_KEYS     = ['transactions'];
+const SKIP_KEYS = new Set(['transactions_backfill_v2']);
+
+function isBackfillComplete(row: { entity: string; lastSlot: number | null; lastSignature: string | null }): boolean {
+  return row.entity === 'transactions_backfill' && row.lastSlot === -1 && row.lastSignature === 'COMPLETE';
+}
 
 async function main() {
   const rows = await db.select().from(syncCursors);
@@ -31,6 +44,13 @@ async function main() {
   let healthy = true;
 
   for (const row of rows) {
+    if (SKIP_KEYS.has(row.entity)) continue;
+
+    if (isBackfillComplete(row)) {
+      console.log(`✅ OK  ${row.entity.padEnd(16)} status=complete`);
+      continue;
+    }
+
     const ageMs = now - new Date(row.lastSyncedAt).getTime();
     const maxAge = TX_KEYS.includes(row.entity) ? TX_MAX_AGE_MS : ENTITY_MAX_AGE_MS;
     const stale = ageMs > maxAge;
@@ -66,4 +86,3 @@ main().catch((e) => {
   console.error(`Health check failed: ${e.message}`);
   process.exit(1);
 });
-
