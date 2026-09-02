@@ -119,6 +119,10 @@
       "esbuild": "0.25.12",
       "uuid": "^9.0.1",
       "rpc-websockets>uuid": "9.0.1"
+    },
+    "supportedArchitectures": {
+      "os": ["win32", "linux", "darwin", "current"],
+      "cpu": ["x64", "arm64", "current"]
     }
   }
 }
