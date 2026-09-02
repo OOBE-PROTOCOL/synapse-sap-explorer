@@ -55,6 +55,9 @@ module.exports = {
         APP_ENV: 'test',
         NEXT_PUBLIC_APP_ENV: 'test',
         INDEXER_MODE: 'polling',
+        // Optional dedicated RPC for indexer only
+        // INDEXER_RPC_URL: 'https://your-indexer-rpc.example.com',
+        // https://us-1-mainnet.oobeprotocol.ai/rpc
         ENTITY_HEALING_INTERVAL_MS: '21600000',
         TX_INTERVAL_MS: '20000',
         SNAPSHOT_INTERVAL_MS: '300000',

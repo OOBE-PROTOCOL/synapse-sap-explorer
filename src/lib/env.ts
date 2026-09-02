@@ -50,6 +50,14 @@ export const env = {
   get INDEXER_MODE() {
     return optional('INDEXER_MODE', 'polling');
   },
+  /**
+   * Optional dedicated RPC endpoint for indexer processes only.
+   * When set (typically only in PM2 env for sap-indexer*), indexer reads
+   * use this URL instead of the Synapse resolver endpoint.
+   */
+  get INDEXER_RPC_URL() {
+    return optional('INDEXER_RPC_URL', '');
+  },
   get INDEXER_GRPC_COMMITMENT() {
     return optional('INDEXER_GRPC_COMMITMENT', 'confirmed');
   },

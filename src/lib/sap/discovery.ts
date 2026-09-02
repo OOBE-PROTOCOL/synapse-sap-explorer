@@ -98,6 +98,13 @@ function resolveRegion(): SynapseRegion {
   }
 }
 
+function resolvePrimaryRpcUrl(): string {
+  const overridden = env.INDEXER_RPC_URL.trim();
+  if (overridden) return overridden;
+  const ep = resolveEndpoint(resolveNetwork(), resolveRegion());
+  return ep.rpc;
+}
+
 let _sap: CoreSapClient | null = null;
 let _sapConnection: Connection | null = null;
 let _sapFallback: CoreSapClient | null = null;
@@ -127,10 +134,10 @@ export function getFallbackSapClient(): CoreSapClient | null {
 
 function getSap(): CoreSapClient {
   if (!_sap) {
-    const ep = resolveEndpoint(resolveNetwork(), resolveRegion());
+    const rpcUrl = resolvePrimaryRpcUrl();
 
     // Create Connection with API key header for Synapse RPC auth
-    _sapConnection = new Connection(ep.rpc, {
+    _sapConnection = new Connection(rpcUrl, {
       commitment: 'confirmed',
       httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY },
     });
@@ -176,9 +183,8 @@ export function getSynapseConnection(): Connection {
  * Useful when web3.js deserialization has issues with node responses.
  */
 export function getRpcConfig(): { url: string; headers: Record<string, string> } {
-  const ep = resolveEndpoint(resolveNetwork(), resolveRegion());
   return {
-    url: ep.rpc,
+    url: resolvePrimaryRpcUrl(),
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': env.SYNAPSE_API_KEY,
