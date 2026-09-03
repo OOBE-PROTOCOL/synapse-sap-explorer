@@ -370,12 +370,11 @@ async function persistTruthLayer(agents: EnrichedAgent[], allTools: Awaited<Retu
 }
 
 async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
-  const [indexedAgents, indexedTools] = await Promise.all([
-    fetchIndexedAgents(),
-    fetchIndexedTools(),
-  ]);
-
-  const rawAgents = indexedAgents.length > 0 ? indexedAgents : await findAllAgents();
+  const indexedTools = await fetchIndexedTools();
+  let rawAgents = await findAllAgents().catch(() => [] as Awaited<ReturnType<typeof findAllAgents>>);
+  if (rawAgents.length === 0) {
+    rawAgents = await fetchIndexedAgents();
+  }
   const allTools = indexedTools.length > 0
     ? indexedTools
     : await findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>);
