@@ -380,7 +380,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     ? indexedTools
     : await findAllTools().catch(() => [] as Awaited<ReturnType<typeof findAllTools>>);
 
-  // Dedup by PDA, cap at 100.
+  // Dedup by PDA.
   const seen = new Set<string>();
   const unique = rawAgents.filter((a) => {
     const key = a.pda.toBase58();
@@ -388,7 +388,7 @@ async function fetchEnrichedAgents(): Promise<EnrichedAgentsResponse> {
     seen.add(key);
     return true;
   });
-  const agents: SerializedDiscoveredAgent[] = unique.slice(0, 100).map(serializeDiscoveredAgent);
+  const agents: SerializedDiscoveredAgent[] = unique.map(serializeDiscoveredAgent);
 
   // PDA → tool count
   const toolCountByAgent = new Map<string, number>();
