@@ -85,6 +85,28 @@ function formatSol(sol: number): string {
   return sol.toFixed(9).replace(/0+$/, "");
 }
 
+function formatRangeDate(ms: number, includeYear: boolean): string {
+  return new Date(ms).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    ...(includeYear ? { year: "numeric" } : {}),
+  });
+}
+
+function selectedRangeLabel(range: TxRange, nowMs: number): string {
+  if (range === "all") return "All time";
+  const windows: Record<Exclude<TxRange, "all">, number> = {
+    "24h": 24 * 60 * 60 * 1000,
+    "7d": 7 * 24 * 60 * 60 * 1000,
+    "30d": 30 * 24 * 60 * 60 * 1000,
+    "120d": 120 * 24 * 60 * 60 * 1000,
+  };
+  const end = nowMs || Date.now();
+  const start = end - windows[range];
+  const includeYear = new Date(start).getFullYear() !== new Date(end).getFullYear();
+  return `${formatRangeDate(start, includeYear)} – ${formatRangeDate(end, includeYear)}`;
+}
+
 /* ── Known program metadata ─────────────────── */
 
 type ProgramMeta = {
@@ -948,6 +970,11 @@ export default function TransactionsPage() {
     };
   }, [displayed]);
 
+  const selectedRangeText = useMemo(
+    () => selectedRangeLabel(timeRange, now),
+    [timeRange, now],
+  );
+
   useEffect(() => {
     setPage(1);
   }, [search, hideSpam, hideFailed, sortDir, sapFilter, timeRange]);
@@ -988,7 +1015,7 @@ export default function TransactionsPage() {
             label="Total Loaded"
             value={total.toLocaleString()}
             icon={<ArrowRightLeft className="h-4 w-4" />}
-            sub={`${stats.oldest} – ${stats.newest}`}
+            sub={selectedRangeText}
             accent="primary"
           />
           <ExplorerMetric
