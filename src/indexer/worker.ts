@@ -22,6 +22,7 @@ const ENTITY_HEALING_INTERVAL_MS = Number(
   ?? process.env.ENTITY_INTERVAL_MS
   ?? 6 * 60 * 60 * 1000,
 ); // 6h default — full scans are healing-only
+const ENTITY_FULL_SCAN_ENABLED = (process.env.ENTITY_FULL_SCAN_ENABLED ?? 'false').toLowerCase() === 'true';
 const TX_INTERVAL_MS      = Number(process.env.TX_INTERVAL_MS      ?? 20_000);   // 20s (compensates for no real-time)
 const TX_FALLBACK_INTERVAL_MS = 300_000;                                          // 5min — fallback when gRPC is active
 const SNAPSHOT_INTERVAL_MS = Number(process.env.SNAPSHOT_INTERVAL_MS ?? 300_000); // 5min
@@ -156,6 +157,7 @@ async function main() {
   log('worker', 'SAP Indexer starting');
   log('worker', `  mode=${INDEXER_MODE} run=${ONCE ? 'once' : 'daemon'}`);
   log('worker', `  intervals: entity-healing=${ENTITY_HEALING_INTERVAL_MS / 1000}s tx=${TX_INTERVAL_MS / 1000}s snap=${SNAPSHOT_INTERVAL_MS / 1000}s`);
+  log('worker', `  full-scan=${ENTITY_FULL_SCAN_ENABLED ? 'enabled' : 'disabled'}`);
   log('worker', `  db=${process.env.DATABASE_URL?.replace(/:[^@]+@/, ':***@') ?? 'NOT SET'}`);
 
   if (!process.env.DATABASE_URL) {
@@ -170,7 +172,11 @@ async function main() {
       process.exit(0);
     }
     try {
-      await syncAllEntities();
+      if (ENTITY_FULL_SCAN_ENABLED) {
+        await syncAllEntities();
+      } else {
+        log('worker', 'Skipping entity full-scan in --once (ENTITY_FULL_SCAN_ENABLED=false)');
+      }
       await sleep(1000);
       await syncTx();
       await sleep(1000);
@@ -183,9 +189,11 @@ async function main() {
   }
 
   // Continuous mode: optional bootstrap full baseline
-  if (FULL_SYNC_ON_START) {
+  if (FULL_SYNC_ON_START && ENTITY_FULL_SCAN_ENABLED) {
     log('worker', 'Running initial baseline sync (entities + snapshots)...');
     await syncAllEntities();
+  } else if (FULL_SYNC_ON_START && !ENTITY_FULL_SCAN_ENABLED) {
+    log('worker', 'Skipping initial full entity sync (ENTITY_FULL_SCAN_ENABLED=false)');
   } else {
     log('worker', 'Skipping initial full entity sync (FULL_SYNC_ON_START=false)');
   }
@@ -205,10 +213,12 @@ async function main() {
   }
 
   // Schedule recurring cycles (full-entity sync is healing-only)
-  const entityTimer = setInterval(async () => {
-    if (!running) return;
-    await syncAllEntities();
-  }, ENTITY_HEALING_INTERVAL_MS);
+  const entityTimer = ENTITY_FULL_SCAN_ENABLED
+    ? setInterval(async () => {
+      if (!running) return;
+      await syncAllEntities();
+    }, ENTITY_HEALING_INTERVAL_MS)
+    : null;
 
   // tx timer differs by mode:
   // - polling: main mechanism every 30s
@@ -235,7 +245,7 @@ async function main() {
     await sleep(1000);
   }
 
-  clearInterval(entityTimer);
+  if (entityTimer) clearInterval(entityTimer);
   clearInterval(txTimer);
   clearInterval(snapTimer);
   if (streamAbort) streamAbort.abort();

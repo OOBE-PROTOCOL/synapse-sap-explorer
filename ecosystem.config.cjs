@@ -52,7 +52,7 @@ module.exports = {
       watch: false,
     },
 
-    /* ── Transaction Indexer (polling) ──────────── */
+    /* ── Transaction Indexer (DB-first default) ─── */
     {
       name: 'sap-indexer',
       script: 'src/indexer/worker.ts',
@@ -63,9 +63,10 @@ module.exports = {
       // Environment
       env: {
         NODE_ENV: 'production',
-        INDEXER_MODE: 'polling',
+        INDEXER_MODE: 'hybrid',
+        ENTITY_FULL_SCAN_ENABLED: 'false',
         // Intervals (ms) — tune as needed
-        ENTITY_HEALING_INTERVAL_MS: '21600000', // 6h — full entity scan (healing only)
+        ENTITY_HEALING_INTERVAL_MS: '21600000', // only used when ENTITY_FULL_SCAN_ENABLED=true
         TX_INTERVAL_MS: '20000',       // 20s — transactions
         SNAPSHOT_INTERVAL_MS: '300000', // 5min — network snapshots
       },

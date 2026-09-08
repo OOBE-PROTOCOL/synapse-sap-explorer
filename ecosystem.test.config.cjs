@@ -54,12 +54,13 @@ module.exports = {
         NODE_ENV: 'production',
         APP_ENV: 'test',
         NEXT_PUBLIC_APP_ENV: 'test',
-        INDEXER_MODE: 'polling',
+        INDEXER_MODE: 'hybrid',
+        ENTITY_FULL_SCAN_ENABLED: 'false',
         // Optional dedicated RPC for indexer only
         // INDEXER_RPC_URL: 'https://your-indexer-rpc.example.com',
         INDEXER_RPC_URL: 'https://us-1-mainnet.oobeprotocol.ai/rpc?api_key=sk_live_xxxxxx',
         INDEXER_RPC_DEBUG: 'true',
-        ENTITY_HEALING_INTERVAL_MS: '21600000',
+        ENTITY_HEALING_INTERVAL_MS: '21600000', // only used when ENTITY_FULL_SCAN_ENABLED=true
         TX_INTERVAL_MS: '20000',
         SNAPSHOT_INTERVAL_MS: '300000',
       },

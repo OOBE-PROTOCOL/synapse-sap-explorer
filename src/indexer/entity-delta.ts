@@ -27,6 +27,7 @@ import {
   logRpcTarget,
 } from './utils';
 import { serializeAccount } from '~/lib/sap/sdk-compat';
+import { setCursor } from './cursor';
 
 type Decoded = {
   kind:
@@ -49,6 +50,18 @@ const KNOWN_ACCOUNT_KINDS: ReadonlyArray<Decoded['kind']> = [
   'feedbackAccount',
   'memoryVault',
 ];
+
+const ENTITY_DELTA_CURSOR_TOUCH_INTERVAL_MS = Number(process.env.ENTITY_DELTA_CURSOR_TOUCH_INTERVAL_MS ?? 5000);
+let lastEntityDeltaCursorTouchMs = 0;
+
+async function touchEntityDeltaCursor(slot?: number): Promise<void> {
+  const now = Date.now();
+  if (now - lastEntityDeltaCursorTouchMs < ENTITY_DELTA_CURSOR_TOUCH_INTERVAL_MS) return;
+  lastEntityDeltaCursorTouchMs = now;
+  await setCursor('entity_delta', {
+    lastSlot: Number.isFinite(slot) ? Math.trunc(slot as number) : undefined,
+  });
+}
 
 function decodeSapAccount(data: Buffer): Decoded | null {
   const sap = getSapClient();
@@ -308,12 +321,14 @@ export async function applyGrpcAccountUpdate(input: {
 
   if (input.lamports === 0 || input.data.length === 0) {
     await markEscrowPossiblyClosed(input.pda);
+    await touchEntityDeltaCursor(input.slot);
     log('delta', `Account tombstone observed pda=${input.pda.slice(0, 10)} slot=${input.slot ?? 0}`);
     return true;
   }
 
   const ok = await applyDecodedAccount(input.pda, input.data);
   if (ok) {
+    await touchEntityDeltaCursor(input.slot);
     log('delta', `Account delta applied pda=${input.pda.slice(0, 10)} slot=${input.slot ?? 0}`);
   }
   return ok;
@@ -378,6 +393,7 @@ export async function refreshAccountsByPdas(pdas: Iterable<string>): Promise<num
   }
 
   if (applied > 0) {
+    await touchEntityDeltaCursor();
     log('delta', `Targeted PDA refresh applied=${applied} requested=${valid.length}`);
   }
   return applied;
