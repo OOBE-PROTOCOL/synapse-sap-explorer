@@ -41,6 +41,85 @@ import {
 import { env } from '~/lib/env';
 import { asPublicKeyText } from '~/lib/format';
 
+const SENSITIVE_HEADER_KEYS = new Set(['x-api-key', 'authorization', 'x-token', 'api-key']);
+const SENSITIVE_QUERY_KEYS = new Set(['api-key', 'apikey', 'key', 'token', 'x-api-key']);
+
+type RpcRequestFn = (method: string, args: unknown[]) => Promise<unknown>;
+type DebugConnection = Connection & {
+  _rpcRequest?: RpcRequestFn;
+  _rpcEndpoint?: string;
+};
+
+const instrumentedConnections = new WeakSet<Connection>();
+
+function rpcDebugEnabled(): boolean {
+  return (process.env.INDEXER_RPC_DEBUG ?? 'false').toLowerCase() === 'true';
+}
+
+function maskSecret(value: string): string {
+  if (!value) return '(empty)';
+  if (value.length <= 8) return `${value.slice(0, 2)}***${value.slice(-1)}`;
+  return `${value.slice(0, 4)}***${value.slice(-4)}`;
+}
+
+function redactRpcUrl(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    if (u.username) u.username = maskSecret(u.username);
+    if (u.password) u.password = maskSecret(u.password);
+    for (const key of Array.from(u.searchParams.keys())) {
+      if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) {
+        u.searchParams.set(key, maskSecret(u.searchParams.get(key) ?? ''));
+      }
+    }
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function redactHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[key] = SENSITIVE_HEADER_KEYS.has(key.toLowerCase()) ? maskSecret(value) : value;
+  }
+  return out;
+}
+
+function attachGetProgramAccountsDebugLogger(
+  connection: Connection,
+  headers: Record<string, string>,
+): void {
+  if (!rpcDebugEnabled()) return;
+  if (instrumentedConnections.has(connection)) return;
+
+  const debugConn = connection as DebugConnection;
+  const original = debugConn._rpcRequest;
+  if (!original) return;
+
+  debugConn._rpcRequest = async (method: string, args: unknown[]) => {
+    if (method === 'getProgramAccounts') {
+      const endpoint = debugConn._rpcEndpoint ?? '';
+      const payload = {
+        jsonrpc: '2.0',
+        id: '<client-generated>',
+        method,
+        params: args,
+      };
+      console.log(
+        `[indexer:rpc] getProgramAccounts request ${JSON.stringify({
+          url: redactRpcUrl(endpoint),
+          headers: redactHeaders(headers),
+          body: payload,
+        })}`,
+      );
+    }
+    return original(method, args);
+  };
+
+  instrumentedConnections.add(connection);
+}
+
 /* ── Re-export types for consumers ────────────────────── */
 
 export type {
@@ -120,9 +199,11 @@ let _sapFallbackConnection: Connection | null = null;
 export function getFallbackSapClient(): CoreSapClient | null {
   if (!env.SAP_FALLBACK_RPC_URL) return null;
   if (!_sapFallback) {
+    const fallbackHeaders: Record<string, string> = {};
     _sapFallbackConnection = new Connection(env.SAP_FALLBACK_RPC_URL, {
       commitment: 'confirmed',
     });
+    attachGetProgramAccountsDebugLogger(_sapFallbackConnection, fallbackHeaders);
     const wallet = makeReadOnlyWallet();
     const provider = new AnchorProvider(_sapFallbackConnection, wallet, {
       commitment: 'confirmed',
@@ -135,12 +216,14 @@ export function getFallbackSapClient(): CoreSapClient | null {
 function getSap(): CoreSapClient {
   if (!_sap) {
     const rpcUrl = resolvePrimaryRpcUrl();
+    const rpcHeaders = { 'x-api-key': env.SYNAPSE_API_KEY };
 
     // Create Connection with API key header for Synapse RPC auth
     _sapConnection = new Connection(rpcUrl, {
       commitment: 'confirmed',
-      httpHeaders: { 'x-api-key': env.SYNAPSE_API_KEY },
+      httpHeaders: rpcHeaders,
     });
+    attachGetProgramAccountsDebugLogger(_sapConnection, rpcHeaders);
 
     const wallet = makeReadOnlyWallet();
     const provider = new AnchorProvider(_sapConnection, wallet, {
