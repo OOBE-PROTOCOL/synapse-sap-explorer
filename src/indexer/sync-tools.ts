@@ -1,15 +1,13 @@
 // src/indexer/sync-tools.ts — Fetch all tools → upsert DB
 import { db } from '~/db';
 import { tools } from '~/db/schema';
-import { findAllTools, getRpcConfig } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, enumKey, hashToHex, conflictUpdateSet, conflictUpdateWhere, logRpcTarget } from './utils';
+import { findAllTools } from './gpa-client';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, enumKey, hashToHex, conflictUpdateSet, conflictUpdateWhere } from './utils';
 import { setCursor } from './cursor';
-import { ToolDescriptorData } from '@oobe-protocol-labs/synapse-sap-sdk/types';
+import type { ToolDescriptorData } from '@oobe-protocol-labs/synapse-sap-sdk/types';
 
 export async function syncTools(): Promise<number> {
   log('tools', 'Fetching all tools from RPC...');
-  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
-  logRpcTarget('tools', 'getProgramAccounts(toolDescriptor)', rpcUrl, rpcHeaders);
 
   const rawTools = await withRetry(() => findAllTools(), 'tools:fetch');
   log('tools', `Fetched ${rawTools.length} tools`);

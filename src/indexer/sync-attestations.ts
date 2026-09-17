@@ -1,14 +1,12 @@
 // src/indexer/sync-attestations.ts — Fetch all attestations → upsert DB
 import { db } from '~/db';
 import { attestations } from '~/db/schema';
-import { findAllAttestations, getRpcConfig } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bnToDate, hashToHex, conflictUpdateSet, conflictUpdateWhere, logRpcTarget } from './utils';
+import { findAllAttestations } from './gpa-client';
+import { log, logErr, withRetry, pk, bnToDate, hashToHex, conflictUpdateSet, conflictUpdateWhere } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncAttestations(): Promise<number> {
   log('attestations', 'Fetching all attestations from RPC...');
-  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
-  logRpcTarget('attestations', 'getProgramAccounts(agentAttestation)', rpcUrl, rpcHeaders);
 
   const raw = await withRetry(() => findAllAttestations(), 'attestations:fetch');
   log('attestations', `Fetched ${raw.length} attestations`);

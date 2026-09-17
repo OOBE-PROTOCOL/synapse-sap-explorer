@@ -58,6 +58,21 @@ export const env = {
   get INDEXER_RPC_URL() {
     return optional('INDEXER_RPC_URL', '');
   },
+  /**
+   * Dedicated RPC endpoint for indexer getProgramAccounts calls.
+   * When set, the indexer routes GPA calls here using `x-token` auth.
+   */
+  get INDEXER_GPA_URL() {
+    return optional('INDEXER_GPA_URL', '');
+  },
+  /**
+   * Token sent as `x-token` for the dedicated indexer GPA endpoint.
+   * Falls back to SYNAPSE_API_KEY only when the dedicated endpoint is used
+   * without an explicit token.
+   */
+  get INDEXER_GPA_TOKEN() {
+    return optional('INDEXER_GPA_TOKEN', '');
+  },
   get INDEXER_GRPC_COMMITMENT() {
     return optional('INDEXER_GRPC_COMMITMENT', 'confirmed');
   },

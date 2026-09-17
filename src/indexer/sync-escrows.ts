@@ -1,14 +1,12 @@
 // src/indexer/sync-escrows.ts — Fetch all escrows → upsert DB
 import { db } from '~/db';
 import { escrows } from '~/db/schema';
-import { findAllEscrows, getRpcConfig } from '~/lib/sap/discovery';
-import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere, formatError, logRpcTarget } from './utils';
+import { findAllEscrows } from './gpa-client';
+import { log, logErr, withRetry, pk, bn, num, bnToDate, conflictUpdateSet, conflictUpdateWhere, formatError } from './utils';
 import { setCursor } from './cursor';
 
 export async function syncEscrows(): Promise<number> {
   log('escrows', 'Fetching all escrows from RPC...');
-  const { url: rpcUrl, headers: rpcHeaders } = getRpcConfig();
-  logRpcTarget('escrows', 'getProgramAccounts(escrowAccount)', rpcUrl, rpcHeaders);
 
   const raw = await withRetry(() => findAllEscrows(), 'escrows:fetch');
   log('escrows', `Fetched ${raw.length} escrows`);
